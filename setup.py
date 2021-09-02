@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-setup(name='mne_pg_browser',
+setup(name='mne_qt_browser',
       version='0.0.1',
       author='marsipu',
       author_email='dev@earthman-music.de',
@@ -21,5 +21,5 @@ setup(name='mne_pg_browser',
                         'pyqtgraph @ git+https://git@github.com/pyqtgraph/pyqtgraph@master#egg=pyqtgraph',
                         'pyopengl',
                         'pytest-qt'],
-      entrypoints={'console_scripts': ['mne_pg_browser = mne_pg_browser.__main__:main']}
+      entrypoints={'console_scripts': ['mne_qt_browser = mne_qt_browser.__main__:main']}
       )
