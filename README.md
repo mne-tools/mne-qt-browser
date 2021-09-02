@@ -27,5 +27,5 @@ pip install https://github.com/mne-tools/mne-qt-browser/zipball/main
 ### Report Bugs & Feature Requests
 Please report bugs and feature requests in the [issues](https://github.com/mne-tools/mne-qt-browser/issues) of this repository.
 
-### Current Project
+### ToDo's
 I set up a [project](https://github.com/mne-tools/mne-qt-browser/projects/1) with ToDo's for the upcoming MNE-Python Release 0.24.
