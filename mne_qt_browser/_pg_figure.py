@@ -14,7 +14,7 @@ from functools import partial
 import numpy as np
 from scipy.stats import zscore
 
-from PyQt5.QtCore import (QEvent, QPointF, Qt, pyqtSignal, QRunnable,
+from PyQt5.QtCore import (QEvent, Qt, pyqtSignal, QRunnable,
                           QObject, QThreadPool, QRectF)
 from PyQt5.QtGui import (QFont, QIcon, QPixmap, QTransform,
                          QMouseEvent, QPainter, QImage, QPen)
@@ -27,9 +27,9 @@ from PyQt5.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
                              QWidget, QStyleOptionSlider, QStyle,
                              QApplication, QGraphicsView, QProgressBar,
                              QVBoxLayout, QLineEdit, QCheckBox, QScrollArea)
-from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
+from pyqtgraph import (AxisItem, GraphicsObject, GraphicsView, InfLineLabel, InfiniteLine,
                        LinearRegionItem,
-                       PlotCurveItem, PlotItem, TextItem, ViewBox, functions,
+                       PlotCurveItem, PlotItem, Point, TextItem, ViewBox, functions,
                        mkBrush, mkPen, setConfigOption, mkQApp, mkColor)
 
 try:
@@ -546,7 +546,7 @@ class OverviewBar(QLabel):
         point_x = self.width() * x / self.mne.inst.times[-1]
         point_y = self.height() * y / len(self.mne.ch_order)
 
-        return QPointF(point_x, point_y)
+        return Point(point_x, point_y)
 
     def _mapToData(self, point):
         # Include padding from black frame
@@ -657,6 +657,24 @@ class VLine(InfiniteLine):
         super().__init__(pos, pen='g', hoverPen='y',
                          movable=True, bounds=bounds)
         self.line = VLineLabel(self)
+
+
+class Crosshair(InfiniteLine):
+    """Continously updating marker inside the Data-Trace-Plot."""
+    def __init__(self):
+        super().__init__(angle=90, movable=False, pen='g')
+        self.y = 1
+
+    def set_data(self, x, y):
+        """Set x and y data for crosshair point."""
+        self.setPos(x)
+        self.y = y
+
+    def paint(self, p, *args):
+        super().paint(p, *args)
+
+        p.setPen(mkPen('r', width=4))
+        p.drawPoint(Point(self.y, 0))
 
 
 class HelpDialog(QDialog):
@@ -1411,7 +1429,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Initialize crosshair (as in pyqtgraph example)
         self.mne.crosshair_enabled = False
         self.mne.crosshair_h = None
-        self.mne.crosshair_v = None
+        self.mne.crosshair = None
         view.sigSceneMouseMoved.connect(self._mouse_moved)
 
         # Initialize Toolbar
@@ -1731,18 +1749,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 x, y = mousePoint.x(), mousePoint.y()
                 if (0 <= x <= self.mne.xmax and
                         0 <= y <= self.mne.ymax):
-                    if not self.mne.crosshair_v:
-                        self.mne.crosshair_v = InfiniteLine(angle=90,
-                                                            movable=False,
-                                                            pen='g')
-                        self.mne.plt.addItem(self.mne.crosshair_v,
-                                             ignoreBounds=True)
-                    if not self.mne.crosshair_h:
-                        self.mne.crosshair_h = InfiniteLine(angle=0,
-                                                            movable=False,
-                                                            pen='g')
-                        self.mne.plt.addItem(self.mne.crosshair_h,
-                                             ignoreBounds=True)
+                    if not self.mne.crosshair:
+                        self.mne.crosshair = Crosshair()
+                        self.mne.plt.addItem(self.mne.crosshair, ignoreBounds=True)
 
                     # Get ypos from trace
                     trace = [tr for tr in self.mne.traces if
@@ -1752,19 +1761,14 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                         idx = np.argmin(np.abs(trace.xData - x))
                         y = trace.get_ydata()[idx]
 
-                        self.mne.crosshair_v.setPos(x)
-                        self.mne.crosshair_h.setPos(y)
-
+                        self.mne.crosshair.set_data(x, y)
                         self.statusBar().showMessage(f'x={x:.3f} s, y={y:.3f}')
 
     def _toggle_crosshair(self):
         self.mne.crosshair_enabled = not self.mne.crosshair_enabled
-        if self.mne.crosshair_v:
-            self.mne.plt.removeItem(self.mne.crosshair_v)
-            self.mne.crosshair_v = None
-        if self.mne.crosshair_h:
-            self.mne.plt.removeItem(self.mne.crosshair_h)
-            self.mne.crosshair_h = None
+        if self.mne.crosshair:
+            self.mne.plt.removeItem(self.mne.crosshair)
+            self.mne.crosshair = None
 
     def _xrange_changed(self, _, xrange):
         # Update data
@@ -2278,7 +2282,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             x = view_width * point[0]
             y = view_height * (1 - point[1])
 
-            point = QPointF(x, y)
+            point = Point(x, y)
 
         elif xform == 'data':
             # For Qt, the equivalent of matplotlibs transData
@@ -2286,9 +2290,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # the coordinate system of the ViewBox.
             # This only works on the View (self.mne.view)
             fig = self.mne.view
-            point = self.mne.viewbox.mapViewToScene(QPointF(*point))
+            point = self.mne.viewbox.mapViewToScene(Point(*point))
         elif xform == 'none':
-            point = QPointF(*point)
+            point = Point(*point)
 
         # Use pytest-qt's exception-hook
         with capture_exceptions() as exceptions:
