@@ -1,0 +1,13 @@
+# Basic dependencies for browser
+numpy
+scipy
+matplotlib
+mne
+qtpy
+PyQt5  # Default, but PySide2 will be also tested
+git+https://github.com/pyqtgraph/pyqtgraph@master
+pyopengl
+
+# Testing
+pytest
+pytest-qt
