@@ -15,7 +15,8 @@ def main():
         onsets = np.arange(2, 8, 2) + raw.first_time
         durations = np.repeat(1, len(onsets))
         descriptions = ['Test1', 'Test2', 'Test3']
-        for onset, duration, description in zip(onsets, durations, descriptions):
+        for onset, duration, description in \
+                zip(onsets, durations, descriptions):
             raw.annotations.append(onset, duration, description)
 
         raw.plot(block=True)

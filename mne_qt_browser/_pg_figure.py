@@ -12,8 +12,6 @@ from contextlib import contextmanager
 from functools import partial
 
 import numpy as np
-from scipy.stats import zscore
-
 from PyQt5.QtCore import (QEvent, Qt, pyqtSignal, QRunnable,
                           QObject, QThreadPool, QRectF)
 from PyQt5.QtGui import (QFont, QIcon, QPixmap, QTransform,
@@ -27,10 +25,11 @@ from PyQt5.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
                              QWidget, QStyleOptionSlider, QStyle,
                              QApplication, QGraphicsView, QProgressBar,
                              QVBoxLayout, QLineEdit, QCheckBox, QScrollArea)
-from pyqtgraph import (AxisItem, GraphicsObject, GraphicsView, InfLineLabel, InfiniteLine,
-                       LinearRegionItem,
-                       PlotCurveItem, PlotItem, Point, TextItem, ViewBox, functions,
-                       mkBrush, mkPen, setConfigOption, mkQApp, mkColor)
+from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
+                       LinearRegionItem, PlotCurveItem, PlotItem,
+                       Point, TextItem, ViewBox, functions, mkBrush,
+                       mkPen, setConfigOption, mkQApp, mkColor)
+from scipy.stats import zscore
 
 try:
     from pytestqt.exceptions import capture_exceptions
@@ -154,7 +153,7 @@ class TimeAxis(AxisItem):
         """Customize creation of axis values from visible axis range."""
         if self.mne.is_epochs:
             values = self.mne.midpoints[np.argwhere(
-                    minVal <= self.mne.midpoints <= maxVal)]
+                minVal <= self.mne.midpoints <= maxVal)]
             tick_values = [(len(self.mne.inst.times), values)]
             return tick_values
         else:
@@ -293,8 +292,8 @@ class BaseScrollBar(QScrollBar):
             opt = QStyleOptionSlider()
             self.initStyleOption(opt)
             control = self.style().hitTestComplexControl(
-                    QStyle.CC_ScrollBar, opt,
-                    event.pos(), self)
+                QStyle.CC_ScrollBar, opt,
+                event.pos(), self)
             if (control == QStyle.SC_ScrollBarAddPage or
                     control == QStyle.SC_ScrollBarSubPage):
                 # scroll here
@@ -319,9 +318,8 @@ class BaseScrollBar(QScrollBar):
                     sliderMin = gr.y()
                     sliderMax = gr.bottom() - sliderLength + 1
                 self.setValue(QStyle.sliderValueFromPosition(
-                        self.minimum(), self.maximum(), pos - sliderMin,
-                                                        sliderMax - sliderMin,
-                        opt.upsideDown))
+                    self.minimum(), self.maximum(),
+                    pos - sliderMin, sliderMax - sliderMin, opt.upsideDown))
                 return
 
         return super().mousePressEvent(event)
@@ -581,7 +579,7 @@ class RawViewBox(ViewBox):
                 description = self.mne.current_description
                 if event.isStart():
                     self._drag_start = self.mapSceneToView(
-                            event.scenePos()).x()
+                        event.scenePos()).x()
                     self._drag_region = AnnotRegion(self.mne,
                                                     description=description,
                                                     values=(self._drag_start,
@@ -598,7 +596,7 @@ class RawViewBox(ViewBox):
                 else:
                     self._drag_region.setRegion((self._drag_start,
                                                  self.mapSceneToView(
-                                                         event.scenePos()).x()))
+                                                     event.scenePos()).x()))
             elif event.isFinish():
                 QMessageBox.warning(self.main, 'No description!',
                                     'No description is given, add one!')
@@ -661,6 +659,7 @@ class VLine(InfiniteLine):
 
 class Crosshair(InfiniteLine):
     """Continously updating marker inside the Data-Trace-Plot."""
+
     def __init__(self):
         super().__init__(angle=90, movable=False, pen='g')
         self.y = 1
@@ -897,7 +896,7 @@ class AnnotationDock(QDockWidget):
                                     if r.description == curr_des]
                     for ed_region in edit_regions:
                         idx = self.main._get_onset_idx(
-                                ed_region.getRegion()[0])
+                            ed_region.getRegion()[0])
                         self.mne.inst.annotations.description[idx] = new_des
                         ed_region.update_description(new_des)
                     self.mne.new_annotation_labels.remove(curr_des)
@@ -909,7 +908,7 @@ class AnnotationDock(QDockWidget):
                         self.mne.annotation_segment_colors.pop(curr_des)
                 else:
                     idx = self.main._get_onset_idx(
-                            self.mne.selected_region.getRegion()[0])
+                        self.mne.selected_region.getRegion()[0])
                     self.mne.inst.annotations.description[idx] = new_des
                     self.mne.selected_region.update_description(new_des)
                     if new_des not in self.mne.new_annotation_labels:
@@ -960,7 +959,7 @@ class AnnotationDock(QDockWidget):
     def _remove_description(self):
         rm_description = self.description_cmbx.currentText()
         existing_annot = list(self.mne.inst.annotations.description).count(
-                rm_description)
+            rm_description)
         if existing_annot > 0:
             ans = QMessageBox.question(self,
                                        f'Remove annotations '
@@ -971,7 +970,7 @@ class AnnotationDock(QDockWidget):
                                        f'Do you really want to remove them?')
             if ans == QMessageBox.Yes:
                 rm_idxs = np.where(
-                        self.mne.inst.annotations.description == rm_description)
+                    self.mne.inst.annotations.description == rm_description)
                 for idx in rm_idxs:
                     self.mne.inst.annotations.delete(idx)
                 for rm_region in [r for r in self.mne.regions
@@ -1109,7 +1108,7 @@ class AnnotationDock(QDockWidget):
     def _update_regions_visible(self):
         for region in self.mne.regions:
             region.update_visible(
-                    self.mne.visible_annotations[region.description])
+                self.mne.visible_annotations[region.description])
 
     def _update_regions_colors(self):
         for region in self.mne.regions:
@@ -1463,9 +1462,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Add GUI-Elements to MNEBrowserParams-Instance
         vars(self.mne).update(
-                plt=plt, view=view, ax_hscroll=ax_hscroll, ax_vscroll=ax_vscroll,
-                overview_bar=overview_bar, fig_annotation=fig_annotation,
-                toolbar=toolbar
+            plt=plt, view=view, ax_hscroll=ax_hscroll, ax_vscroll=ax_vscroll,
+            overview_bar=overview_bar, fig_annotation=fig_annotation,
+            toolbar=toolbar
         )
 
         # Initialize Keyboard-Shortcuts
@@ -1751,7 +1750,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                         0 <= y <= self.mne.ymax):
                     if not self.mne.crosshair:
                         self.mne.crosshair = Crosshair()
-                        self.mne.plt.addItem(self.mne.crosshair, ignoreBounds=True)
+                        self.mne.plt.addItem(self.mne.crosshair,
+                                             ignoreBounds=True)
 
                     # Get ypos from trace
                     trace = [tr for tr in self.mne.traces if
@@ -1951,10 +1951,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.decim_data[data_picks_mask] = self.mne.decim
             # decim can vary by channel type,
             # so compute different `times` vectors
-            self.mne.decim_times = {decim_value: self.mne.times[::decim_value]
-                                                 + self.mne.first_time for
-                                    decim_value in
-                                    set(self.mne.decim_data)}
+            self.mne.decim_times = {decim_value:
+                                    self.mne.times[::decim_value]
+                                    + self.mne.first_time for
+                                    decim_value in set(self.mne.decim_data)}
 
     def _update_data(self):
         if self.mne.data_preloaded:
@@ -2026,7 +2026,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         region.gotSelected.connect(self._region_selected)
         region.removeRequested.connect(self._remove_region)
         self.mne.viewbox.sigYRangeChanged.connect(
-                region.update_label_pos)
+            region.update_label_pos)
         self.mne.regions.append(region)
 
         region.update_label_pos()
