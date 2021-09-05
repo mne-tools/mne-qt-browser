@@ -28,8 +28,6 @@ jobs:
         run: |
           python -m pip uninstall PyQt5 -y
           python -m pip install PySide2
-      - name: Test pwd
-        run: pwd
       - name: Run MNE-Tests
         run: |
           pwd
