@@ -5,13 +5,14 @@ on:
       branches: main
 
 jobs:
-  test_linux:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        qt-version: [PyQt5, PySide2]
+  raw-viz-tests:
+    runs-on: ubuntu-latest
+#    runs-on: ${{ matrix.os }}
+#    strategy:
+#      fail-fast: false
+#      matrix:
+#        os: [ubuntu-latest, macos-latest, windows-latest]
+#        qt-version: [PyQt5, PySide2]
 
     steps:
       - uses: actions/checkout@v2
@@ -24,13 +25,15 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install flake8 pytest
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-      - name: Install PySide2
-        if: matrix.qt-version == 'PySide2'
-        run: |
-          python -m pip uninstall PyQt5
-          python -m pip install PySide2
+#      - name: Install PySide2
+#        if: matrix.qt-version == 'PySide2'
+#        run: |
+#          python -m pip uninstall PyQt5 -y
+#          python -m pip install PySide2
       - name: Lint with flake8
         run: flake8
+      - name: Test pwd
+        run: pwd
       - name: Run MNE-Tests
         run: |
           pwd
