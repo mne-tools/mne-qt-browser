@@ -10,6 +10,7 @@ import math
 import platform
 from contextlib import contextmanager
 from functools import partial
+from os.path import getsize
 
 import numpy as np
 from PyQt5.QtCore import (QEvent, Qt, pyqtSignal, QRunnable,
@@ -33,7 +34,7 @@ from scipy.stats import zscore
 
 try:
     from pytestqt.exceptions import capture_exceptions
-except ModuleNotFoundError:
+except ImportError:
     @contextmanager
     def capture_exceptions():
         yield [None]
@@ -41,7 +42,7 @@ except ModuleNotFoundError:
 from mne.viz._figure import BrowserBase
 from mne.annotations import _sync_onset
 from mne.io.pick import _DATA_CH_TYPES_ORDER_DEFAULT
-from mne.utils import logger
+from mne.utils import logger, sizeof_fmt
 
 name = 'pyqtgraph'
 
@@ -54,7 +55,6 @@ class RawTraceItem(PlotCurveItem):
         # ToDo: Does it affect performance, if the mne-object is referenced
         #  to in every RawTraceItem?
         self.mne = mne
-        self.check_nan = self.mne.check_nan
 
         # Set default z-value to 1 to be before other items in scene
         self.setZValue(1)
@@ -100,7 +100,7 @@ class RawTraceItem(PlotCurveItem):
 
     def update_data(self):
         """Update data (fetch data from self.mne according to self.ch_idx)."""
-        if self.check_nan:
+        if self.mne.is_epochs:
             connect = 'finite'
             skip = False
         else:
@@ -335,7 +335,7 @@ class TimeScrollBar(BaseScrollBar):
 
         self.setMinimum(0)
         self.setSingleStep(1)
-        self.setPageStep(self.mne.tsteps_per_window)
+        self.setPageStep(self.mne.scroll_sensitivity)
         self._update_duration()
         self.setFocusPolicy(Qt.WheelFocus)
         # Because valueChanged is needed (captures every input to scrollbar,
@@ -360,7 +360,7 @@ class TimeScrollBar(BaseScrollBar):
         self._update_duration()
 
     def _update_duration(self):
-        new_step_factor = self.mne.tsteps_per_window / self.mne.duration
+        new_step_factor = self.mne.scroll_sensitivity / self.mne.duration
         if new_step_factor != self.step_factor:
             self.step_factor = new_step_factor
             new_maximum = int((self.mne.xmax - self.mne.duration)
@@ -1237,65 +1237,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     """A PyQtGraph-backend for 2D data browsing."""
 
     def __init__(self, **kwargs):
-        """
-        Those are pyqtgraph-specific parameters.
-
-        They might be added to the .plot()-call or will be integrated
-        into a settings-gui.
-
-        Parameters
-        ----------
-        ds : int | str
-            The downsampling-factor. Either 'auto' to get the downsampling-rate
-            from the visible range or an integer (1 means no downsampling).
-            Defaults to 'auto'.
-        ds_method : str
-            The downsampling-method to use (from pyqtgraph).
-            See here under "Optimization-Keywords" for more detail:
-            https://pyqtgraph.readthedocs.io/en/latest/graphicsItems/
-            plotdataitem.html?#
-        ds_chunk_size : int | None
-            Chunk size for downsampling. No chunking if None (default).
-        antialiasing : bool
-            Enable Antialiasing.
-        use_opengl : bool
-            Use OpenGL.
-        enable_ds_cache : bool
-            If True cache the downsampled arrays inside RawCurveItems
-            per downsampling-factor.
-        tsteps_per_window : int
-            Set how many single scrolling-steps are done in time
-            for the shown time-window.
-        check_nan : bool
-            If to check for NaN-values.
-        preload : str
-            If True, preprocessing steps are applied on all data
-            and are repeated only if necessary. If False (default),
-            preprocessing is applied only on the visible data.
-        overview_mode : str | None
-            Set the mode for the display of an overview over the data.
-            Currently available is "zscore" to display the zscore for
-            each channel across time. This only works if preload=True.
-            Defaults to "zscore".
-        """
-        self.pg_kwarg_defaults = dict(duration=20,
-                                      n_channels=30,
-                                      highpass=None,
-                                      lowpass=None,
-                                      ds='auto',
-                                      ds_method='peak',
-                                      antialiasing=False,
-                                      use_opengl=False,
-                                      enable_ds_cache=True,
-                                      tsteps_per_window=100,
-                                      check_nan=False,
-                                      remove_dc=True,
-                                      preload=True,
-                                      show_overview_bar=True,
-                                      overview_mode='channels')
-        for kw in [k for k in self.pg_kwarg_defaults if k not in kwargs]:
-            kwargs[kw] = self.pg_kwarg_defaults[kw]
-
         BrowserBase.__init__(self, **kwargs)
         QMainWindow.__init__(self)
 
@@ -1334,6 +1275,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         setConfigOption('antialias', self.mne.antialiasing)
 
         # Start preloading if enabled
+        if self.mne.preload == 'auto':
+            self.mne.preload = self._check_space_for_preload()
         if self.mne.preload:
             self._preload_in_thread()
 
@@ -1380,7 +1323,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         try:
             import OpenGL
             logger.info(f'Using pyopengl with version {OpenGL.__version__}')
-        except ModuleNotFoundError:
+        except ImportError:
             logger.warning('pyopengl was not found on this device.\n'
                            'Defaulting to plot without OpenGL with reduced '
                            'performance.')
@@ -1436,12 +1379,12 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         adecr_time = QAction('-Time', parent=self)
         adecr_time.triggered.connect(partial(self.change_duration,
-                                             -self.mne.tsteps_per_window / 10))
+                                             -self.mne.scroll_sensitivity / 10))
         toolbar.addAction(adecr_time)
 
         aincr_time = QAction('+Time', parent=self)
         aincr_time.triggered.connect(partial(self.change_duration,
-                                             self.mne.tsteps_per_window / 10))
+                                             self.mne.scroll_sensitivity / 10))
         toolbar.addAction(aincr_time)
 
         adecr_nchan = QAction('-Channels', parent=self)
@@ -1652,7 +1595,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def hscroll(self, step):
         """Scroll horizontally by step."""
-        rel_step = step * self.mne.duration / self.mne.tsteps_per_window
+        rel_step = step * self.mne.duration / self.mne.scroll_sensitivity
         # Get current range and add step to it
         xmin, xmax = [i + rel_step for i in self.mne.viewbox.viewRange()[0]]
 
@@ -1682,7 +1625,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def change_duration(self, step):
         """Change duration by step."""
         rel_step = (self.mne.duration * step) / (
-                self.mne.tsteps_per_window * 2)
+                self.mne.scroll_sensitivity * 2)
         xmin, xmax = self.mne.viewbox.viewRange()[0]
         xmax += rel_step
         xmin -= rel_step
@@ -1844,7 +1787,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         """
         # Get Downsampling-Factor
         # Auto-Downsampling from pyqtgraph
-        if (self.mne.ds == 'auto' and
+        if (self.mne.downsampling == 'auto' and
                 all([hasattr(self.mne, a) for a in ['viewbox', 'times']])):
             vb = self.mne.viewbox
             if vb is not None:
@@ -1860,19 +1803,20 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                     width = vb.width()
                     if width != 0.0:
                         # Auto-Downsampling with 5 samples per pixel
-                        self.mne.ds = int(max(1, (x1 - x0) / (width * 5)))
+                        self.mne.downsampling = int(max(1, (x1 - x0) /
+                                                        (width * 5)))
 
-        if not isinstance(self.mne.ds, int):
-            self.mne.ds = 1
+        if not isinstance(self.mne.downsampling, int):
+            self.mne.downsampling = 1
 
         # Apply Downsampling
-        if self.mne.ds not in [None, 1]:
-            ds = self.mne.ds
+        if self.mne.downsampling not in [None, 1]:
+            ds = self.mne.downsampling
             times = self.mne.times
             data = self.mne.data
             n_ch = data.shape[0]
 
-            if self.mne.enable_ds_cache and ds in self.mne.ds_cache:
+            if ds in self.mne.ds_cache:
                 # Caching is only activated if downsampling is applied
                 # on the preloaded data.
                 times, data = self.mne.ds_cache[ds]
@@ -1906,10 +1850,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                     y1[:, :, 1] = y2.min(axis=2)
                     data = y1.reshape((n_ch, n * 2))
 
-                # Only cache downsampled data if cache is enabled
-                # (may be not with big datasets)
-                if self.mne.enable_ds_cache and \
-                        self.mne.preload and self.mne.data_preloaded:
+                # Only cache downsampled data if preloading is enabled
+                if self.mne.preload and self.mne.data_preloaded:
                     self.mne.ds_cache[ds] = times, data
 
             self.mne.times, self.mne.data = times, data
@@ -1943,6 +1885,52 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         load_runner.sigs.processText.connect(self._show_process)
         load_runner.sigs.loadingFinished.connect(self._preload_finished)
         QThreadPool.globalInstance().start(load_runner)
+
+    def _check_space_for_preload(self):
+        try:
+            import psutil
+        except ImportError:
+            logger.info('Free RAM space could not be determined because'
+                        '"psutil" is not installed. '
+                        'Setting preload to False.')
+            return False
+        else:
+            # Get disk-space of raw-file(s)
+            disk_space = 0
+            for fn in self.mne.inst.filenames:
+                disk_space += getsize(fn)
+
+            # Determine expected RAM space based on orig_format
+            fmt_multipliers = {'double': 1,
+                               'single': 2,
+                               'int': 2,
+                               'short': 4}
+
+            fmt = self.mne.inst.orig_format
+            # Apply size change to 64-bit float in memory
+            # (* 2 because when loading data will be loaded into a copy
+            # of self.mne.inst._data to apply processing.
+            expected_ram = disk_space * fmt_multipliers[fmt] * 2
+
+            # Get available RAM
+            free_ram = psutil.virtual_memory().free
+
+            expected_ram_str = sizeof_fmt(expected_ram)
+            free_ram_str = sizeof_fmt(free_ram)
+            left_ram_str = sizeof_fmt(free_ram - expected_ram)
+
+            if expected_ram < free_ram:
+                logger.info('The data preloaded for visualization takes '
+                            f'{expected_ram_str} with {left_ram_str}')
+                return True
+            else:
+                logger.info(f'The preloaded data with {expected_ram_str} '
+                            f'will surpass your current {free_ram_str} '
+                            f'of free RAM.\n'
+                            'Thus preload will be set to False.\n'
+                            '(If you want to preload nevertheless, '
+                            'then set preload to True instead of "auto")')
+                return False
 
     def _get_decim(self):
         if self.mne.decim != 1:
@@ -2339,27 +2327,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         event.accept()
 
         self._close(event)
-
-
-qt_key_mapping = {
-    'escape': Qt.Key_Escape,
-    'down': Qt.Key_Down,
-    'up': Qt.Key_Up,
-    'left': Qt.Key_Left,
-    'right': Qt.Key_Right,
-    '-': Qt.Key_Minus,
-    '+': Qt.Key_Plus,
-    '=': Qt.Key_Equal,
-    'pageup': Qt.Key_PageUp,
-    'pagedown': Qt.Key_PageDown,
-    'home': Qt.Key_Home,
-    'end': Qt.Key_End,
-    '?': Qt.Key_Question,
-    'f11': Qt.Key_F11
-}
-for char in 'abcdefghijklmnopyqrstuvwxyz0123456789':
-    qt_key_mapping[char] = getattr(Qt, f'Key_{char.upper() or char}')
-
 
 def _get_n_figs():
     return len(QApplication.topLevelWindows())
