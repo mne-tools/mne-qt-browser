@@ -1244,6 +1244,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # matplotlib and add them to MNEBrowseParams.
         self.mne.ds_cache = dict()
         self.mne.data_preloaded = False
+        self.mne.show_overview_bar = True
 
         # Add Load-Progressbar for loading in a thread
         self.mne.load_prog_label = QLabel('Loading...')
