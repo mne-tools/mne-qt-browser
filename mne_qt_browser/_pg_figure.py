@@ -783,11 +783,14 @@ class AnnotRegion(LinearRegionItem):
 
     def mouseClickEvent(self, event):
         """Customize mouse click events."""
-        event.accept()
-        if event.button() == Qt.LeftButton and self.movable:
-            self.select(True)
-        elif event.button() == Qt.RightButton and self.movable:
-            self.remove()
+        if self.mne.annotation_mode:
+            event.accept()
+            if event.button() == Qt.LeftButton and self.movable:
+                self.select(True)
+            elif event.button() == Qt.RightButton and self.movable:
+                self.remove()
+        else:
+            event.ignore()
 
     def update_label_pos(self):
         """Update position of description-label from annotation-region."""
@@ -1136,18 +1139,20 @@ class BrowserView(GraphicsView):
         self.viewport().grabGesture(Qt.PinchGesture)
         self.viewport().grabGesture(Qt.SwipeGesture)
 
-    def viewportEvent(self, event):
-        """Customize viewportEvent for touch-gestures (WIP)."""
-        if event.type() in [QEvent.TouchBegin, QEvent.TouchUpdate,
-                            QEvent.TouchEnd]:
-            if event.touchPoints() == 2:
-                pass
-        elif event.type() == QEvent.Gesture:
-            print('Gesture')
-        return super().viewportEvent(event)
+    # def viewportEvent(self, event):
+    #     """Customize viewportEvent for touch-gestures (WIP)."""
+    #     if event.type() in [QEvent.TouchBegin, QEvent.TouchUpdate,
+    #                         QEvent.TouchEnd]:
+    #         if event.touchPoints() == 2:
+    #             pass
+    #     elif event.type() == QEvent.Gesture:
+    #         print('Gesture')
+    #     return super().viewportEvent(event)
 
     def mouseMoveEvent(self, ev):
         """Customize MouseMoveEvent."""
+        # Don't set GraphicsView.mouseEnabled to True,
+        # we only want part of the functionality pyqtgraph offers here.
         super().mouseMoveEvent(ev)
         self.sigSceneMouseMoved.emit(ev.pos())
 
