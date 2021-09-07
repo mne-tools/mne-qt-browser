@@ -772,7 +772,7 @@ class HelpDialog(QDialog):
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
         self._init_ui()
-        self.open()
+        self.show()
 
     def _init_ui(self):
         layout = QFormLayout()
