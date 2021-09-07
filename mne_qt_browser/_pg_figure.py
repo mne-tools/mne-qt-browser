@@ -8,13 +8,14 @@
 import datetime
 import math
 import platform
+import sys
 from contextlib import contextmanager
 from functools import partial
 from os.path import getsize
 
 import numpy as np
 from PyQt5.QtCore import (QEvent, Qt, pyqtSignal, QRunnable,
-                          QObject, QThreadPool, QRectF)
+                          QObject, QThreadPool, QRectF, QLineF)
 from PyQt5.QtGui import (QFont, QIcon, QPixmap, QTransform,
                          QMouseEvent, QPainter, QImage, QPen)
 from PyQt5.QtTest import QTest
@@ -25,7 +26,9 @@ from PyQt5.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
                              QPushButton, QScrollBar, QSizePolicy,
                              QWidget, QStyleOptionSlider, QStyle,
                              QApplication, QGraphicsView, QProgressBar,
-                             QVBoxLayout, QLineEdit, QCheckBox, QScrollArea)
+                             QVBoxLayout, QLineEdit, QCheckBox, QScrollArea,
+                             QGraphicsLineItem)
+from mne.viz.utils import _simplify_float
 from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
                        LinearRegionItem, PlotCurveItem, PlotItem,
                        Point, TextItem, ViewBox, functions, mkBrush,
@@ -674,6 +677,90 @@ class Crosshair(InfiniteLine):
 
         p.setPen(mkPen('r', width=4))
         p.drawPoint(Point(self.y, 0))
+
+
+class BaseScaleBar:
+    def __init__(self, mne, ch_type):
+        self.mne = mne
+        self.ch_type = ch_type
+        self.ypos = None
+
+    def _set_position(self, x, y):
+        pass
+
+    def _is_visible(self):
+        return self.ch_type in self.mne.ch_types[self.mne.picks]
+
+    def _get_ypos(self):
+        ch_type_idxs = np.argwhere(self.mne.ch_types[self.mne.picks]
+                                   == self.ch_type)
+
+        for idx in ch_type_idxs:
+            ch_name = self.mne.ch_names[self.mne.picks[idx]]
+            if ch_name not in self.mne.info['bads'] and \
+                    ch_name not in self.mne.whitened_ch_names:
+                break
+
+        self.ypos = self.mne.ch_start + idx + 1
+
+    def update_x_position(self):
+        """Update x-position of Scalebar."""
+        if self._is_visible():
+            if self.ypos is None:
+                self._get_ypos()
+            self._set_position(self.mne.t_start, self.ypos)
+
+    def update_y_position(self):
+        """Update y-position of Scalebar."""
+        if self._is_visible():
+            self.setVisible(True)
+            self._get_ypos()
+            self._set_position(self.mne.t_start, self.ypos)
+        else:
+            self.setVisible(False)
+
+
+class ScaleBarText(BaseScaleBar, TextItem):
+    def __init__(self, mne, ch_type):
+        BaseScaleBar.__init__(self, mne, ch_type)
+        TextItem.__init__(self, color='#AA3377')
+
+        self.setFont(QFont('AnyStyle', 10, QFont.Bold))
+        self.setZValue(2)  # To draw over RawTraceItems
+
+        self.update_value()
+        self.update_y_position()
+
+    def update_value(self):
+        """Update value of ScaleBarText."""
+        scaler = 1 if self.mne.butterfly else 2
+        inv_norm = (scaler *
+                    self.mne.scalings[self.ch_type] *
+                    self.mne.unit_scalings[self.ch_type] /
+                    self.mne.scale_factor)
+        self.setText(f'{_simplify_float(inv_norm)} '
+                     f'{self.mne.units[self.ch_type]}')
+
+    def _set_position(self, x, y):
+        self.setPos(x, y)
+
+
+class ScaleBar(BaseScaleBar, QGraphicsLineItem):
+    def __init__(self, mne, ch_type):
+        BaseScaleBar.__init__(self, mne, ch_type)
+        QGraphicsLineItem.__init__(self)
+
+        self.setZValue(1)
+        self.setPen(mkPen(color='#AA3377', width=2))
+        self.update_y_position()
+
+    def _set_position(self, x, y):
+        self.setLine(QLineF(x, y - 0.5, x, y + 0.5))
+
+    def get_ydata(self):
+        """Get y-data for tests."""
+        line = self.line()
+        return line.y1(), line.y2()
 
 
 class HelpDialog(QDialog):
@@ -1325,6 +1412,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         for ch_idx in self.mne.picks:
             self._add_trace(ch_idx)
 
+        # Add Scale-Bars
+        self._add_scalebars()
+
         # Check for OpenGL
         try:
             import OpenGL
@@ -1591,13 +1681,61 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.plt.removeItem(trace)
         self.mne.traces.remove(trace)
 
+    def _add_scalebars(self):
+        """Add scalebars for all channel-types.
+        (scene handles showing them in when in view
+        range)
+        """
+        self.mne.scalebars.clear()
+        # To keep order (np.unique sorts)
+        ordered_types = self.mne.ch_types[self.mne.ch_order]
+        unique_type_idxs = np.unique(ordered_types,
+                                     return_index=True)[1]
+        ch_types_ordered = [ordered_types[idx] for idx
+                            in sorted(unique_type_idxs)]
+        for ch_type in [ct for ct in ch_types_ordered
+                        if ct != 'stim' and
+                        ct in self.mne.scalings and
+                        ct in getattr(self.mne, 'units', {}) and
+                        ct in getattr(self.mne, 'unit_scalings', {})]:
+
+            scale_bar = ScaleBar(self.mne, ch_type)
+            self.mne.scalebars[ch_type] = scale_bar
+            self.mne.plt.addItem(scale_bar)
+
+            scale_bar_text = ScaleBarText(self.mne, ch_type)
+            self.mne.scalebar_texts[ch_type] = scale_bar_text
+            self.mne.plt.addItem(scale_bar_text)
+
+    def _update_scalebar_x_positions(self):
+        for scalebar in self.mne.scalebars.values():
+            scalebar.update_x_position()
+
+        for scalebar_text in self.mne.scalebar_texts.values():
+            scalebar_text.update_x_position()
+
+    def _update_scalebar_y_positions(self):
+        for scalebar in self.mne.scalebars.values():
+            scalebar.update_y_position()
+
+        for scalebar_text in self.mne.scalebar_texts.values():
+            scalebar_text.update_y_position()
+
+    def _update_scalebar_values(self):
+        for scalebar_text in self.mne.scalebar_texts.values():
+            scalebar_text.update_value()
+
     def scale_all(self, step):
         """Scale all traces by multiplying with step."""
         self.mne.scale_factor *= step
         transform = self._get_scale_transform()
 
+        # Scale Traces (by scaling the Item, not the data)
         for line in self.mne.traces:
             line.setTransform(transform)
+
+        # Update Scalebars
+        self._update_scalebar_values()
 
     def hscroll(self, step):
         """Scroll horizontally by step."""
@@ -1708,10 +1846,21 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                     if len(trace) == 1:
                         trace = trace[0]
                         idx = np.argmin(np.abs(trace.xData - x))
-                        y = trace.get_ydata()[idx]
+                        yshown = trace.get_ydata()[idx]
 
-                        self.mne.crosshair.set_data(x, y)
-                        self.statusBar().showMessage(f'x={x:.3f} s, y={y:.3f}')
+                        self.mne.crosshair.set_data(x, yshown)
+
+                        yvalue = yshown - trace.ypos
+                        # negative because plot is inverted for Y
+                        scaler = -1 if self.mne.butterfly else -2
+                        inv_norm = (scaler *
+                                    self.mne.scalings[trace.ch_type] *
+                                    self.mne.unit_scalings[trace.ch_type] /
+                                    self.mne.scale_factor)
+                        label = f'{_simplify_float(yvalue * inv_norm)} ' \
+                                f'{self.mne.units[trace.ch_type]}'
+                        self.statusBar().showMessage(f'x={x:.3f} s, '
+                                                     f'y={label}')
 
     def _toggle_crosshair(self):
         self.mne.crosshair_enabled = not self.mne.crosshair_enabled
@@ -1731,6 +1880,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Update Overview-Bar
         self.mne.overview_bar.update()
 
+        # Update Scalebars
+        self._update_scalebar_x_positions()
+
     def _yrange_changed(self, _, yrange):
         if not self.mne.butterfly:
             # Update picks and data
@@ -1746,6 +1898,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
             # Update Overview-Bar
             self.mne.overview_bar.update()
+
+            # Update Scalebars
+            self._update_scalebar_y_positions()
 
         off_traces = [tr for tr in self.mne.traces
                       if tr.ch_idx not in self.mne.picks]
@@ -1901,22 +2056,25 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                         'Setting preload to False.')
             return False
         else:
-            # Get disk-space of raw-file(s)
-            disk_space = 0
-            for fn in self.mne.inst.filenames:
-                disk_space += getsize(fn)
+            if self.mne.inst.filenames[0]:
+                # Get disk-space of raw-file(s)
+                disk_space = 0
+                for fn in self.mne.inst.filenames:
+                    disk_space += getsize(fn)
 
-            # Determine expected RAM space based on orig_format
-            fmt_multipliers = {'double': 1,
-                               'single': 2,
-                               'int': 2,
-                               'short': 4}
+                # Determine expected RAM space based on orig_format
+                fmt_multipliers = {'double': 1,
+                                   'single': 2,
+                                   'int': 2,
+                                   'short': 4}
 
-            fmt = self.mne.inst.orig_format
-            # Apply size change to 64-bit float in memory
-            # (* 2 because when loading data will be loaded into a copy
-            # of self.mne.inst._data to apply processing.
-            expected_ram = disk_space * fmt_multipliers[fmt] * 2
+                fmt = self.mne.inst.orig_format
+                # Apply size change to 64-bit float in memory
+                # (* 2 because when loading data will be loaded into a copy
+                # of self.mne.inst._data to apply processing.
+                expected_ram = disk_space * fmt_multipliers[fmt] * 2
+            else:
+                expected_ram = sys.getsizeof(self.mne.inst._data)
 
             # Get available RAM
             free_ram = psutil.virtual_memory().free
@@ -1927,7 +2085,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
             if expected_ram < free_ram:
                 logger.info('The data preloaded for visualization takes '
-                            f'{expected_ram_str} with {left_ram_str}')
+                            f'{expected_ram_str} with {left_ram_str} of '
+                            f'RAM left.')
                 return True
             else:
                 logger.info(f'The preloaded data with {expected_ram_str} '
@@ -2328,11 +2487,15 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         return list(ax.get_labels())
 
+    def _get_scale_bar_texts(self):
+        return tuple(t.toPlainText() for t in self.mne.scalebar_texts.values())
+
     def closeEvent(self, event):
         """Customize close event."""
         event.accept()
 
         self._close(event)
+
 
 def _get_n_figs():
     return len(QApplication.topLevelWindows())
