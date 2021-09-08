@@ -28,8 +28,7 @@ from PyQt5.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
                              QApplication, QGraphicsView, QProgressBar,
                              QVBoxLayout, QLineEdit, QCheckBox, QScrollArea,
                              QGraphicsLineItem)
-from mne.viz.utils import _simplify_float
-from prompt_toolkit.key_binding.bindings import scroll
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
                        LinearRegionItem, PlotCurveItem, PlotItem,
                        Point, TextItem, ViewBox, functions, mkBrush,
@@ -44,6 +43,7 @@ except ImportError:
         yield [None]
 
 from mne.viz._figure import BrowserBase
+from mne.viz.utils import _simplify_float
 from mne.annotations import _sync_onset
 from mne.io.pick import _DATA_CH_TYPES_ORDER_DEFAULT
 from mne.utils import logger, sizeof_fmt
@@ -267,15 +267,19 @@ class ChannelAxis(AxisItem):
                          if k in [tr.ch_name for tr in self.mne.traces]}
         # Get channel-name from position of channel-description
         ypos = event.scenePos().y()
+        ch_name = None
         for ch_name in self.ch_texts:
             ymin, ymax = self.ch_texts[ch_name][1]
             if ymin < ypos < ymax:
-                print(f'{ch_name} clicked!')
-                line = [li for li in self.mne.traces
-                        if li.ch_name == ch_name][0]
-                self.main._bad_ch_clicked(line)
                 break
-        # return super().mouseClickEvent(event)
+
+        if ch_name is not None:
+            trace = [tr for tr in self.mne.traces
+                    if tr.ch_name == ch_name][0]
+            if event.button() == Qt.LeftButton:
+                self.main._bad_ch_clicked(trace)
+            elif event.button() == Qt.RightButton:
+                self.main._create_ch_context_fig(trace.range_idx)
 
     def get_labels(self):
         """Get labels for testing."""
@@ -1341,6 +1345,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     """A PyQtGraph-backend for 2D data browsing."""
 
     def __init__(self, **kwargs):
+        self.backend_name = 'pyqtgraph'
+
         BrowserBase.__init__(self, **kwargs)
         QMainWindow.__init__(self)
 
@@ -2356,6 +2362,28 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.toolbar.setVisible(self.mne.scrollbars_visible)
         self.mne.overview_bar.setVisible(self.mne.scrollbars_visible)
 
+    def _get_widget_from_mpl(self, fig):
+        canvas = FigureCanvasQTAgg(fig)
+        canvas.setFocusPolicy(Qt.StrongFocus | Qt.WheelFocus)
+        canvas.setFocus()
+
+        return canvas
+
+    def _get_dlg_from_mpl(self, fig):
+        canvas = self._get_widget_from_mpl(fig)
+        dlg = QDialog(self)
+        layout = QVBoxLayout()
+        layout.addWidget(canvas)
+        close_bt = QPushButton('Close')
+        close_bt.clicked.connect(dlg.close)
+        layout.addWidget(close_bt)
+        dlg.setLayout(layout)
+        dlg.open()
+
+    def _create_ch_context_fig(self, idx):
+        fig = super()._create_ch_context_fig(idx)
+        self._get_dlg_from_mpl(fig)
+
     def _update_trace_offsets(self):
         pass
 
@@ -2406,7 +2434,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _close_event(self, fig=None):
         fig = fig or self
-        fig.close()
+        if hasattr(fig, 'close'):
+            fig.close()
 
     def _get_size(self):
         inch_width = self.width() / self.physicalDpiX()
