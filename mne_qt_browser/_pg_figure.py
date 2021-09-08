@@ -29,6 +29,7 @@ from PyQt5.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
                              QVBoxLayout, QLineEdit, QCheckBox, QScrollArea,
                              QGraphicsLineItem)
 from mne.viz.utils import _simplify_float
+from prompt_toolkit.key_binding.bindings import scroll
 from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
                        LinearRegionItem, PlotCurveItem, PlotItem,
                        Point, TextItem, ViewBox, functions, mkBrush,
@@ -48,6 +49,11 @@ from mne.io.pick import _DATA_CH_TYPES_ORDER_DEFAULT
 from mne.utils import logger, sizeof_fmt
 
 name = 'pyqtgraph'
+
+
+def _get_std_icon(icon_name):
+    return QApplication.instance().style().standardIcon(
+        getattr(QStyle, icon_name))
 
 
 class RawTraceItem(PlotCurveItem):
@@ -769,13 +775,16 @@ class HelpDialog(QDialog):
     def __init__(self, main):
         super().__init__(main)
         self.mne = main.mne
-        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
         self._init_ui()
         self.show()
 
     def _init_ui(self):
-        layout = QFormLayout()
+        layout = QVBoxLayout()
+        scroll_area = QScrollArea()
+
+        scroll_widget = QWidget()
+        form_layout = QFormLayout()
         for key in self.mne.keyboard_shortcuts:
             key_dict = self.mne.keyboard_shortcuts[key]
             if 'alias' in key_dict:
@@ -785,7 +794,10 @@ class HelpDialog(QDialog):
                     mod = key_dict['modifier'][idx]
                     if mod is not None:
                         key = mod + ' + ' + key
-                layout.addRow(key, QLabel(key_des))
+                form_layout.addRow(key, QLabel(key_des))
+        scroll_widget.setLayout(form_layout)
+        scroll_area.setWidget(scroll_widget)
+        layout.addWidget(scroll_area)
         self.setLayout(layout)
 
 
@@ -1472,30 +1484,35 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Initialize Toolbar
         toolbar = self.addToolBar('Tools')
+        toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
 
-        adecr_time = QAction('-Time', parent=self)
-        adecr_time.triggered.connect(partial(self.change_duration,
-                                             -self.mne.scroll_sensitivity / 10))
+        adecr_time = QAction(_get_std_icon('SP_ArrowDown'),
+                             'Time', parent=self)
+        adecr_time.triggered.connect(partial(self.change_duration, -10))
         toolbar.addAction(adecr_time)
 
-        aincr_time = QAction('+Time', parent=self)
-        aincr_time.triggered.connect(partial(self.change_duration,
-                                             self.mne.scroll_sensitivity / 10))
+        aincr_time = QAction(_get_std_icon('SP_ArrowUp'),
+                             'Time', parent=self)
+        aincr_time.triggered.connect(partial(self.change_duration, 10))
         toolbar.addAction(aincr_time)
 
-        adecr_nchan = QAction('-Channels', parent=self)
+        adecr_nchan = QAction(_get_std_icon('SP_ArrowDown'),
+                              'Channels', parent=self)
         adecr_nchan.triggered.connect(partial(self.change_nchan, -10))
         toolbar.addAction(adecr_nchan)
 
-        aincr_nchan = QAction('+Channels', parent=self)
+        aincr_nchan = QAction(_get_std_icon('SP_ArrowUp'),
+                              'Channels', parent=self)
         aincr_nchan.triggered.connect(partial(self.change_nchan, 10))
         toolbar.addAction(aincr_nchan)
 
-        atoggle_annot = QAction('Toggle Annotations', parent=self)
+        atoggle_annot = QAction(_get_std_icon('SP_DialogResetButton'),
+                                'Toggle Annotations', parent=self)
         atoggle_annot.triggered.connect(self._toggle_annotation_fig)
         toolbar.addAction(atoggle_annot)
 
-        ahelp = QAction('Help', parent=self)
+        ahelp = QAction(_get_std_icon('SP_MessageBoxQuestion'),
+                        'Help', parent=self)
         ahelp.triggered.connect(self._toggle_help_fig)
         toolbar.addAction(ahelp)
 
