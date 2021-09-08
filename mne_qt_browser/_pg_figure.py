@@ -773,24 +773,53 @@ class ScaleBar(BaseScaleBar, QGraphicsLineItem):
         return line.y1(), line.y2()
 
 
-class HelpDialog(QDialog):
-    """Shows all keyboard-shortcuts."""
-
-    def __init__(self, main):
+class _BaseDialog(QDialog):
+    def __init__(self, main, widget=None, modal=False, title=None):
         super().__init__(main)
         self.mne = main.mne
+        self.widget = widget
+
+        self.setAttribute(Qt.WA_DeleteOnClose, True)
 
         self._init_ui()
-        self.show()
+
+        self.mne.child_figs.append(self)
+
+        if title is not None:
+            self.setWindowTitle(title)
+
+        if modal:
+            self.open()
+        else:
+            self.show()
 
     def _init_ui(self):
         layout = QVBoxLayout()
-        scroll_area = QScrollArea()
+        if self.widget is not None:
+            layout.addWidget(self.widget)
+        close_bt = QPushButton('Close')
+        close_bt.clicked.connect(self.close)
+        layout.addWidget(close_bt)
+        self.setLayout(layout)
 
+    def closeEvent(self, event):
+        event.accept()
+        if self.widget is not None:
+            self.widget.deleteLater()
+        self.mne.child_figs.remove(self)
+
+
+class HelpDialog(_BaseDialog):
+    """Shows all keyboard-shortcuts."""
+
+    def __init__(self, main):
+
+        # Show all keyboard-shortcuts in a Scroll-Area
+        scroll_area = QScrollArea()
         scroll_widget = QWidget()
         form_layout = QFormLayout()
-        for key in self.mne.keyboard_shortcuts:
-            key_dict = self.mne.keyboard_shortcuts[key]
+        for key in main.mne.keyboard_shortcuts:
+            key_dict = main.mne.keyboard_shortcuts[key]
             if 'alias' in key_dict:
                 key = key_dict['alias']
             for idx, key_des in enumerate(key_dict['description']):
@@ -801,8 +830,8 @@ class HelpDialog(QDialog):
                 form_layout.addRow(key, QLabel(key_des))
         scroll_widget.setLayout(form_layout)
         scroll_area.setWidget(scroll_widget)
-        layout.addWidget(scroll_area)
-        self.setLayout(layout)
+
+        super().__init__(main, scroll_area)
 
 
 class AnnotRegion(LinearRegionItem):
@@ -2362,23 +2391,32 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.toolbar.setVisible(self.mne.scrollbars_visible)
         self.mne.overview_bar.setVisible(self.mne.scrollbars_visible)
 
+    def _new_child_figure(self, fig_name, window_title, **kwargs):
+        from matplotlib.figure import Figure
+        fig = Figure(**kwargs)
+        # Pass window title on
+        if window_title is not None:
+            fig.title = window_title
+        return fig
+
     def _get_widget_from_mpl(self, fig):
         canvas = FigureCanvasQTAgg(fig)
         canvas.setFocusPolicy(Qt.StrongFocus | Qt.WheelFocus)
         canvas.setFocus()
+        # Pass window title on
+        if hasattr(fig, 'title'):
+            canvas.title = fig.title
 
         return canvas
 
     def _get_dlg_from_mpl(self, fig):
         canvas = self._get_widget_from_mpl(fig)
-        dlg = QDialog(self)
-        layout = QVBoxLayout()
-        layout.addWidget(canvas)
-        close_bt = QPushButton('Close')
-        close_bt.clicked.connect(dlg.close)
-        layout.addWidget(close_bt)
-        dlg.setLayout(layout)
-        dlg.open()
+        # Pass window title on
+        if hasattr(canvas, 'title'):
+            title = canvas.title
+        else:
+            title = None
+        _BaseDialog(self, canvas, title=title)
 
     def _create_ch_context_fig(self, idx):
         fig = super()._create_ch_context_fig(idx)
@@ -2433,8 +2471,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             trace.update_data()
 
     def _close_event(self, fig=None):
-        fig = fig or self
-        if hasattr(fig, 'close'):
+        if fig is not None and hasattr(fig, 'close'):
             fig.close()
 
     def _get_size(self):
