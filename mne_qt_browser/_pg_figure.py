@@ -482,6 +482,19 @@ class OverviewBar(QLabel):
 
                 painter.drawRect(QRectF(top_left, bottom_right))
 
+        # ToDo: Way too slow, needs to be reworked (maybe using QGraphicsView
+        #   instead of QLabel and paintEvent)
+        # Paint Events
+        if self.mne.event_nums is not None and self.mne.events_visible:
+            for ev_t, ev_id in zip(self.mne.event_times, self.mne.event_nums):
+                color_name = self.mne.event_color_dict[ev_id]
+                color = mkColor(color_name)
+                color.setAlpha(200)
+                painter.setPen(color)
+                top_left = self._mapFromData(ev_t, 0)
+                bottom_right = self._mapFromData(ev_t, len(self.mne.ch_order))
+                painter.drawLine(QLineF(top_left, bottom_right))
+
         # Paint view range
         view_pen = QPen(mkColor('g'))
         view_pen.setWidth(2)
@@ -638,7 +651,7 @@ class VLineLabel(InfLineLabel):
     """Label of the vline displaying the time."""
 
     def __init__(self, vline):
-        super().__init__(vline, text='{value:.3f} s', position=0.975,
+        super().__init__(vline, text='{value:.3f} s', position=0.98,
                          fill='g', color='b', movable=True)
         self.vline = vline
         self.cursorOffset = None
@@ -663,16 +676,25 @@ class VLineLabel(InfLineLabel):
 
 
 class VLine(InfiniteLine):
-    """Marker to be placed inside the Data-Trace-Plot."""
+    """Marker to be placed inside the Trace-Plot."""
 
     def __init__(self, pos, bounds):
         super().__init__(pos, pen='g', hoverPen='y',
                          movable=True, bounds=bounds)
-        self.line = VLineLabel(self)
+        self.label = VLineLabel(self)
+
+
+class EventLine(InfiniteLine):
+    """Displays Events inside Trace-Plot"""
+
+    def __init__(self, pos, id, color):
+        super().__init__(pos, pen=color, movable=False,
+                         label=str(id), labelOpts={'position': 0.98,
+                                                   'color': color})
 
 
 class Crosshair(InfiniteLine):
-    """Continously updating marker inside the Data-Trace-Plot."""
+    """Continously updating marker inside the Trace-Plot."""
 
     def __init__(self):
         super().__init__(angle=90, movable=False, pen='g')
@@ -1252,7 +1274,7 @@ class AnnotationDock(QDockWidget):
         select_dlg.setLayout(layout)
         select_dlg.exec()
 
-        self._update_regions_visible()
+        self.main._update_regions_visible()
 
     def _description_changed(self, descr_idx):
         new_descr = self.description_cmbx.itemText(descr_idx)
@@ -1309,11 +1331,6 @@ class AnnotationDock(QDockWidget):
         for description in descriptions:
             self._add_description_to_cmbx(description)
         self.description_cmbx.setCurrentText(self.mne.current_description)
-
-    def _update_regions_visible(self):
-        for region in self.mne.regions:
-            region.update_visible(
-                self.mne.visible_annotations[region.description])
 
     def _update_regions_colors(self):
         for region in self.mne.regions:
@@ -1474,6 +1491,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Initialize annotations (ToDo: Adjust to MPL)
         self.mne.annotation_mode = False
+        self.mne.annotations_visible = True
         self.mne.new_annotation_labels = self._get_annotation_labels()
         if len(self.mne.new_annotation_labels) > 0:
             self.mne.current_description = self.mne.new_annotation_labels[0]
@@ -1525,6 +1543,22 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Add traces
         for ch_idx in self.mne.picks:
             self._add_trace(ch_idx)
+
+        # Add events (add all once, since their representation is simple
+        # they shouldn't have a big impact on performance when showing them
+        # is handled by QGraphicsView).
+        if self.mne.event_nums is not None:
+            self.mne.events_visible = True
+            for ev_time, ev_id in zip(self.mne.event_times,
+                                      self.mne.event_nums):
+                color = self.mne.event_color_dict[ev_id]
+                event_line = EventLine(ev_time, ev_id, color)
+                self.mne.event_lines.append(event_line)
+
+                if 0 < ev_time < self.mne.duration:
+                    self.mne.plt.addItem(event_line)
+        else:
+            self.mne.events_visible = False
 
         # Add Scale-Bars
         self._add_scalebars()
@@ -1723,8 +1757,11 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             },
             'a': {
                 'qt_key': Qt.Key_A,
-                'slot': [self._toggle_annotation_fig],
-                'description': ['Toggle Annotation-Tool']
+                'slot': [self._toggle_annotation_fig,
+                         self._toggle_annotations],
+                'modifier': [None, 'Shift'],
+                'description': ['Toggle Annotation-Tool',
+                                'Toggle All Annotations']
             },
             'b': {
                 'qt_key': Qt.Key_B,
@@ -1735,6 +1772,11 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'qt_key': Qt.Key_D,
                 'slot': [self._toggle_dc],
                 'description': ['Toggle DC-Correction']
+            },
+            'e': {
+                'qt_key': Qt.Key_E,
+                'slot': [self._toggle_events],
+                'description': ['Toggle Events']
             },
             'h': {
                 'qt_key': Qt.Key_H,
@@ -2044,6 +2086,12 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.duration = xrange[1] - xrange[0]
         self._redraw(update_data=True)
 
+        # Update annotations
+        self._update_annotations_xrange(xrange)
+
+        # Update Events
+        self._update_events_xrange(xrange)
+
         # Update Time-Bar
         self.mne.ax_hscroll.update_value(xrange[0])
 
@@ -2052,6 +2100,42 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Update Scalebars
         self._update_scalebar_x_positions()
+
+    def _update_events_xrange(self, xrange):
+        """Add or remove event-lines depending on view-range.
+
+        This has proven to be more performant (and scalable)
+        than adding all event-lines to plt/the Scene
+        and letting pyqtgraph/Qt handle it.
+        """
+        if self.mne.events_visible:
+            for ev_line in self.mne.event_lines:
+                if xrange[0] < ev_line.pos().x() < xrange[1]:
+                    if ev_line not in self.mne.plt.items:
+                        self.mne.plt.addItem(ev_line)
+                else:
+                    if ev_line in self.mne.plt.items:
+                        self.mne.plt.removeItem(ev_line)
+
+    def _update_annotations_xrange(self, xrange):
+        """Add or remove annotation-regions depending on view-range.
+
+        This has proven to be more performant (and scalable)
+        than adding all event-lines to plt/the Scene
+        and letting pyqtgraph/Qt handle it.
+        """
+        if self.mne.annotations_visible:
+            for region in self.mne.regions:
+                if self.mne.visible_annotations[region.description]:
+                    if any([xrange[0] < v < xrange[1]
+                            for v in region.getRegion()]):
+                        if region not in self.mne.plt.items:
+                            self.mne.plt.addItem(region)
+                            self.mne.plt.addItem(region.label_item)
+                    else:
+                        if region in self.mne.plt.items:
+                            self.mne.plt.removeItem(region)
+                            self.mne.plt.removeItem(region.label_item)
 
     def _yrange_changed(self, _, yrange):
         if not self.mne.butterfly:
@@ -2350,8 +2434,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if not region:
             region = AnnotRegion(self.mne, description=description,
                                  values=(plot_onset, plot_onset + duration))
+        if (any([self.mne.t_start < v < self.mne.t_start + self.mne.duration
+                for v in [plot_onset, plot_onset + duration]]) and
+                region not in self.mne.plt.items):
             self.mne.plt.addItem(region)
-            # Found no better way yet to initialize the region-labels
             self.mne.plt.addItem(region.label_item)
         region.regionChangeFinished.connect(self._region_changed)
         region.gotSelected.connect(self._region_selected)
@@ -2455,6 +2541,29 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.annotation_mode = not self.mne.annotation_mode
         self._change_annot_mode()
 
+    def _update_regions_visible(self):
+        for region in self.mne.regions:
+            region.update_visible(
+                self.mne.visible_annotations[region.description])
+        self.mne.overview_bar.update()
+
+    def _toggle_annotations(self):
+        self.mne.annotations_visible = not self.mne.annotations_visible
+        for descr in self.mne.visible_annotations:
+            self.mne.visible_annotations[descr] = self.mne.annotations_visible
+        self._update_regions_visible()
+
+        # Update Plot
+        if self.mne.annotations_visible:
+            self._update_annotations_xrange((self.mne.t_start,
+                                             self.mne.t_start +
+                                             self.mne.duration))
+        else:
+            for region in [r for r in self.mne.regions
+                           if r in self.mne.plt.items]:
+                self.mne.plt.removeItem(region)
+                self.mne.plt.removeItem(region.label_item)
+
     def _apply_update_projectors(self, toggle_all=False):
         if toggle_all:
             on = self.mne.projs_on
@@ -2520,6 +2629,23 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def _toggle_epoch_histogram(self):
         fig = self._create_epoch_histogram()
         self._get_dlg_from_mpl(fig)
+
+    def _toggle_events(self):
+        if self.mne.event_nums is not None:
+            self.mne.events_visible = not self.mne.events_visible
+            for event_line in self.mne.event_lines:
+                event_line.setVisible(self.mne.events_visible)
+
+            # Update Plot
+            if self.mne.events_visible:
+                self._update_events_xrange((self.mne.t_start,
+                                            self.mne.t_start +
+                                            self.mne.duration))
+            else:
+                for event_line in [evl for evl in self.mne.event_lines
+                                   if evl in self.mne.plt.items]:
+                    self.mne.plt.removeItem(event_line)
+            self.mne.overview_bar.update()
 
     def _toggle_time_format(self):
         if self.mne.time_format == 'float':
