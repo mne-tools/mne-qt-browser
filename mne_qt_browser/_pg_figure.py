@@ -818,7 +818,7 @@ class _BaseDialog(QDialog):
     def closeEvent(self, event):
         if self in self.mne.child_figs:
             self.mne.child_figs.remove(self)
-        if hasattr(self.mne, self.name):
+        if self.name is not None and hasattr(self.mne, self.name):
             setattr(self.mne, self.name, None)
         event.accept()
 
@@ -877,13 +877,14 @@ class ProjDialog(_BaseDialog):
             self.checkboxes.append(chkbx)
             layout.addWidget(chkbx)
 
-        toggle_all_bt = QPushButton('Toggle All')
-        toggle_all_bt.clicked.connect(self.toggle_all)
-        layout.addWidget(toggle_all_bt)
+        self.toggle_all_bt = QPushButton('Toggle All')
+        self.toggle_all_bt.clicked.connect(self.toggle_all)
+        layout.addWidget(self.toggle_all_bt)
         widget.setLayout(layout)
 
     def _proj_changed(self, _):
         if self.external_change:
+            print('Projection-Checkbox was clicked!')
             applied = self.mne.projs_active
             new_state = np.array([chkbx.isChecked()
                                   for chkbx in self.checkboxes])
@@ -2475,7 +2476,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.fig_proj.close()
 
     def _toggle_all_projs(self):
-        self._apply_update_projectors(toggle_all=True)
+        if self.mne.fig_proj is None:
+            self._apply_update_projectors(toggle_all=True)
+        else:
+            self.mne.fig_proj.toggle_all()
 
     def _toggle_help_fig(self):
         if self.mne.fig_help is None:
@@ -2580,7 +2584,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _create_ch_context_fig(self, idx):
         fig = super()._create_ch_context_fig(idx)
-        self._get_dlg_from_mpl(fig)
+        if fig is not None:
+            self._get_dlg_from_mpl(fig)
 
     def _update_trace_offsets(self):
         pass
@@ -2613,7 +2618,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                         if mod in key_dict['modifier']:
                             mod_idx = key_dict['modifier'].index(mod)
 
-                slot_idx = mod_idx if len(key_dict['slot']) < mod_idx else 0
+                slot_idx = mod_idx if mod_idx < len(key_dict['slot']) else 0
                 slot = key_dict['slot'][slot_idx]
 
                 if 'parameter' in key_dict:
@@ -2631,10 +2636,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # Update data
             trace.update_data()
 
-    def _close_event(self, fig=None):
-        if fig is not None and hasattr(fig, 'close'):
-            fig.close()
-
     def _get_size(self):
         inch_width = self.width() / self.physicalDpiX()
         inch_height = self.height() / self.physicalDpiY()
@@ -2643,9 +2644,17 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _fake_keypress(self, key, fig=None):
         fig = fig or self
+
+        if key.isupper():
+            key = key.lower()
+            modifier = Qt.ShiftModifier
+        else:
+            modifier = Qt.NoModifier
+
         # Use pytest-qt's exception-hook
         with capture_exceptions() as exceptions:
-            QTest.keyPress(fig, self.mne.keyboard_shortcuts[key]['qt_key'])
+            QTest.keyPress(fig, self.mne.keyboard_shortcuts[key]['qt_key'],
+                           modifier)
 
         for exc in exceptions:
             raise RuntimeError(f'There as been an {exc[0]} inside the Qt '
@@ -2688,12 +2697,18 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # This only works on the View (self.mne.view)
             fig = self.mne.view
             point = self.mne.viewbox.mapViewToScene(Point(*point))
-        elif xform == 'none':
-            point = Point(*point)
+        elif xform == 'none' or xform is None:
+            if isinstance(point, (tuple, list)):
+                point = Point(*point)
+            else:
+                point = Point(point)
 
         # Use pytest-qt's exception-hook
         with capture_exceptions() as exceptions:
             if kind == 'press':
+                # always click because most interactivity comes form
+                # mouseClickEvent from pyqtgraph (just press doesn't suffice
+                # here).
                 _mouseClick(widget=fig, pos=point, button=button)
             elif kind == 'release':
                 _mouseRelease(widget=fig, pos=point, button=button)
