@@ -6,6 +6,7 @@
 # License: Simplified BSD
 
 import datetime
+import gc
 import math
 import platform
 import sys
@@ -527,7 +528,7 @@ class OverviewBar(QLabel):
     def set_overview(self):
         """Set the background-image for the selected overview-mode."""
         # Add Overview-Pixmap
-        if self.mne.overview_mode == 'channels' or not self.mne.preload:
+        if self.mne.overview_mode == 'channels' or not self.mne.enable_preload:
             channel_rgba = np.empty((len(self.mne.ch_order),
                                      2, 4))
             for line_idx, ch_idx in enumerate(self.mne.ch_order):
@@ -774,16 +775,22 @@ class ScaleBar(BaseScaleBar, QGraphicsLineItem):
 
 
 class _BaseDialog(QDialog):
-    def __init__(self, main, widget=None, modal=False, title=None):
+    def __init__(self, main, widget=None, modal=False, name=None,
+                 title=None):
         super().__init__(main)
+        self.main = main
         self.mne = main.mne
         self.widget = widget
+        self.name = name
 
         self.setAttribute(Qt.WA_DeleteOnClose, True)
 
         self._init_ui()
 
         self.mne.child_figs.append(self)
+
+        if self.name is not None:
+            setattr(self.mne, self.name, self)
 
         if title is not None:
             self.setWindowTitle(title)
@@ -802,17 +809,24 @@ class _BaseDialog(QDialog):
         layout.addWidget(close_bt)
         self.setLayout(layout)
 
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape:
+            self.close()
+        else:
+            self.parent().keyPressEvent(event)
+
     def closeEvent(self, event):
+        if self in self.mne.child_figs:
+            self.mne.child_figs.remove(self)
+        if hasattr(self.mne, self.name):
+            setattr(self.mne, self.name, None)
         event.accept()
-        if self.widget is not None:
-            self.widget.deleteLater()
-        self.mne.child_figs.remove(self)
 
 
 class HelpDialog(_BaseDialog):
     """Shows all keyboard-shortcuts."""
 
-    def __init__(self, main):
+    def __init__(self, main, **kwargs):
 
         # Show all keyboard-shortcuts in a Scroll-Area
         scroll_area = QScrollArea()
@@ -831,7 +845,62 @@ class HelpDialog(_BaseDialog):
         scroll_widget.setLayout(form_layout)
         scroll_area.setWidget(scroll_widget)
 
-        super().__init__(main, scroll_area)
+        super().__init__(main, scroll_area, **kwargs)
+
+
+class ProjDialog(_BaseDialog):
+    """A dialog to toggle projections."""
+    def __init__(self, main, **kwargs):
+        self.external_change = True
+        # Create projection-layout
+        widget = QWidget()
+        super().__init__(main, widget, **kwargs)
+
+        layout = QVBoxLayout()
+        labels = [p['desc'] for p in self.mne.projs]
+        for ix, active in enumerate(self.mne.projs_active):
+            if active:
+                labels[ix] += ' (already applied)'
+
+        # make title
+        layout.addWidget(QLabel('Mark projectors applied on the plot.\n'
+                                '(Applied projectors are dimmed).'))
+
+        # Add checkboxes
+        self.checkboxes = list()
+        for idx, label in enumerate(labels):
+            chkbx = QCheckBox(label)
+            chkbx.setChecked(bool(self.mne.projs_on[idx]))
+            chkbx.stateChanged.connect(self._proj_changed)
+            if label.endswith('(already applied)'):
+                chkbx.setEnabled(False)
+            self.checkboxes.append(chkbx)
+            layout.addWidget(chkbx)
+
+        toggle_all_bt = QPushButton('Toggle All')
+        toggle_all_bt.clicked.connect(self.toggle_all)
+        layout.addWidget(toggle_all_bt)
+        widget.setLayout(layout)
+
+    def _proj_changed(self, _):
+        if self.external_change:
+            applied = self.mne.projs_active
+            new_state = np.array([chkbx.isChecked()
+                                  for chkbx in self.checkboxes])
+            # Always activate applied projections
+            new_state[applied] = True
+            self.mne.projs_on = new_state
+            self.main._apply_update_projectors()
+
+    def toggle_all(self):
+        """Toggle all projectors."""
+        self.main._apply_update_projectors(toggle_all=True)
+
+        # Update all checkboxes without consequences in _proj_changed
+        self.external_change = False
+        for idx, chkbx in enumerate(self.checkboxes):
+            chkbx.setChecked(bool(self.mne.projs_on[idx]))
+        self.external_change = True
 
 
 class AnnotRegion(LinearRegionItem):
@@ -1382,6 +1451,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Initialize attributes which are only used by pyqtgraph, not by
         # matplotlib and add them to MNEBrowseParams.
         self.mne.ds_cache = dict()
+        self.mne.enable_preload = False
         self.mne.data_preloaded = False
         self.mne.show_overview_bar = True
 
@@ -1414,12 +1484,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         setConfigOption('antialias', self.mne.antialiasing)
 
-        # Start preloading if enabled
-        if self.mne.preload == 'auto':
-            self.mne.preload = self._check_space_for_preload()
-        if self.mne.preload:
-            self._preload_in_thread()
-
         # Create centralWidget and layout
         widget = QWidget()
         layout = QGridLayout()
@@ -1432,8 +1496,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         vars(self.mne).update(time_axis=time_axis, channel_axis=channel_axis,
                               viewbox=viewbox)
 
+        # Start preloading if enabled
+        QThreadPool.globalInstance().setMaxThreadCount(1)
+        self._init_preload()
         # Initialize data (needed in RawTraceItem.update_data).
-        # This could be optimized.
         self._update_data()
 
         # Initialize Trace-Plot
@@ -1546,6 +1612,11 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         atoggle_annot.triggered.connect(self._toggle_annotation_fig)
         toolbar.addAction(atoggle_annot)
 
+        atoggle_proj = QAction(_get_std_icon('SP_DialogOkButton'),
+                               'Toggle Projections', parent=self)
+        atoggle_proj.triggered.connect(self._toggle_proj_fig)
+        toolbar.addAction(atoggle_proj)
+
         ahelp = QAction(_get_std_icon('SP_MessageBoxQuestion'),
                         'Help', parent=self)
         ahelp.triggered.connect(self._toggle_help_fig)
@@ -1567,7 +1638,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'alias': '←',
                 'qt_key': Qt.Key_Left,
                 'modifier': [None, 'Ctrl'],
-                'slot': self.hscroll,
+                'slot': [self.hscroll],
                 'parameter': [-10, -1],
                 'description': ['Move left', 'Move left (tiny step)']
             },
@@ -1575,7 +1646,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'alias': '→',
                 'qt_key': Qt.Key_Right,
                 'modifier': [None, 'Ctrl'],
-                'slot': self.hscroll,
+                'slot': [self.hscroll],
                 'parameter': [10, 1],
                 'description': ['Move right', 'Move left (tiny step)']
             },
@@ -1583,7 +1654,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'alias': '↑',
                 'qt_key': Qt.Key_Up,
                 'modifier': [None, 'Ctrl'],
-                'slot': self.vscroll,
+                'slot': [self.vscroll],
                 'parameter': [-10, -1],
                 'description': ['Move up', 'Move up (tiny step)']
             },
@@ -1591,7 +1662,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'alias': '↓',
                 'qt_key': Qt.Key_Down,
                 'modifier': [None, 'Ctrl'],
-                'slot': self.vscroll,
+                'slot': [self.vscroll],
                 'parameter': [10, 1],
                 'description': ['Move down', 'Move down (tiny step)']
             },
@@ -1599,7 +1670,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'alias': dur_keys[0],
                 'qt_key': Qt.Key_Home,
                 'modifier': [None, 'Ctrl'],
-                'slot': self.change_duration,
+                'slot': [self.change_duration],
                 'parameter': [-10, -1],
                 'description': ['Decrease duration',
                                 'Decrease duration (tiny step)']
@@ -1608,7 +1679,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'alias': dur_keys[1],
                 'qt_key': Qt.Key_End,
                 'modifier': [None, 'Ctrl'],
-                'slot': self.change_duration,
+                'slot': [self.change_duration],
                 'parameter': [10, 1],
                 'description': ['Increase duration',
                                 'Increase duration (tiny step)']
@@ -1617,7 +1688,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'alias': ch_keys[1],
                 'qt_key': Qt.Key_PageUp,
                 'modifier': [None, 'Ctrl'],
-                'slot': self.change_nchan,
+                'slot': [self.change_nchan],
                 'parameter': [-10, -1],
                 'description': ['Decrease shown channels',
                                 'Decrease shown channels (tiny step)']
@@ -1626,73 +1697,101 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'alias': ch_keys[0],
                 'qt_key': Qt.Key_PageDown,
                 'modifier': [None, 'Ctrl'],
-                'slot': self.change_nchan,
+                'slot': [self.change_nchan],
                 'parameter': [10, 1],
                 'description': ['Increase shown channels',
                                 'Increase shown channels (tiny step)']
             },
             '-': {
                 'qt_key': Qt.Key_Minus,
-                'slot': self.scale_all,
+                'slot': [self.scale_all],
                 'parameter': [0.75],
                 'description': ['Decrease Scale']
             },
             '+': {
                 'qt_key': Qt.Key_Plus,
-                'slot': self.scale_all,
+                'slot': [self.scale_all],
                 'parameter': [1.25],
                 'description': ['Increase Scale']
             },
             '=': {
                 'qt_key': Qt.Key_Equal,
-                'slot': self.scale_all,
+                'slot': [self.scale_all],
                 'parameter': [1.25],
                 'description': ['Increase Scale']
             },
             'a': {
                 'qt_key': Qt.Key_A,
-                'slot': self._toggle_annotation_fig,
+                'slot': [self._toggle_annotation_fig],
                 'description': ['Toggle Annotation-Tool']
             },
             'b': {
                 'qt_key': Qt.Key_B,
-                'slot': self._toggle_butterfly,
+                'slot': [self._toggle_butterfly],
                 'description': ['Toggle Annotation-Tool']
             },
             'd': {
                 'qt_key': Qt.Key_D,
-                'slot': self._toggle_dc,
+                'slot': [self._toggle_dc],
                 'description': ['Toggle DC-Correction']
+            },
+            'h': {
+                'qt_key': Qt.Key_H,
+                'slot': [self._toggle_epoch_histogram],
+                'description': ['Toggle Epoch-Histogram']
+            },
+            'j': {
+                'qt_key': Qt.Key_J,
+                'slot': [self._toggle_proj_fig,
+                         self._toggle_all_projs],
+                'modifier': [None, 'Shift'],
+                'description': ['Toggle Projection Figure',
+                                'Toggle All Projections']
             },
             'o': {
                 'qt_key': Qt.Key_O,
-                'slot': self._toggle_overview_bar,
-                'description': ['Toggle Overview-Bar']
+                'slot': [self._toggle_overview_bar],
+                'description': ['Toggle Overview-Bar',]
             },
             't': {
                 'qt_key': Qt.Key_T,
-                'slot': self._toggle_time_format,
+                'slot': [self._toggle_time_format],
                 'description': ['Toggle Time-Format']
+            },
+            's': {
+                'qt_key': Qt.Key_S,
+                'slot': [self._toggle_scalebars],
+                'description': ['Toggle Scalebars']
+            },
+            'w': {
+                'qt_key': Qt.Key_W,
+                'slot': [self._toggle_whitening],
+                'description': ['Toggle Whitening']
             },
             'x': {
                 'qt_key': Qt.Key_X,
-                'slot': self._toggle_crosshair,
+                'slot': [self._toggle_crosshair],
                 'description': ['Toggle Crosshair']
             },
             'z': {
                 'qt_key': Qt.Key_Z,
-                'slot': self._toggle_zenmode,
+                'slot': [self._toggle_zenmode],
                 'description': ['Toggle Zen-Mode']
             },
             '?': {
                 'qt_key': Qt.Key_Question,
-                'slot': self._toggle_help_fig,
+                'slot': [self._toggle_help_fig],
                 'description': ['Show Help']
             },
             'f11': {
                 'qt_key': Qt.Key_F11,
-                'slot': self._toggle_fullscreen,
+                'slot': [self._toggle_fullscreen],
                 'description': ['Toggle Full-Screen']
+            },
+            'escape': {
+                'qt_key': Qt.Key_Escape,
+                'slot': [self.close],
+                'description': ['Close']
             }
         }
 
@@ -1701,6 +1800,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         transform.scale(1, self.mne.scale_factor)
 
         return transform
+
+    def _update_yaxis_labels(self):
+        self.mne.channel_axis.repaint()
 
     def _bad_ch_clicked(self, line):
         """Slot for bad channel click."""
@@ -1711,7 +1813,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         line._update_bad_color()
 
         # Update Channel-Axis
-        self.mne.channel_axis.repaint()
+        self._update_yaxis_labels()
 
         # Update Overview-Bar
         self.mne.overview_bar.update()
@@ -1760,22 +1862,37 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.plt.addItem(scale_bar_text)
 
     def _update_scalebar_x_positions(self):
-        for scalebar in self.mne.scalebars.values():
-            scalebar.update_x_position()
+        if self.mne.scalebars_visible:
+            for scalebar in self.mne.scalebars.values():
+                scalebar.update_x_position()
 
-        for scalebar_text in self.mne.scalebar_texts.values():
-            scalebar_text.update_x_position()
+            for scalebar_text in self.mne.scalebar_texts.values():
+                scalebar_text.update_x_position()
 
     def _update_scalebar_y_positions(self):
-        for scalebar in self.mne.scalebars.values():
-            scalebar.update_y_position()
+        if self.mne.scalebars_visible:
+            for scalebar in self.mne.scalebars.values():
+                scalebar.update_y_position()
 
-        for scalebar_text in self.mne.scalebar_texts.values():
-            scalebar_text.update_y_position()
+            for scalebar_text in self.mne.scalebar_texts.values():
+                scalebar_text.update_y_position()
 
     def _update_scalebar_values(self):
         for scalebar_text in self.mne.scalebar_texts.values():
             scalebar_text.update_value()
+
+    def _set_scalebars_visible(self, visible):
+        for scalebar in self.mne.scalebars.values():
+            scalebar.setVisible(visible)
+
+        for scalebar_text in self.mne.scalebar_texts.values():
+            scalebar_text.setVisible(visible)
+
+        self._update_scalebar_y_positions()
+
+    def _toggle_scalebars(self):
+        self.mne.scalebars_visible = not self.mne.scalebars_visible
+        self._set_scalebars_visible(self.mne.scalebars_visible)
 
     def scale_all(self, step):
         """Scale all traces by multiplying with step."""
@@ -2064,7 +2181,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                     data = y1.reshape((n_ch, n * 2))
 
                 # Only cache downsampled data if preloading is enabled
-                if self.mne.preload and self.mne.data_preloaded:
+                if self.mne.enable_preload and self.mne.data_preloaded:
                     self.mne.ds_cache[ds] = times, data
 
             self.mne.times, self.mne.data = times, data
@@ -2083,21 +2200,29 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # Show loaded overview image
             self.mne.overview_bar.set_overview()
 
-    def _preload_in_thread(self):
-        self.mne.data_preloaded = False
+    def _init_preload(self):
         # Remove previously loaded data
+        self.mne.data_preloaded = False
         if all([hasattr(self.mne, st)
                 for st in ['global_data', 'global_times']]):
             del self.mne.global_data, self.mne.global_times
-        # Start preload thread
-        self.mne.load_progressbar.show()
-        self.mne.load_prog_label.show()
-        load_runner = LoadRunner(self)
-        load_runner.sigs.loadProgress.connect(self.mne.
-                                              load_progressbar.setValue)
-        load_runner.sigs.processText.connect(self._show_process)
-        load_runner.sigs.loadingFinished.connect(self._preload_finished)
-        QThreadPool.globalInstance().start(load_runner)
+        gc.collect()
+
+        if self.mne.preload == 'auto':
+            self.mne.enable_preload = self._check_space_for_preload()
+        elif isinstance(self.mne.preload, bool):
+            self.mne.enable_preload = self.mne.preload
+
+        if self.mne.enable_preload:
+            # Start preload thread
+            self.mne.load_progressbar.show()
+            self.mne.load_prog_label.show()
+            load_runner = LoadRunner(self)
+            load_runner.sigs.loadProgress.connect(self.mne.
+                                                  load_progressbar.setValue)
+            load_runner.sigs.processText.connect(self._show_process)
+            load_runner.sigs.loadingFinished.connect(self._preload_finished)
+            QThreadPool.globalInstance().start(load_runner)
 
     def _check_space_for_preload(self):
         try:
@@ -2136,17 +2261,17 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             left_ram_str = sizeof_fmt(free_ram - expected_ram)
 
             if expected_ram < free_ram:
-                logger.info('The data preloaded for visualization takes '
-                            f'{expected_ram_str} with {left_ram_str} of '
-                            f'RAM left.')
+                logger.debug('The data preloaded for visualization takes '
+                             f'{expected_ram_str} with {left_ram_str} of '
+                             f'RAM left.')
                 return True
             else:
-                logger.info(f'The preloaded data with {expected_ram_str} '
-                            f'will surpass your current {free_ram_str} '
-                            f'of free RAM.\n'
-                            'Thus preload will be set to False.\n'
-                            '(If you want to preload nevertheless, '
-                            'then set preload to True instead of "auto")')
+                logger.debug(f'The preloaded data with {expected_ram_str} '
+                             f'will surpass your current {free_ram_str} '
+                             f'of free RAM.\n'
+                             'Thus preload will be set to False.\n'
+                             '(If you want to preload nevertheless, '
+                             'then set preload to True instead of "auto")')
                 return False
 
     def _get_decim(self):
@@ -2329,9 +2454,32 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.annotation_mode = not self.mne.annotation_mode
         self._change_annot_mode()
 
+    def _apply_update_projectors(self, toggle_all=False):
+        if toggle_all:
+            on = self.mne.projs_on
+            applied = self.mne.projs_active
+            value = False if all(on) else True
+            new_state = np.full_like(on, value)
+            # Always activate applied projections
+            new_state[applied] = True
+            self.mne.projs_on = new_state
+        self._update_projector()
+        # If data was preloaded it needs to be preloaded again.
+        self._init_preload()
+        self._redraw()
+
+    def _toggle_proj_fig(self):
+        if self.mne.fig_proj is None:
+            ProjDialog(self, name='fig_proj')
+        else:
+            self.mne.fig_proj.close()
+
+    def _toggle_all_projs(self):
+        self._apply_update_projectors(toggle_all=True)
+
     def _toggle_help_fig(self):
         if self.mne.fig_help is None:
-            self.mne.fig_help = HelpDialog(self)
+            HelpDialog(self, name='fig_help')
         else:
             self.mne.fig_help.close()
             self.mne.fig_help = None
@@ -2365,6 +2513,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.remove_dc = not self.mne.remove_dc
         self._redraw()
 
+    def _toggle_epoch_histogram(self):
+        fig = self._create_epoch_histogram()
+        self._get_dlg_from_mpl(fig)
+
     def _toggle_time_format(self):
         if self.mne.time_format == 'float':
             self.mne.time_format = 'clock'
@@ -2372,7 +2524,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         else:
             self.mne.time_format = 'float'
             self.mne.time_axis.setLabel(text='Time', units='s')
-        self.mne.time_axis.repaint()
+        self._update_yaxis_labels()
 
     def _toggle_fullscreen(self):
         if self.isFullScreen():
@@ -2394,7 +2546,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def _new_child_figure(self, fig_name, window_title, **kwargs):
         from matplotlib.figure import Figure
         fig = Figure(**kwargs)
-        # Pass window title on
+        # Pass window title and fig_name on
+        if fig_name is not None:
+            fig.fig_name = fig_name
         if window_title is not None:
             fig.title = window_title
         return fig
@@ -2403,7 +2557,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         canvas = FigureCanvasQTAgg(fig)
         canvas.setFocusPolicy(Qt.StrongFocus | Qt.WheelFocus)
         canvas.setFocus()
-        # Pass window title on
+        # Pass window title and fig_name on
+        if hasattr(fig, 'fig_name'):
+            canvas.fig_name = fig.fig_name
         if hasattr(fig, 'title'):
             canvas.title = fig.title
 
@@ -2411,12 +2567,16 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _get_dlg_from_mpl(self, fig):
         canvas = self._get_widget_from_mpl(fig)
-        # Pass window title on
+        # Pass window title and fig_name on
+        if hasattr(canvas, 'fig_name'):
+            name = canvas.fig_name
+        else:
+            name = None
         if hasattr(canvas, 'title'):
             title = canvas.title
         else:
             title = None
-        _BaseDialog(self, canvas, title=title)
+        _BaseDialog(self, canvas, title=title, name=name)
 
     def _create_ch_context_fig(self, idx):
         fig = super()._create_ch_context_fig(idx)
@@ -2428,9 +2588,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def _create_selection_fig(self):
         pass
 
-    def _toggle_proj_fig(self):
-        pass
-
     def keyPressEvent(self, event):
         """Customize key press events."""
         # On MacOs additionally KeypadModifier is set when arrow-keys
@@ -2440,24 +2597,28 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # of the modifier-values is done.
         # modifiers need to be exclusive
         modifiers = {
-            'Ctrl': '4' in hex(int(event.modifiers()))
+            'Ctrl': '4' in hex(int(event.modifiers())),
+            'Shift': int(event.modifiers()) == 33554432
         }
-
         for key_name in self.mne.keyboard_shortcuts:
             key_dict = self.mne.keyboard_shortcuts[key_name]
             if key_dict['qt_key'] == event.key():
-                slot = key_dict['slot']
 
-                param_idx = 0
+                mod_idx = 0
                 # Get modifier
                 if 'modifier' in key_dict:
                     mods = [modifiers[mod] for mod in modifiers]
                     if any(mods):
                         mod = [mod for mod in modifiers if modifiers[mod]][0]
                         if mod in key_dict['modifier']:
-                            param_idx = key_dict['modifier'].index(mod)
+                            mod_idx = key_dict['modifier'].index(mod)
+
+                slot_idx = mod_idx if len(key_dict['slot']) < mod_idx else 0
+                slot = key_dict['slot'][slot_idx]
 
                 if 'parameter' in key_dict:
+                    param_idx = (mod_idx if len(key_dict['parameter'])
+                                 < mod_idx else 0)
                     slot(key_dict['parameter'][param_idx])
                 else:
                     slot()
@@ -2581,6 +2742,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
 
 def _get_n_figs():
+    # Wait for a short time to let the Qt-loop clean up
+    QTest.qWait(10)
     return len(QApplication.topLevelWindows())
 
 
