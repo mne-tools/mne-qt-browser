@@ -16,7 +16,7 @@ from os.path import getsize
 
 import numpy as np
 from PyQt5.QtCore import (QEvent, Qt, pyqtSignal, QRunnable,
-                          QObject, QThreadPool, QRectF, QLineF)
+                          QObject, QThreadPool, QRectF, QLineF, QRect, QPoint)
 from PyQt5.QtGui import (QFont, QIcon, QPixmap, QTransform,
                          QMouseEvent, QPainter, QImage, QPen)
 from PyQt5.QtTest import QTest
@@ -28,7 +28,7 @@ from PyQt5.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
                              QWidget, QStyleOptionSlider, QStyle,
                              QApplication, QGraphicsView, QProgressBar,
                              QVBoxLayout, QLineEdit, QCheckBox, QScrollArea,
-                             QGraphicsLineItem)
+                             QGraphicsLineItem, QGraphicsScene)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
                        LinearRegionItem, PlotCurveItem, PlotItem,
@@ -429,7 +429,7 @@ class ChannelScrollBar(BaseScrollBar):
         event.ignore()
 
 
-class OverviewBar(QLabel):
+class OverviewBar(QGraphicsView):
     """
     Provides overview over channels and current visible range.
 
@@ -439,73 +439,130 @@ class OverviewBar(QLabel):
     """
 
     def __init__(self, browser):
-        super().__init__()
+        super().__init__(QGraphicsScene())
         self.browser = browser
         self.mne = browser.mne
         self.bg_img = None
+        self.bg_pxmp = None
+        self.bg_pxmp_item = None
         # Set minimum Size to 1/10 of display size
         min_h = int(QApplication.desktop().screenGeometry().height() / 10)
         self.setMinimumSize(1, 1)
         self.setFixedHeight(min_h)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        self.setStyleSheet("QLabel {background-color : white}")
-        self.set_overview()
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-    def paintEvent(self, event):
-        """Customize painting of this label."""
-        super().paintEvent(event)
+        self.set_background()
 
-        painter = QPainter(self)
+        # Initialize Graphics-Items
+        # Bad channels
+        self.bad_line_dict = dict()
+        self.update_bad_channels()
 
-        # Paint bad-channels
+        # Events
+        self.event_line_dict = dict()
+        self.update_events()
+
+        # Annotations
+        self.annotations_rect_dict = dict()
+        self.update_annotations()
+
+        # View Range
+        self.viewrange_rect = None
+        self.update_viewrange()
+
+    def update_bad_channels(self):
+        """Update representation of bad channels."""
+        bad_set = set(self.mne.info['bads'])
+        line_set = set(self.bad_line_dict.keys())
+
+        add_chs = bad_set.difference(line_set)
+        rm_chs = line_set.difference(bad_set)
+
         for line_idx, ch_idx in enumerate(self.mne.ch_order):
-            if self.mne.ch_names[ch_idx] in self.mne.info['bads']:
-                painter.setPen(mkColor(self.mne.ch_color_bad))
+            ch_name = self.mne.ch_names[ch_idx]
+            if ch_name in add_chs:
                 start = self._mapFromData(0, line_idx)
                 stop = self._mapFromData(self.mne.inst.times[-1], line_idx)
-                painter.drawLine(start, stop)
+                pen = mkColor(self.mne.ch_color_bad)
+                line = self.scene().addLine(QLineF(start, stop), pen)
+                line.setZValue(2)
+                self.bad_line_dict[ch_name] = line
+            elif ch_name in rm_chs:
+                self.scene().removeItem(self.bad_line_dict[ch_name])
+                self.bad_line_dict.pop(ch_name)
 
-        # Paint Annotations
-        for annot in self.mne.inst.annotations:
-            des = annot['description']
-            if self.mne.visible_annotations[des]:
-                plot_onset = _sync_onset(self.mne.inst, annot['onset'])
-                duration = annot['duration']
-                color_name = self.mne.annotation_segment_colors[des]
-                color = mkColor(color_name)
-                color.setAlpha(200)
-                painter.setPen(color)
-                painter.setBrush(color)
-                top_left = self._mapFromData(plot_onset, 0)
-                bottom_right = self._mapFromData(plot_onset + duration,
-                                                 len(self.mne.ch_order))
-
-                painter.drawRect(QRectF(top_left, bottom_right))
-
-        # ToDo: Way too slow, needs to be reworked (maybe using QGraphicsView
-        #   instead of QLabel and paintEvent)
-        # Paint Events
+    def update_events(self):
         if self.mne.event_nums is not None and self.mne.events_visible:
             for ev_t, ev_id in zip(self.mne.event_times, self.mne.event_nums):
                 color_name = self.mne.event_color_dict[ev_id]
                 color = mkColor(color_name)
                 color.setAlpha(200)
-                painter.setPen(color)
+                pen = mkPen(color)
                 top_left = self._mapFromData(ev_t, 0)
                 bottom_right = self._mapFromData(ev_t, len(self.mne.ch_order))
-                painter.drawLine(QLineF(top_left, bottom_right))
+                line = self.scene().addLine(QLineF(top_left, bottom_right),
+                                            pen)
+                line.setZValue(1)
+                self.event_line_dict[ev_t] = line
+        else:
+            for event_line in self.event_line_dict.values():
+                self.scene().removeItem(event_line)
+            self.event_line_dict.clear()
 
-        # Paint view range
-        view_pen = QPen(mkColor('g'))
-        view_pen.setWidth(2)
-        painter.setPen(view_pen)
-        painter.setBrush(Qt.NoBrush)  # Clear previous brush
-        top_left = self._mapFromData(self.mne.t_start, self.mne.ch_start)
-        bottom_right = self._mapFromData(self.mne.t_start
-                                         + self.mne.duration,
-                                         self.mne.ch_start
-                                         + self.mne.n_channels)
-        painter.drawRect(QRectF(top_left, bottom_right))
+    def update_annotations(self):
+        """Update representation of annotations."""
+        annotations = self.mne.inst.annotations
+        # Exclude non-visible annotations
+        annot_set = set([annot['onset'] for annot in annotations if
+                         self.mne.visible_annotations[annot['description']]])
+        rect_set = set(self.annotations_rect_dict.keys())
+
+        add_onsets = annot_set.difference(rect_set)
+        rm_onsets = rect_set.difference(annot_set)
+
+        for add_onset in add_onsets:
+            annot_idx = np.argwhere(annotations.onset == add_onset)[0][0]
+            plot_onset = _sync_onset(self.mne.inst, add_onset)
+            duration = annotations.duration[annot_idx]
+            description = annotations.description[annot_idx]
+            color_name = self.mne.annotation_segment_colors[description]
+            color = mkColor(color_name)
+            color.setAlpha(200)
+            pen = mkPen(color)
+            brush = mkBrush(color)
+            top_left = self._mapFromData(plot_onset, 0)
+            bottom_right = self._mapFromData(plot_onset + duration,
+                                             len(self.mne.ch_order))
+            rect = self.scene().addRect(QRectF(top_left, bottom_right),
+                                        pen, brush)
+            rect.setZValue(3)
+            self.annotations_rect_dict[add_onset] = {'rect': rect,
+                                                     'plot_onset': plot_onset,
+                                                     'duration': duration}
+
+        for rm_onset in rm_onsets:
+            self.scene().removeItem(self.annotations_rect_dict[rm_onset]
+                                    ['rect'])
+            self.annotations_rect_dict.pop(rm_onset)
+
+    def update_viewrange(self):
+        if self.viewrange_rect is None:
+            pen = QPen(mkColor('g'))
+            pen.setWidth(2)
+            top_left = self._mapFromData(self.mne.t_start, self.mne.ch_start)
+            bottom_right = self._mapFromData(self.mne.t_start
+                                             + self.mne.duration,
+                                             self.mne.ch_start
+                                             + self.mne.n_channels)
+            self.viewrange_rect = self.scene().addRect(QRectF(top_left,
+                                                              bottom_right),
+                                                       pen)
+            self.viewrange_rect.setZValue(4)
+        else:
+            top_left = self._mapFromData(self.mne.t_start, self.mne.ch_start)
+            self.viewrange_rect.setPos(top_left)
 
     def _set_range_from_pos(self, pos):
         x, y = self._mapToData(pos)
@@ -526,19 +583,66 @@ class OverviewBar(QLabel):
 
     def _fit_bg_img(self):
         # Resize Pixmap
-        if self.bg_img:
-            p = QPixmap.fromImage(self.bg_img)
-            p = p.scaled(self.width(), self.height(),
-                         Qt.IgnoreAspectRatio)
-            self.setPixmap(p)
+        if self.bg_pxmp:
+            # Remove previous item from scene
+            if (self.bg_pxmp_item is not None and
+                    self.bg_pxmp_item in self.scene().items()):
+                self.scene().removeItem(self.bg_pxmp_item)
+
+            cnt_rect = self.contentsRect()
+            self.bg_pxmp = self.bg_pxmp.scaled(cnt_rect.width(),
+                                               cnt_rect.height(),
+                                               Qt.IgnoreAspectRatio)
+            self.bg_pxmp_item = self.scene().addPixmap(self.bg_pxmp)
 
     def resizeEvent(self, event):
         """Customize resize event."""
         super().resizeEvent(event)
-
+        cnt_rect = self.contentsRect()
+        self.setSceneRect(QRectF(QPoint(0, 0),
+                                 QPoint(cnt_rect.width(),
+                                        cnt_rect.height())))
+        # Resize backgounrd
         self._fit_bg_img()
 
-    def set_overview(self):
+        # ToDo: This could be improved a lot with view-transforms e.g. with
+        #   QGraphicsView.fitInView. The margin-problem could be approached
+        #   with https://stackoverflow.com/questions/19640642/
+        #   qgraphicsview-fitinview-margins, but came with other problems.
+        # Resize Graphics Items (assuming height never changes)
+        # Resize bad_channels
+        for bad_ch_line in self.bad_line_dict.values():
+            current_line = bad_ch_line.line()
+            bad_ch_line.setLine(QLineF(current_line.p1(),
+                                       Point(cnt_rect.width(),
+                                             current_line.y2())))
+
+        # Resize event-lines
+        for ev_t, event_line in self.event_line_dict.items():
+            top_left = self._mapFromData(ev_t, 0)
+            bottom_right = self._mapFromData(ev_t, len(self.mne.ch_order))
+            event_line.setLine(QLineF(top_left, bottom_right))
+
+        # Resize annotation-rects
+        for annot_dict in self.annotations_rect_dict.values():
+            annot_rect = annot_dict['rect']
+            plot_onset = annot_dict['plot_onset']
+            duration = annot_dict['duration']
+
+            top_left = self._mapFromData(plot_onset, 0)
+            bottom_right = self._mapFromData(plot_onset + duration,
+                                             len(self.mne.ch_order))
+            annot_rect.setRect(QRectF(top_left, bottom_right))
+
+        # Update viewrange-rect
+        top_left = self._mapFromData(self.mne.t_start, self.mne.ch_start)
+        bottom_right = self._mapFromData(self.mne.t_start
+                                         + self.mne.duration,
+                                         self.mne.ch_start
+                                         + self.mne.n_channels)
+        self.viewrange_rect.setRect(QRectF(top_left, bottom_right))
+
+    def set_background(self):
         """Set the background-image for the selected overview-mode."""
         # Add Overview-Pixmap
         if self.mne.overview_mode == 'channels' or not self.mne.enable_preload:
@@ -554,7 +658,7 @@ class OverviewBar(QLabel):
                                  channel_rgba.shape[1],
                                  channel_rgba.shape[0],
                                  QImage.Format_RGBA8888)
-            self.setPixmap(QPixmap.fromImage(self.bg_img))
+            self.bg_pxmp = QPixmap.fromImage(self.bg_img)
 
         elif self.mne.overview_mode == 'zscore' \
                 and hasattr(self.mne, 'zscore_rgba'):
@@ -562,7 +666,7 @@ class OverviewBar(QLabel):
                                  self.mne.zscore_rgba.shape[1],
                                  self.mne.zscore_rgba.shape[0],
                                  QImage.Format_RGBA8888)
-            self.setPixmap(QPixmap.fromImage(self.bg_img))
+            self.bg_pxmp = QPixmap.fromImage(self.bg_img)
 
         self._fit_bg_img()
 
@@ -1859,7 +1963,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self._update_yaxis_labels()
 
         # Update Overview-Bar
-        self.mne.overview_bar.update()
+        self.mne.overview_bar.update_bad_channels()
 
     def _add_trace(self, ch_idx):
         trace = RawTraceItem(self.mne, ch_idx)
@@ -2096,7 +2200,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.ax_hscroll.update_value(xrange[0])
 
         # Update Overview-Bar
-        self.mne.overview_bar.update()
+        self.mne.overview_bar.update_viewrange()
 
         # Update Scalebars
         self._update_scalebar_x_positions()
@@ -2151,7 +2255,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.ax_vscroll.update_value(self.mne.ch_start)
 
             # Update Overview-Bar
-            self.mne.overview_bar.update()
+            self.mne.overview_bar.update_viewrange()
 
             # Update Scalebars
             self._update_scalebar_y_positions()
@@ -2283,7 +2387,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         if self.mne.overview_mode == 'zscore':
             # Show loaded overview image
-            self.mne.overview_bar.set_overview()
+            self.mne.overview_bar.set_background()
 
     def _init_preload(self):
         # Remove previously loaded data
@@ -2468,7 +2572,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.inst.annotations.delete(idx)
 
         # Update Overview-Bar
-        self.mne.overview_bar.update()
+        self.mne.overview_bar.update_annotations()
 
     def _region_selected(self, region):
         old_region = self.mne.selected_region
@@ -2514,7 +2618,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         region.select(True)
 
         # Update Overview-Bar
-        self.mne.overview_bar.update()
+        self.mne.overview_bar.update_annotations()
 
     def _change_annot_mode(self):
         if not self.mne.annotation_mode:
@@ -2545,7 +2649,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         for region in self.mne.regions:
             region.update_visible(
                 self.mne.visible_annotations[region.description])
-        self.mne.overview_bar.update()
+        self.mne.overview_bar.update_annotations()
 
     def _toggle_annotations(self):
         self.mne.annotations_visible = not self.mne.annotations_visible
@@ -2645,7 +2749,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 for event_line in [evl for evl in self.mne.event_lines
                                    if evl in self.mne.plt.items]:
                     self.mne.plt.removeItem(event_line)
-            self.mne.overview_bar.update()
+            self.mne.overview_bar.update_events()
 
     def _toggle_time_format(self):
         if self.mne.time_format == 'float':
