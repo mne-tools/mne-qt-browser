@@ -548,21 +548,19 @@ class OverviewBar(QGraphicsView):
             self.annotations_rect_dict.pop(rm_onset)
 
     def update_viewrange(self):
+        top_left = self._mapFromData(self.mne.t_start, self.mne.ch_start)
+        bottom_right = self._mapFromData(self.mne.t_start
+                                         + self.mne.duration,
+                                         self.mne.ch_start
+                                         + self.mne.n_channels)
+        rect = QRectF(top_left, bottom_right)
         if self.viewrange_rect is None:
             pen = QPen(mkColor('g'))
             pen.setWidth(2)
-            top_left = self._mapFromData(self.mne.t_start, self.mne.ch_start)
-            bottom_right = self._mapFromData(self.mne.t_start
-                                             + self.mne.duration,
-                                             self.mne.ch_start
-                                             + self.mne.n_channels)
-            self.viewrange_rect = self.scene().addRect(QRectF(top_left,
-                                                              bottom_right),
-                                                       pen)
+            self.viewrange_rect = self.scene().addRect(rect, pen)
             self.viewrange_rect.setZValue(4)
         else:
-            top_left = self._mapFromData(self.mne.t_start, self.mne.ch_start)
-            self.viewrange_rect.setPos(top_left)
+            self.viewrange_rect.setRect(rect)
 
     def _set_range_from_pos(self, pos):
         x, y = self._mapToData(pos)
