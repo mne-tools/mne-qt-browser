@@ -961,11 +961,12 @@ class HelpDialog(_BaseDialog):
             if 'alias' in key_dict:
                 key = key_dict['alias']
             for idx, key_des in enumerate(key_dict['description']):
+                key_name = key
                 if 'modifier' in key_dict:
                     mod = key_dict['modifier'][idx]
                     if mod is not None:
-                        key = mod + ' + ' + key
-                form_layout.addRow(key, QLabel(key_des))
+                        key_name = mod + ' + ' + key_name
+                form_layout.addRow(key_name, QLabel(key_des))
         scroll_widget.setLayout(form_layout)
         scroll_area.setWidget(scroll_widget)
 
@@ -1774,88 +1775,106 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             'left': {
                 'alias': '←',
                 'qt_key': Qt.Key_Left,
-                'modifier': [None, 'Ctrl'],
+                'modifier': [None, 'Ctrl', 'Shift'],
                 'slot': [self.hscroll],
-                'parameter': [-10, -1],
-                'description': ['Move left', 'Move left (tiny step)']
+                'parameter': [-10, -1, '-full'],
+                'description': ['Move left',
+                                'Move left (tiny step)',
+                                'Move left (page)']
             },
             'right': {
                 'alias': '→',
                 'qt_key': Qt.Key_Right,
-                'modifier': [None, 'Ctrl'],
+                'modifier': [None, 'Ctrl', 'Shift'],
                 'slot': [self.hscroll],
-                'parameter': [10, 1],
-                'description': ['Move right', 'Move left (tiny step)']
+                'parameter': [10, 1, '+full'],
+                'description': ['Move right',
+                                'Move right (tiny step)',
+                                'Move right (page)']
             },
             'up': {
                 'alias': '↑',
                 'qt_key': Qt.Key_Up,
-                'modifier': [None, 'Ctrl'],
+                'modifier': [None, 'Ctrl', 'Shift'],
                 'slot': [self.vscroll],
-                'parameter': [-10, -1],
-                'description': ['Move up', 'Move up (tiny step)']
+                'parameter': [-10, -1, '-full'],
+                'description': ['Move up',
+                                'Move up (tiny step)',
+                                'Move up (page)']
             },
             'down': {
                 'alias': '↓',
                 'qt_key': Qt.Key_Down,
-                'modifier': [None, 'Ctrl'],
+                'modifier': [None, 'Ctrl', 'Shift'],
                 'slot': [self.vscroll],
-                'parameter': [10, 1],
-                'description': ['Move down', 'Move down (tiny step)']
+                'parameter': [10, 1, '+full'],
+                'description': ['Move down',
+                                'Move down (tiny step)',
+                                'Move down (page)']
             },
             'home': {
                 'alias': dur_keys[0],
                 'qt_key': Qt.Key_Home,
-                'modifier': [None, 'Ctrl'],
+                'modifier': [None, 'Ctrl', 'Shift'],
                 'slot': [self.change_duration],
-                'parameter': [-10, -1],
+                'parameter': [-10, -1, '-full'],
                 'description': ['Decrease duration',
-                                'Decrease duration (tiny step)']
+                                'Decrease duration (tiny step)',
+                                'Decrease duration (page)']
             },
             'end': {
                 'alias': dur_keys[1],
                 'qt_key': Qt.Key_End,
-                'modifier': [None, 'Ctrl'],
+                'modifier': [None, 'Ctrl', 'Shift'],
                 'slot': [self.change_duration],
-                'parameter': [10, 1],
+                'parameter': [10, 1, '+full'],
                 'description': ['Increase duration',
-                                'Increase duration (tiny step)']
+                                'Increase duration (tiny step)',
+                                'Increase duration (page)']
             },
             'pagedown': {
                 'alias': ch_keys[1],
                 'qt_key': Qt.Key_PageUp,
-                'modifier': [None, 'Ctrl'],
+                'modifier': [None, 'Ctrl', 'Shift'],
                 'slot': [self.change_nchan],
-                'parameter': [-10, -1],
+                'parameter': [-10, -1, '-full'],
                 'description': ['Decrease shown channels',
-                                'Decrease shown channels (tiny step)']
+                                'Decrease shown channels (tiny step)',
+                                'Decrease shown channels (page)']
             },
             'pageup': {
                 'alias': ch_keys[0],
                 'qt_key': Qt.Key_PageDown,
-                'modifier': [None, 'Ctrl'],
+                'modifier': [None, 'Ctrl', 'Shift'],
                 'slot': [self.change_nchan],
-                'parameter': [10, 1],
+                'parameter': [10, 1, '+full'],
                 'description': ['Increase shown channels',
-                                'Increase shown channels (tiny step)']
+                                'Increase shown channels (tiny step)',
+                                'Increase shown channels (page)']
             },
             '-': {
                 'qt_key': Qt.Key_Minus,
+                'modifier': [None, 'Ctrl'],
                 'slot': [self.scale_all],
-                'parameter': [0.75],
-                'description': ['Decrease Scale']
+                'parameter': [0.75, 0.95],
+                'description': ['Decrease Scale',
+                                'Decrease Scale (small step)']
             },
             '+': {
                 'qt_key': Qt.Key_Plus,
+                'modifier': [None, 'Ctrl'],
                 'slot': [self.scale_all],
-                'parameter': [1.25],
-                'description': ['Increase Scale']
+                'parameter': [1.25, 1.05],
+                'description': ['Increase Scale',
+                                'Increase Scale (small step)']
             },
             '=': {
                 'qt_key': Qt.Key_Equal,
+                'modifier': [None, 'Ctrl'],
                 'slot': [self.scale_all],
-                'parameter': [1.25],
-                'description': ['Increase Scale']
+                'parameter': [1.25, 1.05],
+                'description': ['Increase Scale',
+                                'Increase Scale (small step)']
             },
             'a': {
                 'qt_key': Qt.Key_A,
@@ -2053,7 +2072,12 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def hscroll(self, step):
         """Scroll horizontally by step."""
-        rel_step = step * self.mne.duration / self.mne.scroll_sensitivity
+        if step == '+full':
+            rel_step = self.mne.duration
+        elif step == '-full':
+            rel_step = - self.mne.duration
+        else:
+            rel_step = step * self.mne.duration / self.mne.scroll_sensitivity
         # Get current range and add step to it
         xmin, xmax = [i + rel_step for i in self.mne.viewbox.viewRange()[0]]
 
@@ -2069,6 +2093,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def vscroll(self, step):
         """Scroll vertically by step."""
         # Get current range and add step to it
+        if step == '+full':
+            step = self.mne.n_channels
+        elif step == '-full':
+            step = - self.mne.n_channels
         ymin, ymax = [i + step for i in self.mne.viewbox.viewRange()[1]]
 
         if ymin < 0:
@@ -2082,8 +2110,13 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def change_duration(self, step):
         """Change duration by step."""
-        rel_step = (self.mne.duration * step) / (
-                self.mne.scroll_sensitivity * 2)
+        if step == '+full':
+            rel_step = self.mne.duration
+        elif step == '-full':
+            rel_step = - self.mne.duration
+        else:
+            rel_step = (self.mne.duration * step) / (
+                    self.mne.scroll_sensitivity * 2)
         xmin, xmax = self.mne.viewbox.viewRange()[0]
         xmax += rel_step
         xmin -= rel_step
@@ -2108,6 +2141,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def change_nchan(self, step):
         """Change number of channels by step."""
+        if step == '+full':
+            step = self.mne.n_channels
+        elif step == '-full':
+            step = - self.mne.n_channels
         ymin, ymax = self.mne.viewbox.viewRange()[1]
         ymax += step
         if ymax > self.mne.ymax:
@@ -2842,6 +2879,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 if 'modifier' in key_dict:
                     mods = [modifiers[mod] for mod in modifiers]
                     if any(mods):
+                        # No multiple modifiers supported yet
                         mod = [mod for mod in modifiers if modifiers[mod]][0]
                         if mod in key_dict['modifier']:
                             mod_idx = key_dict['modifier'].index(mod)
@@ -2850,8 +2888,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 slot = key_dict['slot'][slot_idx]
 
                 if 'parameter' in key_dict:
-                    param_idx = (mod_idx if len(key_dict['parameter'])
-                                 < mod_idx else 0)
+                    param_idx = (mod_idx if mod_idx <
+                                 len(key_dict['parameter']) else 0)
                     slot(key_dict['parameter'][param_idx])
                 else:
                     slot()
