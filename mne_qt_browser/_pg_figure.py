@@ -44,7 +44,7 @@ except ImportError:
         yield [None]
 
 from mne.viz._figure import BrowserBase
-from mne.viz.utils import _simplify_float
+from mne.viz.utils import _simplify_float, _merge_annotations
 from mne.annotations import _sync_onset
 from mne.io.pick import _DATA_CH_TYPES_ORDER_DEFAULT
 from mne.utils import logger, sizeof_fmt
@@ -523,9 +523,11 @@ class OverviewBar(QGraphicsView):
         add_onsets = annot_set.difference(rect_set)
         rm_onsets = rect_set.difference(annot_set)
 
+        # Add missing onsets
         for add_onset in add_onsets:
-            annot_idx = np.argwhere(annotations.onset == add_onset)[0][0]
             plot_onset = _sync_onset(self.mne.inst, add_onset)
+            annot_idx = np.argwhere(self.mne.inst.annotations.onset
+                                 == add_onset)[0][0]
             duration = annotations.duration[annot_idx]
             description = annotations.description[annot_idx]
             color_name = self.mne.annotation_segment_colors[description]
@@ -543,10 +545,26 @@ class OverviewBar(QGraphicsView):
                                                      'plot_onset': plot_onset,
                                                      'duration': duration}
 
+        # Remove onsets
         for rm_onset in rm_onsets:
             self.scene().removeItem(self.annotations_rect_dict[rm_onset]
                                     ['rect'])
             self.annotations_rect_dict.pop(rm_onset)
+
+        # Edit changed duration
+        for edit_onset in self.annotations_rect_dict:
+            plot_onset = _sync_onset(self.mne.inst, edit_onset)
+            annot_idx = np.where(self.mne.inst.annotations.onset
+                                 == edit_onset)[0][0]
+            duration = annotations.duration[annot_idx]
+            rect_duration = self.annotations_rect_dict[edit_onset]['duration']
+            if duration != rect_duration:
+                self.annotations_rect_dict[edit_onset]['duration'] = duration
+                rect = self.annotations_rect_dict[edit_onset]['rect']
+                top_left = self._mapFromData(plot_onset, 0)
+                bottom_right = self._mapFromData(plot_onset + duration,
+                                                 len(self.mne.ch_order))
+                rect.setRect(QRectF(top_left, bottom_right))
 
     def update_viewrange(self):
         top_left = self._mapFromData(self.mne.t_start, self.mne.ch_start)
@@ -721,9 +739,39 @@ class RawViewBox(ViewBox):
                     drag_stop = self.mapSceneToView(event.scenePos()).x()
                     self._drag_region.setRegion((self._drag_start, drag_stop))
                     plot_onset = min(self._drag_start, drag_stop)
+                    plot_offset = max(self._drag_start, drag_stop)
                     duration = abs(self._drag_start - drag_stop)
-                    self.main._add_annotation(plot_onset, duration,
-                                              region=self._drag_region)
+
+                    # Add to annotations
+                    onset = _sync_onset(self.mne.inst, plot_onset,
+                                        inverse=True)
+                    _merge_annotations(onset, onset + duration,
+                                       self.mne.current_description,
+                                       self.mne.inst.annotations)
+
+                    # Add to regions/merge regions
+                    merge_values = [plot_onset, plot_offset]
+                    rm_regions = list()
+                    for region in [r for r in self.mne.regions
+                                   if r.description ==
+                                      self.mne.current_description]:
+                        values = region.getRegion()
+                        if any([plot_onset < val < plot_offset for val in
+                                values]):
+                            merge_values += values
+                            rm_regions.append(region)
+                    if len(merge_values) > 2:
+                        self._drag_region.setRegion((min(merge_values),
+                                                     max(merge_values)))
+                    for rm_region in rm_regions:
+                        self.main._remove_region(rm_region, from_annot=False)
+                    self.main._add_region(plot_onset, duration,
+                                          self.mne.current_description,
+                                          self._drag_region)
+                    self._drag_region.select(True)
+
+                    # Update Overview-Bar
+                    self.mne.overview_bar.update_annotations()
                 else:
                     self._drag_region.setRegion((self._drag_start,
                                                  self.mapSceneToView(
@@ -2262,7 +2310,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         """Add or remove event-lines depending on view-range.
 
         This has proven to be more performant (and scalable)
-        than adding all event-lines to plt/the Scene
+        than adding all event-lines to plt(the Scene)
         and letting pyqtgraph/Qt handle it.
         """
         if self.mne.events_visible:
@@ -2278,7 +2326,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         """Add or remove annotation-regions depending on view-range.
 
         This has proven to be more performant (and scalable)
-        than adding all event-lines to plt/the Scene
+        than adding all annotations to plt(the Scene)
         and letting pyqtgraph/Qt handle it.
         """
         if self.mne.annotations_visible:
@@ -2605,7 +2653,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         region.update_label_pos()
 
-    def _remove_region(self, region):
+    def _remove_region(self, region, from_annot=True):
         # Remove from shown regions
         if region.label_item in self.mne.viewbox.addedItems:
             self.mne.viewbox.removeItem(region.label_item)
@@ -2621,8 +2669,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.selected_region = None
 
         # Remove from annotations
-        idx = self._get_onset_idx(region.getRegion()[0])
-        self.mne.inst.annotations.delete(idx)
+        if from_annot:
+            idx = self._get_onset_idx(region.getRegion()[0])
+            self.mne.inst.annotations.delete(idx)
 
         # Update Overview-Bar
         self.mne.overview_bar.update_annotations()
@@ -2639,7 +2688,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _get_onset_idx(self, plot_onset):
         onset = _sync_onset(self.mne.inst, plot_onset, inverse=True)
-        idx = np.where(self.mne.inst.annotations.onset == onset)
+        idx = np.where(self.mne.inst.annotations.onset == onset)[0][0]
         return idx
 
     def _region_changed(self, region):
@@ -2656,22 +2705,13 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                                                            inverse=True)
         self.mne.inst.annotations.duration[idx] = rgn[1] - rgn[0]
 
+        # Update overview-bar
+        self.mne.overview_bar.update_annotations()
+
     def _draw_annotations(self):
         # All regions are constantly added to the Scene and handled by Qt
         # which is faster than handling adding/removing in Python.
         pass
-
-    def _add_annotation(self, plot_onset, duration, region=None):
-        """Add annotation to Annotations."""
-        onset = _sync_onset(self.mne.inst, plot_onset, inverse=True)
-        self.mne.inst.annotations.append(onset, duration,
-                                         self.mne.current_description)
-        self._add_region(plot_onset, duration, self.mne.current_description,
-                         region)
-        region.select(True)
-
-        # Update Overview-Bar
-        self.mne.overview_bar.update_annotations()
 
     def _change_annot_mode(self):
         if not self.mne.annotation_mode:
