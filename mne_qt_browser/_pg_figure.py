@@ -158,6 +158,7 @@ class TimeAxis(AxisItem):
 
     def __init__(self, mne):
         self.mne = mne
+        self._spacing = None
         super().__init__(orientation='bottom')
 
     def tickValues(self, minVal, maxVal, size):
@@ -168,6 +169,8 @@ class TimeAxis(AxisItem):
             tick_values = [(len(self.mne.inst.times), values)]
             return tick_values
         else:
+            # Save _spacing for later use
+            self._spacing = self.tickSpacing(minVal, maxVal, size)
             return super().tickValues(minVal, maxVal, size)
 
     def tickStrings(self, values, scale, spacing):
@@ -180,7 +183,9 @@ class TimeAxis(AxisItem):
         elif self.mne.time_format == 'clock':
             meas_date = self.mne.info['meas_date']
             first_time = datetime.timedelta(seconds=self.mne.inst.first_time)
-            digits = np.ceil(-np.log10(spacing) + 1).astype(int)
+
+            digits = np.ceil(-np.log10(min(v[0] for v in self._spacing)
+                                       ) + 1).astype(int)
             tick_strings = list()
             for val in values:
                 val_time = datetime.timedelta(seconds=val) + \
@@ -202,8 +207,11 @@ class TimeAxis(AxisItem):
 
     def get_labels(self):
         """Get labels for testing."""
-        values = self.tickValues(*self.mne.viewbox.viewRange()[0], None)
-        labels = self.tickStrings(values, None, None)
+        values = self.tickValues(*self.mne.viewbox.viewRange()[0],
+                                 self.mne.xmax)
+        labels = list()
+        for spacing, vals in values:
+            labels += self.tickStrings(vals, 1, spacing)
 
         return labels
 
@@ -3091,14 +3099,15 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def closeEvent(self, event):
         """Customize close event."""
         event.accept()
-
-        self._close(event)
+        if hasattr(self, 'mne'):
+            self._close(event)
 
 
 def _get_n_figs():
     # Wait for a short time to let the Qt-loop clean up
     QTest.qWait(10)
-    return len(QApplication.topLevelWindows())
+    return len([window for window in QApplication.topLevelWindows()
+                if window.isVisible() and window.isExposed()])
 
 
 def _close_all():
