@@ -136,7 +136,8 @@ class RawTraceItem(PlotCurveItem):
 
     def mouseClickEvent(self, ev):
         """Customize mouse click events."""
-        if not self.clickable or ev.button() != Qt.MouseButton.LeftButton:
+        if (not self.clickable or ev.button() != Qt.MouseButton.LeftButton
+                or self.mne.annotation_mode):
             ev.ignore()
             return
         if self.mouseShape().contains(ev.pos()):
@@ -708,11 +709,12 @@ class RawViewBox(ViewBox):
                 description = self.mne.current_description
                 if event.isStart():
                     self._drag_start = self.mapSceneToView(
-                        event.scenePos()).x()
+                        event.lastScenePos()).x()
+                    drag_stop = self.mapSceneToView(event.scenePos()).x()
                     self._drag_region = AnnotRegion(self.mne,
                                                     description=description,
                                                     values=(self._drag_start,
-                                                            self._drag_start))
+                                                            drag_stop))
                     self.mne.plt.addItem(self._drag_region)
                     self.mne.plt.addItem(self._drag_region.label_item)
                 elif event.isFinish():
@@ -734,10 +736,12 @@ class RawViewBox(ViewBox):
         """Customize mouse click events."""
         # If we want the context-menu back, uncomment following line
         # super().mouseClickEvent(event)
-        if event.button() == Qt.LeftButton:
-            self.main._add_vline(self.mapSceneToView(event.scenePos()).x())
-        elif event.button() == Qt.RightButton:
-            self.main._remove_vline()
+        if not self.mne.annotation_mode:
+            if event.button() == Qt.LeftButton:
+                self.main._add_vline(self.mapSceneToView(
+                    event.scenePos()).x())
+            elif event.button() == Qt.RightButton:
+                self.main._remove_vline()
 
     def wheelEvent(self, ev, axis=None):
         """Customize mouse wheel/trackpad-scroll events."""
@@ -958,15 +962,16 @@ class HelpDialog(_BaseDialog):
         form_layout = QFormLayout()
         for key in main.mne.keyboard_shortcuts:
             key_dict = main.mne.keyboard_shortcuts[key]
-            if 'alias' in key_dict:
-                key = key_dict['alias']
-            for idx, key_des in enumerate(key_dict['description']):
-                key_name = key
-                if 'modifier' in key_dict:
-                    mod = key_dict['modifier'][idx]
-                    if mod is not None:
-                        key_name = mod + ' + ' + key_name
-                form_layout.addRow(key_name, QLabel(key_des))
+            if 'description' in key_dict:
+                if 'alias' in key_dict:
+                    key = key_dict['alias']
+                for idx, key_des in enumerate(key_dict['description']):
+                    key_name = key
+                    if 'modifier' in key_dict:
+                        mod = key_dict['modifier'][idx]
+                        if mod is not None:
+                            key_name = mod + ' + ' + key_name
+                    form_layout.addRow(key_name, QLabel(key_des))
         scroll_widget.setLayout(form_layout)
         scroll_area.setWidget(scroll_widget)
 
@@ -1152,7 +1157,7 @@ class AnnotationDock(QDockWidget):
         layout.addWidget(self.description_cmbx)
 
         add_bt = QPushButton('Add Description')
-        add_bt.clicked.connect(self._add_description)
+        add_bt.clicked.connect(self._add_description_dlg)
         layout.addWidget(add_bt)
 
         rm_bt = QPushButton('Remove Description')
@@ -1197,17 +1202,21 @@ class AnnotationDock(QDockWidget):
         color_icon = QIcon(color_pixmap)
         self.description_cmbx.addItem(color_icon, description)
 
-    def _add_description(self):
+    def _add_description(self, new_description):
+        self.mne.new_annotation_labels.append(new_description)
+        self.mne.visible_annotations[new_description] = True
+        self.main._setup_annotation_colors()
+        self._add_description_to_cmbx(new_description)
+        self.mne.current_description = new_description
+        self.description_cmbx.setCurrentText(new_description)
+
+    def _add_description_dlg(self):
         new_description, ok = QInputDialog.getText(self,
                                                    'Set new description!',
                                                    'New description: ')
         if ok and new_description \
                 and new_description not in self.mne.new_annotation_labels:
-            self.mne.new_annotation_labels.append(new_description)
-            self.mne.visible_annotations[new_description] = True
-            self.main._setup_annotation_colors()
-            self._add_description_to_cmbx(new_description)
-        self.mne.current_description = self.description_cmbx.currentText()
+            self._add_description(new_description)
 
     def _edit_description(self):
         curr_des = self.description_cmbx.currentText()
@@ -1306,23 +1315,25 @@ class AnnotationDock(QDockWidget):
                 for rm_region in [r for r in self.mne.regions
                                   if r.description == rm_description]:
                     rm_region.remove()
+            else:
+                return
 
-                # Remove from descriptions
-                self.mne.new_annotation_labels.remove(rm_description)
-                self._update_description_cmbx()
+        # Remove from descriptions
+        self.mne.new_annotation_labels.remove(rm_description)
+        self._update_description_cmbx()
 
-                # Remove from visible annotations
-                self.mne.visible_annotations.pop(rm_description)
+        # Remove from visible annotations
+        self.mne.visible_annotations.pop(rm_description)
 
-                # Remove from color-mapping
-                if rm_description in self.mne.annotation_segment_colors:
-                    self.mne.annotation_segment_colors.pop(rm_description)
+        # Remove from color-mapping
+        if rm_description in self.mne.annotation_segment_colors:
+            self.mne.annotation_segment_colors.pop(rm_description)
 
-                # Set first description in Combo-Box to current description
-                if self.description_cmbx.count() > 0:
-                    self.description_cmbx.setCurrentIndex(0)
-                    self.mne.current_description = \
-                        self.description_cmbx.currentText()
+        # Set first description in Combo-Box to current description
+        if self.description_cmbx.count() > 0:
+            self.description_cmbx.setCurrentIndex(0)
+            self.mne.current_description = \
+                self.description_cmbx.currentText()
 
     def _select_annotations(self):
         def _set_visible_region(state, description):
@@ -1956,6 +1967,13 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'qt_key': Qt.Key_Escape,
                 'slot': [self.close],
                 'description': ['Close']
+            },
+            # Just for testing
+            'enter': {
+                'qt_key': Qt.Key_Enter
+            },
+            ' ': {
+                'qt_key': Qt.Key_Space
             }
         }
 
@@ -2872,7 +2890,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         }
         for key_name in self.mne.keyboard_shortcuts:
             key_dict = self.mne.keyboard_shortcuts[key_name]
-            if key_dict['qt_key'] == event.key():
+            if key_dict['qt_key'] == event.key() and 'slot' in key_dict:
 
                 mod_idx = 0
                 # Get modifier
@@ -2926,7 +2944,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             raise RuntimeError(f'There as been an {exc[0]} inside the Qt '
                                f'event loop (look above for traceback).')
 
-    def _fake_click(self, point, fig=None, ax=None,
+    def _fake_click(self, point, point2=None, fig=None, ax=None,
                     xform='ax', button=1, kind='press'):
 
         # Wait until Window is fully shown.
@@ -2936,7 +2954,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         QTest.qWait(10)
 
         # Qt: right-button=2, matplotlib: right-button=3
-        button = 2 if button == 3 else button
+        if button == 1:
+            button = Qt.LeftButton
+        else:
+            button = Qt.RightButton
 
         # For Qt, fig or ax both would be the widget to test interaction on.
         # If View
@@ -2947,14 +2968,15 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # would be a transformation to View Coordinates.
             # But for the View top-left is (0, 0) and bottom-right is
             # (view-width, view-height).
-
             view_width = fig.width()
             view_height = fig.height()
-
             x = view_width * point[0]
             y = view_height * (1 - point[1])
-
             point = Point(x, y)
+            if point2 is not None:
+                x2 = view_width * point2[0]
+                y2 = view_height * (1 - point[1])
+                point2 = Point(x2, y2)
 
         elif xform == 'data':
             # For Qt, the equivalent of matplotlibs transData
@@ -2963,11 +2985,19 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # This only works on the View (self.mne.view)
             fig = self.mne.view
             point = self.mne.viewbox.mapViewToScene(Point(*point))
+            if point2 is not None:
+                point2 = self.mne.viewbox.mapViewToScene(Point(*point2))
+
         elif xform == 'none' or xform is None:
             if isinstance(point, (tuple, list)):
                 point = Point(*point)
             else:
                 point = Point(point)
+            if point2 is not None:
+                if isinstance(point, (tuple, list)):
+                    point2 = Point(*point2)
+                else:
+                    point2 = Point(point2)
 
         # Use pytest-qt's exception-hook
         with capture_exceptions() as exceptions:
@@ -2979,7 +3009,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             elif kind == 'release':
                 _mouseRelease(widget=fig, pos=point, button=button)
             elif kind == 'motion':
-                _mouseMove(widget=fig, pos=point)
+                _mouseMove(widget=fig, pos=point, buttons=button)
+            elif kind == 'drag':
+                _mouseDrag(widget=fig, pos1=point, pos2=point2,
+                           button=button)
 
         for exc in exceptions:
             raise RuntimeError(f'There as been an {exc[0]} inside the Qt '
@@ -3068,6 +3101,7 @@ def _mouseMove(widget, pos, buttons=None, modifier=None):
 def _mouseDrag(widget, pos1, pos2, button, modifier=None):
     _mouseMove(widget, pos1)
     _mousePress(widget, pos1, button, modifier)
+    QTest.qWait(10)
     _mouseMove(widget, pos2, button, modifier)
     _mouseRelease(widget, pos2, button, modifier)
 
