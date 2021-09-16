@@ -10,15 +10,16 @@ import gc
 import math
 import platform
 import sys
+from collections import OrderedDict
 from contextlib import contextmanager
 from functools import partial
 from os.path import getsize
 
 import numpy as np
 from PyQt5.QtCore import (QEvent, Qt, pyqtSignal, QRunnable,
-                          QObject, QThreadPool, QRectF, QLineF, QRect, QPoint)
+                          QObject, QThreadPool, QRectF, QLineF, QPoint)
 from PyQt5.QtGui import (QFont, QIcon, QPixmap, QTransform,
-                         QMouseEvent, QPainter, QImage, QPen)
+                         QMouseEvent, QImage, QPen, QPainter, QPainterPath)
 from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
                              QDockWidget, QDoubleSpinBox, QFormLayout,
@@ -28,7 +29,7 @@ from PyQt5.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
                              QWidget, QStyleOptionSlider, QStyle,
                              QApplication, QGraphicsView, QProgressBar,
                              QVBoxLayout, QLineEdit, QCheckBox, QScrollArea,
-                             QGraphicsLineItem, QGraphicsScene)
+                             QGraphicsLineItem, QGraphicsScene, QTextEdit)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
                        LinearRegionItem, PlotCurveItem, PlotItem,
@@ -43,6 +44,7 @@ except ImportError:
     def capture_exceptions():
         yield [None]
 
+from mne.viz import plot_sensors
 from mne.viz._figure import BrowserBase
 from mne.viz.utils import _simplify_float, _merge_annotations
 from mne.annotations import _sync_onset
@@ -62,8 +64,6 @@ class RawTraceItem(PlotCurveItem):
 
     def __init__(self, mne, ch_idx):
         super().__init__(clickable=True)
-        # ToDo: Does it affect performance, if the mne-object is referenced
-        #  to in every RawTraceItem?
         self.mne = mne
 
         # Set default z-value to 1 to be before other items in scene
@@ -88,7 +88,7 @@ class RawTraceItem(PlotCurveItem):
         if self.mne.butterfly:
             self.ypos = self.mne.butterfly_type_order.index(self.ch_type) + 1
         else:
-            self.ypos = self.order_idx + 1
+            self.ypos = self.range_idx + self.mne.ch_start + 1
 
     def set_ch_idx(self, ch_idx):
         """Sets the channel index and all deriving indices."""
@@ -105,7 +105,7 @@ class RawTraceItem(PlotCurveItem):
         self.ch_name = self.mne.inst.ch_names[ch_idx]
         self.isbad = self.ch_name in self.mne.info['bads']
         self.ch_type = self.mne.ch_types[ch_idx]
-        self.color = self.mne.ch_color_dict[self.ch_type]
+        self.color = self.mne.ch_colors[self.ch_name]
         self.update_ypos()
 
     def update_data(self):
@@ -248,8 +248,7 @@ class ChannelAxis(AxisItem):
             ixs.sort()
             tick_strings = np.array(_DATA_CH_TYPES_ORDER_DEFAULT)[ixs]
         else:
-            ch_idxs = [v - 1 for v in values]
-            tick_strings = self.mne.ch_names[self.mne.ch_order[ch_idxs]]
+            tick_strings = self.mne.ch_names[self.mne.picks]
 
         return tick_strings
 
@@ -260,7 +259,7 @@ class ChannelAxis(AxisItem):
             if text in self.mne.info['bads']:
                 p.setPen(functions.mkPen(self.mne.ch_color_bad))
             else:
-                p.setPen(functions.mkPen('k'))
+                p.setPen(functions.mkPen(self.mne.ch_colors[text]))
             self.ch_texts[text] = ((rect.left(), rect.left() + rect.width()),
                                    (rect.top(), rect.top() + rect.height()))
             p.drawText(rect, int(flags), text)
@@ -447,10 +446,10 @@ class OverviewBar(QGraphicsView):
     - zscore: Display channel-wise zscore across time
     """
 
-    def __init__(self, browser):
+    def __init__(self, main):
         super().__init__(QGraphicsScene())
-        self.browser = browser
-        self.mne = browser.mne
+        self.main = main
+        self.mne = main.mne
         self.bg_img = None
         self.bg_pxmp = None
         self.bg_pxmp_item = None
@@ -712,6 +711,9 @@ class OverviewBar(QGraphicsView):
             x, y = None, None
 
         return x, y
+
+    def keyPressEvent(self, event):
+        self.main.keyPressEvent(event)
 
 
 class RawViewBox(ViewBox):
@@ -1088,6 +1090,178 @@ class ProjDialog(_BaseDialog):
         for idx, chkbx in enumerate(self.checkboxes):
             chkbx.setChecked(bool(self.mne.projs_on[idx]))
         self.external_change = True
+
+
+class _ChannelFig(FigureCanvasQTAgg):
+    def __init__(self, figure):
+        self.figure = figure
+        super().__init__(figure)
+        self.setFocusPolicy(Qt.StrongFocus | Qt.WheelFocus)
+        self.setFocus()
+        self._lasso_path = None
+        # Only update when mouse is pressed
+        self.setMouseTracking(False)
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        # Lasso-Drawing doesn't seem to work with mpl, thus it is replicated
+        # in Qt.
+        if self._lasso_path is not None:
+            painter = QPainter(self)
+            painter.setPen(mkPen('red', width=2))
+            painter.drawPath(self._lasso_path)
+            painter.end()
+
+    def mouseMoveEvent(self, event):
+        super().mouseMoveEvent(event)
+
+        if self._lasso_path is None:
+            self._lasso_path = QPainterPath()
+            self._lasso_path.moveTo(event.pos())
+        else:
+            self._lasso_path.lineTo(event.pos())
+
+        self.update()
+
+    def mouseReleaseEvent(self, event):
+        super().mouseReleaseEvent(event)
+        self._lasso_path = None
+        self.update()
+
+
+class SelectionDialog(_BaseDialog):
+    def __init__(self, main):
+        # Create widget
+        widget = QWidget()
+        super().__init__(main, widget, name='fig_selection',
+                         title='Channel selection')
+        self.setGeometry(100, 100, 400, 800)
+
+        layout = QVBoxLayout()
+
+        # Add channel plot
+        self.channel_fig = plot_sensors(self.mne.info, kind='select',
+                                        ch_type='all', title='',
+                                        ch_groups=self.mne.group_by,
+                                        show=False)[0]
+        self.mne.child_figs.append(self.channel_fig)
+        self.channel_fig.canvas.mpl_connect('lasso_event',
+                                            self._set_custom_selection)
+        self.channel_widget = _ChannelFig(self.channel_fig)
+        layout.addWidget(self.channel_widget)
+
+        selections_dict = self.mne.ch_selections
+        selections_dict.update(Custom=np.array([], dtype=int))  # for lasso
+
+        self.chkbxs = OrderedDict()
+        for label in selections_dict:
+            chkbx = QCheckBox(label)
+            chkbx.clicked.connect(partial(self._chkbx_changed, label))
+            self.chkbxs[label] = chkbx
+            layout.addWidget(chkbx)
+
+        self.mne.old_selection = list(selections_dict.keys())[0]
+        self.chkbxs[self.mne.old_selection].setChecked(True)
+
+        self._update_highlighted_sensors()
+
+        # add instructions at bottom
+        instructions = (
+            'To use a custom selection, first click-drag on the sensor plot '
+            'to "lasso" the sensors you want to select, or hold Ctrl while '
+            'clicking individual sensors. Holding Ctrl while click-dragging '
+            'allows a lasso selection adding to (rather than replacing) the '
+            'existing selection.')
+        help_widget = QTextEdit(instructions)
+        help_widget.setReadOnly(True)
+        layout.addWidget(help_widget)
+
+        widget.setLayout(layout)
+
+    def _chkbx_changed(self, label):
+        # Disable other checkboxes
+        for chkbx in self.chkbxs.values():
+            chkbx.setChecked(False)
+        if (label == 'Custom' and
+                not len(self.mne.ch_selections['Custom'])):
+            label = self.mne.old_selection
+        # Select the checkbox no matter if clicked on when active or not
+        self.chkbxs[label].setChecked(True)
+        # Update selections
+        self.mne.old_selection = label
+        self.mne.picks = self.mne.ch_selections[label]
+        self.mne.n_channels = len(self.mne.picks)
+        # Update highlighted sensors
+        self._update_highlighted_sensors()
+        # if "Vertex" is defined, some channels appear twice, so if
+        # "Vertex" is selected, ch_start should be the *first* match;
+        # otherwise it should be the *last* match (since "Vertex" is
+        # always the first selection group, if it exists).
+        index = 0 if label == 'Vertex' else -1
+        ch_order = np.concatenate(list(self.mne.ch_selections.values()))
+        ch_start = np.where(ch_order == self.mne.picks[0])[0][index]
+        self.mne.ch_start = ch_start
+
+        # Adapt ymax to additional channels from 'Custom'
+        self.mne.ymax = (len(self.mne.ch_order) +
+                         len(self.mne.ch_selections['Custom']) + 1)
+        self.mne.plt.setLimits(yMax=self.mne.ymax)
+        self.mne.ax_vscroll._update_nchan()
+
+        # Apply changes on view
+        self.mne.plt.setYRange(self.mne.ch_start,
+                               self.mne.ch_start + self.mne.n_channels + 1,
+                               padding=0)
+
+        # Update all y-positions, because channels can appear in multiple
+        # selections on different y-positions
+        for trace in self.mne.traces:
+            trace.update_ypos()
+            trace.update_data()
+
+    def _set_custom_selection(self):
+        chs = self.channel_fig.lasso.selection
+        inds = np.in1d(self.mne.ch_names, chs)
+        self.mne.ch_selections['Custom'] = inds.nonzero()[0]
+        if any(inds):
+            self._chkbx_changed('Custom')
+
+    def _update_highlighted_sensors(self):
+        inds = np.in1d(self.mne.fig_selection.channel_fig.lasso.ch_names,
+                       self.mne.ch_names[self.mne.picks]).nonzero()[0]
+        self.channel_fig.lasso.select_many(inds)
+        self.channel_widget.draw()
+
+    def _style_butterfly(self):
+        for key, chkbx in self.chkbxs.items():
+            if self.mne.butterfly:
+                chkbx.setChecked(False)
+                chkbx.setEnabled(False)
+            else:
+                chkbx.setEnabled(True)
+                if key == self.mne.old_selection:
+                    chkbx.setChecked(True)
+        self._update_highlighted_sensors()
+
+    def _scroll_selection(self, step):
+        name_idx = list(self.mne.ch_selections.keys()).index(
+            self.mne.old_selection)
+        new_idx = np.clip(name_idx + step,
+                          0, len(self.mne.ch_selections) - 1)
+        new_label = list(self.mne.ch_selections.keys())[new_idx]
+        self._chkbx_changed(new_label)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Up:
+            self._scroll_selection(-1)
+        elif event.key() == Qt.Key_Down:
+            self._scroll_selection(1)
+        else:
+            self.main.keyPressEvent(event)
+
+    def closeEvent(self, event):
+        super().closeEvent(event)
+        self.main.close()
 
 
 class AnnotRegion(LinearRegionItem):
@@ -1643,6 +1817,12 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.data_preloaded = False
         self.mne.show_overview_bar = True
 
+        # Initialize channel-colors for faster indexing later
+        self.mne.ch_colors = dict()
+        for idx, ch_name in enumerate(self.mne.ch_names):
+            ch_type = self.mne.ch_types[idx]
+            self.mne.ch_colors[ch_name] = self.mne.ch_color_dict[ch_type]
+
         # Add Load-Progressbar for loading in a thread
         self.mne.load_prog_label = QLabel('Loading...')
         self.statusBar().addWidget(self.mne.load_prog_label)
@@ -1923,7 +2103,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'qt_key': Qt.Key_Minus,
                 'modifier': [None, 'Ctrl'],
                 'slot': [self.scale_all],
-                'parameter': [0.75, 0.95],
+                'parameter': [4/5, 19/20],
                 'description': ['Decrease Scale',
                                 'Decrease Scale (small step)']
             },
@@ -1931,7 +2111,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'qt_key': Qt.Key_Plus,
                 'modifier': [None, 'Ctrl'],
                 'slot': [self.scale_all],
-                'parameter': [1.25, 1.05],
+                'parameter': [5/4, 20/19],
                 'description': ['Increase Scale',
                                 'Increase Scale (small step)']
             },
@@ -2166,21 +2346,27 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def vscroll(self, step):
         """Scroll vertically by step."""
-        # Get current range and add step to it
-        if step == '+full':
-            step = self.mne.n_channels
-        elif step == '-full':
-            step = - self.mne.n_channels
-        ymin, ymax = [i + step for i in self.mne.viewbox.viewRange()[1]]
+        if self.mne.fig_selection is not None:
+            if step > 0 or step == '+full':
+                self.mne.fig_selection._scroll_selection(1)
+            else:
+                self.mne.fig_selection._scroll_selection(-1)
+        else:
+            # Get current range and add step to it
+            if step == '+full':
+                step = self.mne.n_channels
+            elif step == '-full':
+                step = - self.mne.n_channels
+            ymin, ymax = [i + step for i in self.mne.viewbox.viewRange()[1]]
 
-        if ymin < 0:
-            ymin = 0
-            ymax = self.mne.n_channels + 1
-        elif ymax > self.mne.ymax:
-            ymax = self.mne.ymax
-            ymin = ymax - self.mne.n_channels - 1
+            if ymin < 0:
+                ymin = 0
+                ymax = self.mne.n_channels + 1
+            elif ymax > self.mne.ymax:
+                ymax = self.mne.ymax
+                ymin = ymax - self.mne.n_channels - 1
 
-        self.mne.plt.setYRange(ymin, ymax, padding=0)
+            self.mne.plt.setYRange(ymin, ymax, padding=0)
 
     def change_duration(self, step):
         """Change duration by step."""
@@ -2352,12 +2538,13 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _yrange_changed(self, _, yrange):
         if not self.mne.butterfly:
-            # Update picks and data
-            self.mne.ch_start = np.clip(round(yrange[0]), 0,
-                                        len(self.mne.ch_order)
-                                        - self.mne.n_channels)
-            self.mne.n_channels = round(yrange[1] - yrange[0] - 1)
-            self._update_picks()
+            if not self.mne.fig_selection:
+                # Update picks and data
+                self.mne.ch_start = np.clip(round(yrange[0]), 0,
+                                            len(self.mne.ch_order)
+                                            - self.mne.n_channels)
+                self.mne.n_channels = round(yrange[1] - yrange[0] - 1)
+                self._update_picks()
             self._update_data()
 
             # Update Channel-Bar
@@ -2374,6 +2561,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         add_idxs = [p for p in self.mne.picks
                     if p not in [tr.ch_idx for tr in self.mne.traces]]
 
+        # Update range_idx for traces which just shifted in y-position
+        for trace in [tr for tr in self.mne.traces if tr not in off_traces]:
+            trace.update_range_idx()
+
         # Update number of traces.
         trace_diff = len(self.mne.picks) - len(self.mne.traces)
 
@@ -2389,13 +2580,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if trace_diff > 0:
             # Make copy to avoid skipping iteration.
             idxs_copy = add_idxs.copy()
-            for aidx in idxs_copy:
+            for aidx in idxs_copy[:trace_diff]:
                 self._add_trace(aidx)
                 add_idxs.remove(aidx)
-
-        # Update range_idx for traces which just shifted in y-position
-        for trace in [tr for tr in self.mne.traces if tr not in off_traces]:
-            trace.update_range_idx()
 
         # Update data of traces outside of yrange (reuse remaining trace-items)
         for trace, ch_idx in zip(off_traces, add_idxs):
@@ -2752,14 +2939,13 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 self.mne.visible_annotations[region.description])
         self.mne.overview_bar.update_annotations()
 
-    def _toggle_annotations(self):
-        self.mne.annotations_visible = not self.mne.annotations_visible
+    def _set_annotations_visible(self, visible):
         for descr in self.mne.visible_annotations:
-            self.mne.visible_annotations[descr] = self.mne.annotations_visible
+            self.mne.visible_annotations[descr] = visible
         self._update_regions_visible()
 
         # Update Plot
-        if self.mne.annotations_visible:
+        if visible:
             self._update_annotations_xrange((self.mne.t_start,
                                              self.mne.t_start +
                                              self.mne.duration))
@@ -2768,6 +2954,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                            if r in self.mne.plt.items]:
                 self.mne.plt.removeItem(region)
                 self.mne.plt.removeItem(region.label_item)
+
+    def _toggle_annotations(self):
+        self.mne.annotations_visible = not self.mne.annotations_visible
+        self._set_annotations_visible(self.mne.annotations_visible)
 
     def _apply_update_projectors(self, toggle_all=False):
         if toggle_all:
@@ -2833,24 +3023,28 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _toggle_epoch_histogram(self):
         fig = self._create_epoch_histogram()
+        self.mne.child_figs.append(fig)
         self._get_dlg_from_mpl(fig)
+
+    def _set_events_visible(self, visible):
+        for event_line in self.mne.event_lines:
+            event_line.setVisible(visible)
+
+        # Update Plot
+        if visible:
+            self._update_events_xrange((self.mne.t_start,
+                                        self.mne.t_start +
+                                        self.mne.duration))
+        else:
+            for event_line in [evl for evl in self.mne.event_lines
+                               if evl in self.mne.plt.items]:
+                self.mne.plt.removeItem(event_line)
+        self.mne.overview_bar.update_events()
 
     def _toggle_events(self):
         if self.mne.event_nums is not None:
             self.mne.events_visible = not self.mne.events_visible
-            for event_line in self.mne.event_lines:
-                event_line.setVisible(self.mne.events_visible)
-
-            # Update Plot
-            if self.mne.events_visible:
-                self._update_events_xrange((self.mne.t_start,
-                                            self.mne.t_start +
-                                            self.mne.duration))
-            else:
-                for event_line in [evl for evl in self.mne.event_lines
-                                   if evl in self.mne.plt.items]:
-                    self.mne.plt.removeItem(event_line)
-            self.mne.overview_bar.update_events()
+            self._set_events_visible(self.men.events_visible)
 
     def _toggle_time_format(self):
         if self.mne.time_format == 'float':
@@ -2877,6 +3071,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             bar.setVisible(self.mne.scrollbars_visible)
         self.mne.toolbar.setVisible(self.mne.scrollbars_visible)
         self.mne.overview_bar.setVisible(self.mne.scrollbars_visible)
+        self._set_annotations_visible(self.mne.scrollbars_visible)
+        self._set_events_visible(self.mne.scrollbars_visible)
 
     def _new_child_figure(self, fig_name, window_title, **kwargs):
         from matplotlib.figure import Figure
@@ -2915,6 +3111,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _create_ch_context_fig(self, idx):
         fig = super()._create_ch_context_fig(idx)
+        self.mne.child_figs.append(fig)
         if fig is not None:
             self._get_dlg_from_mpl(fig)
 
@@ -2922,7 +3119,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         pass
 
     def _create_selection_fig(self):
-        pass
+        SelectionDialog(self)
 
     def keyPressEvent(self, event):
         """Customize key press events."""
@@ -3095,6 +3292,19 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _get_scale_bar_texts(self):
         return tuple(t.toPlainText() for t in self.mne.scalebar_texts.values())
+
+    def _close_event(self, fig=None):
+        """Force calling of the MPL figure close event."""
+        fig = fig or self
+        if hasattr(fig, 'canvas'):
+            try:
+                fig.canvas.close_event()
+            except ValueError:  # old mpl with Qt
+                pass  # pragma: no cover
+            else:
+                self.mne.child_figs.remove(fig)
+        else:
+            fig.close()
 
     def closeEvent(self, event):
         """Customize close event."""
