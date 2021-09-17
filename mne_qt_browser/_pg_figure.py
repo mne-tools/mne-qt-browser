@@ -45,6 +45,7 @@ except ImportError:
         yield [None]
 
 from mne.viz import plot_sensors
+from mne.viz.backends._utils import _init_qt_resources
 from mne.viz._figure import BrowserBase
 from mne.viz.utils import _simplify_float, _merge_annotations
 from mne.annotations import _sync_onset
@@ -257,9 +258,11 @@ class ChannelAxis(AxisItem):
         super().drawPicture(p, axisSpec, tickSpecs, textSpecs)
         for rect, flags, text in textSpecs:
             if text in self.mne.info['bads']:
-                p.setPen(functions.mkPen(self.mne.ch_color_bad))
+                p.setPen(mkPen(self.mne.ch_color_bad))
+            if self.mne.butterfly:
+                p.setPen(mkPen(self.mne.ch_color_dict[text]))
             else:
-                p.setPen(functions.mkPen(self.mne.ch_colors[text]))
+                p.setPen(mkPen(self.mne.ch_colors[text]))
             self.ch_texts[text] = ((rect.left(), rect.left() + rect.width()),
                                    (rect.top(), rect.top() + rect.height()))
             p.drawText(rect, int(flags), text)
@@ -272,23 +275,24 @@ class ChannelAxis(AxisItem):
     def mouseClickEvent(self, event):
         """Customize mouse click events."""
         # Clean up channel-texts
-        self.ch_texts = {k: v for k, v in self.ch_texts.items()
-                         if k in [tr.ch_name for tr in self.mne.traces]}
-        # Get channel-name from position of channel-description
-        ypos = event.scenePos().y()
-        ch_name = None
-        for ch_name in self.ch_texts:
-            ymin, ymax = self.ch_texts[ch_name][1]
-            if ymin < ypos < ymax:
-                break
+        if not self.mne.butterfly:
+            self.ch_texts = {k: v for k, v in self.ch_texts.items()
+                             if k in [tr.ch_name for tr in self.mne.traces]}
+            # Get channel-name from position of channel-description
+            ypos = event.scenePos().y()
+            ch_name = None
+            for ch_name in self.ch_texts:
+                ymin, ymax = self.ch_texts[ch_name][1]
+                if ymin < ypos < ymax:
+                    break
 
-        if ch_name is not None:
-            trace = [tr for tr in self.mne.traces
-                    if tr.ch_name == ch_name][0]
-            if event.button() == Qt.LeftButton:
-                self.main._bad_ch_clicked(trace)
-            elif event.button() == Qt.RightButton:
-                self.main._create_ch_context_fig(trace.range_idx)
+            if ch_name is not None:
+                trace = [tr for tr in self.mne.traces
+                        if tr.ch_name == ch_name][0]
+                if event.button() == Qt.LeftButton:
+                    self.main._bad_ch_clicked(trace)
+                elif event.button() == Qt.RightButton:
+                    self.main._create_ch_context_fig(trace.range_idx)
 
     def get_labels(self):
         """Get labels for testing."""
@@ -2370,54 +2374,56 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def change_duration(self, step):
         """Change duration by step."""
-        if step == '+full':
-            rel_step = self.mne.duration
-        elif step == '-full':
-            rel_step = - self.mne.duration
-        else:
-            rel_step = (self.mne.duration * step) / (
-                    self.mne.scroll_sensitivity * 2)
-        xmin, xmax = self.mne.viewbox.viewRange()[0]
-        xmax += rel_step
-        xmin -= rel_step
+        if not self.mne.butterfly:
+            if step == '+full':
+                rel_step = self.mne.duration
+            elif step == '-full':
+                rel_step = - self.mne.duration
+            else:
+                rel_step = (self.mne.duration * step) / (
+                        self.mne.scroll_sensitivity * 2)
+            xmin, xmax = self.mne.viewbox.viewRange()[0]
+            xmax += rel_step
+            xmin -= rel_step
 
-        if self.mne.is_epochs:
-            # use the length of one epoch as duration change
-            min_dur = len(self.mne.inst.times) / self.mne.info['sfreq']
-        else:
-            # never show fewer than 3 samples
-            min_dur = 3 * np.diff(self.mne.inst.times[:2])[0]
+            if self.mne.is_epochs:
+                # use the length of one epoch as duration change
+                min_dur = len(self.mne.inst.times) / self.mne.info['sfreq']
+            else:
+                # never show fewer than 3 samples
+                min_dur = 3 * np.diff(self.mne.inst.times[:2])[0]
 
-        if xmax - xmin < min_dur:
-            xmax = xmin + min_dur
+            if xmax - xmin < min_dur:
+                xmax = xmin + min_dur
 
-        if xmax > self.mne.xmax:
-            xmax = self.mne.xmax
+            if xmax > self.mne.xmax:
+                xmax = self.mne.xmax
 
-        if xmin < 0:
-            xmin = 0
+            if xmin < 0:
+                xmin = 0
 
-        self.mne.plt.setXRange(xmin, xmax, padding=0)
+            self.mne.plt.setXRange(xmin, xmax, padding=0)
 
     def change_nchan(self, step):
         """Change number of channels by step."""
-        if step == '+full':
-            step = self.mne.n_channels
-        elif step == '-full':
-            step = - self.mne.n_channels
-        ymin, ymax = self.mne.viewbox.viewRange()[1]
-        ymax += step
-        if ymax > self.mne.ymax:
-            ymax = self.mne.ymax
-            ymin -= step
+        if not self.mne.butterfly:
+            if step == '+full':
+                step = self.mne.n_channels
+            elif step == '-full':
+                step = - self.mne.n_channels
+            ymin, ymax = self.mne.viewbox.viewRange()[1]
+            ymax += step
+            if ymax > self.mne.ymax:
+                ymax = self.mne.ymax
+                ymin -= step
 
-        if ymin < 0:
-            ymin = 0
+            if ymin < 0:
+                ymin = 0
 
-        if ymax - ymin <= 2:
-            ymax = ymin + 2
+            if ymax - ymin <= 2:
+                ymax = ymin + 2
 
-        self.mne.plt.setYRange(ymin, ymax, padding=0)
+            self.mne.plt.setYRange(ymin, ymax, padding=0)
 
     def _remove_vline(self):
         if self.mne.vline:
@@ -3374,7 +3380,10 @@ def _mouseClick(widget, pos, button, modifier=None):
 def _init_browser(inst, figsize, **kwargs):
     setConfigOption('enableExperimental', True)
 
-    mkQApp()
+    app = mkQApp()
+    _init_qt_resources()
+    kind = 'bigsur-' if platform.mac_ver()[0] >= '10.16' else ''
+    app.setWindowIcon(QIcon(f":/mne-{kind}icon.png"))
     browser = PyQtGraphBrowser(inst=inst, figsize=figsize, **kwargs)
     width = int(figsize[0] * browser.physicalDpiX())
     height = int(figsize[1] * browser.physicalDpiY())
