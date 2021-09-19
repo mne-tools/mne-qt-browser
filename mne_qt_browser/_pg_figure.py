@@ -49,7 +49,8 @@ from mne.viz.backends._utils import _init_qt_resources
 from mne.viz._figure import BrowserBase
 from mne.viz.utils import _simplify_float, _merge_annotations
 from mne.annotations import _sync_onset
-from mne.io.pick import _DATA_CH_TYPES_ORDER_DEFAULT
+from mne.io.pick import _DATA_CH_TYPES_ORDER_DEFAULT, channel_indices_by_type, \
+    _DATA_CH_TYPES_SPLIT
 from mne.utils import logger, sizeof_fmt
 
 name = 'pyqtgraph'
@@ -71,11 +72,12 @@ class RawTraceItem(PlotCurveItem):
         self.setZValue(1)
 
         self.set_ch_idx(ch_idx)
-        self._update_bad_color()
+        self.update_color()
         self.update_data()
 
-    def _update_bad_color(self):
-        if self.isbad:
+    def update_color(self):
+        """Update the color of the trace (depending on ch_type and bad)."""
+        if self.isbad and not self.mne.butterfly:
             self.setPen(self.mne.ch_color_bad)
         else:
             self.setPen(self.color)
@@ -86,7 +88,9 @@ class RawTraceItem(PlotCurveItem):
 
     def update_ypos(self):
         """Should be updated when butterfly is toggled or ch_idx changes."""
-        if self.mne.butterfly:
+        if self.mne.butterfly and self.mne.fig_selection is not None:
+            self.ypos = self.mne.selection_ypos_dict[self.ch_idx]
+        elif self.mne.butterfly:
             self.ypos = self.mne.butterfly_type_order.index(self.ch_type) + 1
         else:
             self.ypos = self.range_idx + self.mne.ch_start + 1
@@ -106,7 +110,7 @@ class RawTraceItem(PlotCurveItem):
         self.ch_name = self.mne.inst.ch_names[ch_idx]
         self.isbad = self.ch_name in self.mne.info['bads']
         self.ch_type = self.mne.ch_types[ch_idx]
-        self.color = self.mne.ch_colors[self.ch_name]
+        self.color = self.mne.ch_color_assoc[self.ch_name]
         self.update_ypos()
 
     def update_data(self):
@@ -237,12 +241,7 @@ class ChannelAxis(AxisItem):
         """Customize strings of axis values."""
         # Get channel-names
         if self.mne.butterfly and self.mne.fig_selection is not None:
-            exclude = ('Vertex', 'Custom')
-            ticklabels = list(self.mne.ch_selections)
-            keep_mask = np.in1d(ticklabels, exclude, invert=True)
-            ticklabels = [t.replace('Left-', 'L-').replace('Right-', 'R-')
-                          for t in ticklabels]  # avoid having to rotate labels
-            tick_strings = np.array(ticklabels)[keep_mask]
+            tick_strings = list(self.main._make_butterfly_selections_dict())
         elif self.mne.butterfly:
             _, ixs, _ = np.intersect1d(_DATA_CH_TYPES_ORDER_DEFAULT,
                                        self.mne.ch_types, return_indices=True)
@@ -257,12 +256,14 @@ class ChannelAxis(AxisItem):
         """Customize drawing of axis items."""
         super().drawPicture(p, axisSpec, tickSpecs, textSpecs)
         for rect, flags, text in textSpecs:
-            if text in self.mne.info['bads']:
-                p.setPen(mkPen(self.mne.ch_color_bad))
-            if self.mne.butterfly:
+            if self.mne.butterfly and self.mne.fig_selection is not None:
+                p.setPen(mkPen('black'))
+            elif self.mne.butterfly:
                 p.setPen(mkPen(self.mne.ch_color_dict[text]))
+            elif text in self.mne.info['bads']:
+                p.setPen(mkPen(self.mne.ch_color_bad))
             else:
-                p.setPen(mkPen(self.mne.ch_colors[text]))
+                p.setPen(mkPen(self.mne.ch_color_assoc[text]))
             self.ch_texts[text] = ((rect.left(), rect.left() + rect.width()),
                                    (rect.top(), rect.top() + rect.height()))
             p.drawText(rect, int(flags), text)
@@ -417,10 +418,13 @@ class ChannelScrollBar(BaseScrollBar):
         self.valueChanged.connect(self._channel_changed)
 
     def _channel_changed(self, value):
-        value = min(value, self.mne.ymax - self.mne.n_channels)
         if not self.external_change:
-            self.mne.plt.setYRange(value, value + self.mne.n_channels + 1,
-                                   padding=0)
+            if self.mne.fig_selection:
+                self.mne.fig_selection._scroll_to_idx(value)
+            elif not self.mne.butterfly:
+                value = min(value, self.mne.ymax - self.mne.n_channels)
+                self.mne.plt.setYRange(value, value + self.mne.n_channels + 1,
+                                       padding=0)
 
     def update_value(self, value):
         """Update value of the ScrollBar."""
@@ -578,11 +582,16 @@ class OverviewBar(QGraphicsView):
                 rect.setRect(QRectF(top_left, bottom_right))
 
     def update_viewrange(self):
-        top_left = self._mapFromData(self.mne.t_start, self.mne.ch_start)
-        bottom_right = self._mapFromData(self.mne.t_start
-                                         + self.mne.duration,
-                                         self.mne.ch_start
-                                         + self.mne.n_channels)
+        if self.mne.butterfly:
+            top_left = self._mapFromData(self.mne.t_start, 0)
+            bottom_right = self._mapFromData(self.mne.t_start +
+                                             self.mne.duration, self.mne.ymax)
+        else:
+            top_left = self._mapFromData(self.mne.t_start, self.mne.ch_start)
+            bottom_right = self._mapFromData(self.mne.t_start
+                                             + self.mne.duration,
+                                             self.mne.ch_start
+                                             + self.mne.n_channels)
         rect = QRectF(top_left, bottom_right)
         if self.viewrange_rect is None:
             pen = QPen(mkColor('g'))
@@ -599,7 +608,12 @@ class OverviewBar(QGraphicsView):
             x = x - self.mne.duration / 2
             y = y - self.mne.n_channels / 2
             self.mne.plt.setXRange(x, x + self.mne.duration, padding=0)
-            self.mne.plt.setYRange(y, y + self.mne.n_channels + 1, padding=0)
+
+            if self.mne.fig_selection:
+                self.mne.fig_selection._scroll_to_idx(int(y))
+            else:
+                self.mne.plt.setYRange(y, y + self.mne.n_channels + 1,
+                                       padding=0)
 
     def mousePressEvent(self, event):
         """Customize mouse press events."""
@@ -857,8 +871,9 @@ class EventLine(InfiniteLine):
 
     def __init__(self, pos, id, color):
         super().__init__(pos, pen=color, movable=False,
-                         label=str(id), labelOpts={'position': 0.98,
+                         label=str(id), labelOpts={'position': 0.99,
                                                    'color': color})
+        self.label.setFont(QFont('AnyStyle', 10, QFont.Bold))
 
 
 class Crosshair(InfiniteLine):
@@ -893,16 +908,19 @@ class BaseScaleBar:
         return self.ch_type in self.mne.ch_types[self.mne.picks]
 
     def _get_ypos(self):
-        ch_type_idxs = np.argwhere(self.mne.ch_types[self.mne.picks]
-                                   == self.ch_type)
+        if self.mne.butterfly:
+            self.ypos = self.mne.butterfly_type_order.index(self.ch_type) + 1
+        else:
+            ch_type_idxs = np.argwhere(self.mne.ch_types[self.mne.picks]
+                                       == self.ch_type)
 
-        for idx in ch_type_idxs:
-            ch_name = self.mne.ch_names[self.mne.picks[idx]]
-            if ch_name not in self.mne.info['bads'] and \
-                    ch_name not in self.mne.whitened_ch_names:
-                break
+            for idx in ch_type_idxs:
+                ch_name = self.mne.ch_names[self.mne.picks[idx]]
+                if ch_name not in self.mne.info['bads'] and \
+                        ch_name not in self.mne.whitened_ch_names:
+                    break
 
-        self.ypos = self.mne.ch_start + idx + 1
+            self.ypos = self.mne.ch_start + idx + 1
 
     def update_x_position(self):
         """Update x-position of Scalebar."""
@@ -1139,7 +1157,8 @@ class SelectionDialog(_BaseDialog):
         widget = QWidget()
         super().__init__(main, widget, name='fig_selection',
                          title='Channel selection')
-        self.setGeometry(100, 100, 400, 800)
+        xpos = QApplication.desktop().screenGeometry().width() - 400
+        self.setGeometry(xpos, 100, 400, 800)
 
         layout = QVBoxLayout()
 
@@ -1183,6 +1202,9 @@ class SelectionDialog(_BaseDialog):
         widget.setLayout(layout)
 
     def _chkbx_changed(self, label):
+        # Disable butterfly if checkbox is clicked
+        if self.mne.butterfly:
+            self.main._set_butterfly(False)
         # Disable other checkboxes
         for chkbx in self.chkbxs.values():
             chkbx.setChecked(False)
@@ -1201,7 +1223,9 @@ class SelectionDialog(_BaseDialog):
         # "Vertex" is selected, ch_start should be the *first* match;
         # otherwise it should be the *last* match (since "Vertex" is
         # always the first selection group, if it exists).
-        index = 0 if label == 'Vertex' else -1
+        index = 0
+        if label != 'Vertex' and 'Vertex' in self.mne.ch_selections:
+            index = -1
         ch_order = np.concatenate(list(self.mne.ch_selections.values()))
         ch_start = np.where(ch_order == self.mne.picks[0])[0][index]
         self.mne.ch_start = ch_start
@@ -1236,13 +1260,25 @@ class SelectionDialog(_BaseDialog):
         self.channel_fig.lasso.select_many(inds)
         self.channel_widget.draw()
 
+    def _update_bad_sensors(self, pick, mark_bad):
+        sensor_picks = list()
+        ch_indices = channel_indices_by_type(self.mne.info)
+        for this_type in _DATA_CH_TYPES_SPLIT:
+            if this_type in self.mne.ch_types:
+                sensor_picks.extend(ch_indices[this_type])
+        sensor_idx = np.in1d(sensor_picks, pick).nonzero()[0]
+        # change the sensor color
+        fig = self.channel_fig
+        fig.lasso.ec[sensor_idx, 0] = float(mark_bad)  # change R of RGBA array
+        fig.lasso.collection.set_edgecolors(fig.lasso.ec)
+        fig.canvas.draw_idle()
+        self.channel_widget.draw()
+
     def _style_butterfly(self):
         for key, chkbx in self.chkbxs.items():
             if self.mne.butterfly:
                 chkbx.setChecked(False)
-                chkbx.setEnabled(False)
             else:
-                chkbx.setEnabled(True)
                 if key == self.mne.old_selection:
                     chkbx.setChecked(True)
         self._update_highlighted_sensors()
@@ -1254,6 +1290,14 @@ class SelectionDialog(_BaseDialog):
                           0, len(self.mne.ch_selections) - 1)
         new_label = list(self.mne.ch_selections.keys())[new_idx]
         self._chkbx_changed(new_label)
+
+    def _scroll_to_idx(self, idx):
+        pick = np.concatenate(list(self.mne.ch_selections.values()))[idx]
+        # Take dictionary without Vertex and Custom
+        sel_dict = self.main._make_butterfly_selections_dict()
+        label = [sel for sel, picks in sel_dict.items()
+                 if pick in picks][0]
+        self._chkbx_changed(label)
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Up:
@@ -1816,16 +1860,17 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Initialize attributes which are only used by pyqtgraph, not by
         # matplotlib and add them to MNEBrowseParams.
+        self.mne.selection_ypos_dict = dict()
         self.mne.ds_cache = dict()
         self.mne.enable_preload = False
         self.mne.data_preloaded = False
         self.mne.show_overview_bar = True
 
         # Initialize channel-colors for faster indexing later
-        self.mne.ch_colors = dict()
+        self.mne.ch_color_assoc = dict()
         for idx, ch_name in enumerate(self.mne.ch_names):
             ch_type = self.mne.ch_types[idx]
-            self.mne.ch_colors[ch_name] = self.mne.ch_color_dict[ch_type]
+            self.mne.ch_color_assoc[ch_name] = self.mne.ch_color_dict[ch_type]
 
         # Add Load-Progressbar for loading in a thread
         self.mne.load_prog_label = QLabel('Loading...')
@@ -2228,17 +2273,21 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _bad_ch_clicked(self, line):
         """Slot for bad channel click."""
-        self._toggle_bad_channel(line.range_idx)
+        _, pick, marked_bad = self._toggle_bad_channel(line.range_idx)
 
         # Update line color
         line.isbad = not line.isbad
-        line._update_bad_color()
+        line.update_color()
 
         # Update Channel-Axis
         self._update_yaxis_labels()
 
         # Update Overview-Bar
         self.mne.overview_bar.update_bad_channels()
+
+        # update sensor color (if in selection mode)
+        if self.mne.fig_selection is not None:
+            self.mne.fig_selection._update_bad_sensors(pick, marked_bad)
 
     def _add_trace(self, ch_idx):
         trace = RawTraceItem(self.mne, ch_idx)
@@ -2556,11 +2605,11 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # Update Channel-Bar
             self.mne.ax_vscroll.update_value(self.mne.ch_start)
 
-            # Update Overview-Bar
-            self.mne.overview_bar.update_viewrange()
+        # Update Overview-Bar
+        self.mne.overview_bar.update_viewrange()
 
-            # Update Scalebars
-            self._update_scalebar_y_positions()
+        # Update Scalebars
+        self._update_scalebar_y_positions()
 
         off_traces = [tr for tr in self.mne.traces
                       if tr.ch_idx not in self.mne.picks]
@@ -2593,7 +2642,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Update data of traces outside of yrange (reuse remaining trace-items)
         for trace, ch_idx in zip(off_traces, add_idxs):
             trace.set_ch_idx(ch_idx)
-            trace._update_bad_color()
+            trace.update_color()
             trace.update_data()
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -2998,16 +3047,23 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.fig_help.close()
             self.mne.fig_help = None
 
-    def _toggle_butterfly(self):
-        self.mne.butterfly = not self.mne.butterfly
-        self.mne.ax_vscroll.setVisible(not self.mne.butterfly)
-        self.mne.overview_bar.setVisible(not self.mne.butterfly)
-
+    def _set_butterfly(self, butterfly):
+        self.mne.butterfly = butterfly
         self._update_picks()
         self._update_data()
 
-        if self.mne.butterfly:
-            # ToDo: Butterfly + Selection
+        if butterfly and self.mne.fig_selection is not None:
+            self.mne.selection_ypos_dict.clear()
+            selections_dict = self._make_butterfly_selections_dict()
+            for idx, picks in enumerate(selections_dict.values()):
+                for pick in picks:
+                    self.mne.selection_ypos_dict[pick] = idx + 1
+            ymax = len(selections_dict) + 1
+            self.mne.plt.setLimits(yMax=ymax)
+            self.mne.plt.setYRange(0, ymax, padding=0)
+            # Update Selection-Dialog
+            self.mne.fig_selection._style_butterfly()
+        elif butterfly:
             ymax = len(self.mne.butterfly_type_order) + 1
             self.mne.plt.setLimits(yMax=ymax)
             self.mne.plt.setYRange(0, ymax, padding=0)
@@ -3017,11 +3073,22 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                                    self.mne.ch_start + self.mne.n_channels + 1,
                                    padding=0)
 
-        # update ypos for butterfly-mode
+        # Set vertical scrollbar visible
+        self.mne.ax_vscroll.setVisible(not butterfly or
+                                       self.mne.fig_selection is not None)
+
+        # update overview-bar
+        self.mne.overview_bar.update_viewrange()
+
+        # update ypos and color for butterfly-mode
         for trace in self.mne.traces:
             trace.update_ypos()
+            trace.update_color()
 
         self._draw_traces()
+
+    def _toggle_butterfly(self):
+        self._set_butterfly(not self.mne.butterfly)
 
     def _toggle_dc(self):
         self.mne.remove_dc = not self.mne.remove_dc
@@ -3050,7 +3117,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def _toggle_events(self):
         if self.mne.event_nums is not None:
             self.mne.events_visible = not self.mne.events_visible
-            self._set_events_visible(self.men.events_visible)
+            self._set_events_visible(self.mne.events_visible)
 
     def _toggle_time_format(self):
         if self.mne.time_format == 'float':
@@ -3172,8 +3239,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             trace.update_data()
 
     def _get_size(self):
-        inch_width = self.width() / self.physicalDpiX()
-        inch_height = self.height() / self.physicalDpiY()
+        inch_width = self.width() / self.logicalDpiX()
+        inch_height = self.height() / self.logicalDpiY()
 
         return inch_width, inch_height
 
@@ -3195,9 +3262,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             raise RuntimeError(f'There as been an {exc[0]} inside the Qt '
                                f'event loop (look above for traceback).')
 
-    def _fake_click(self, point, point2=None, fig=None, ax=None,
+    def _fake_click(self, point, add_points=None, fig=None, ax=None,
                     xform='ax', button=1, kind='press'):
-
+        add_points = add_points or list()
         # Wait until Window is fully shown.
         QTest.qWaitForWindowExposed(self)
         # Scene-Dimensions still seem to change to final state when waiting
@@ -3224,10 +3291,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             x = view_width * point[0]
             y = view_height * (1 - point[1])
             point = Point(x, y)
-            if point2 is not None:
-                x2 = view_width * point2[0]
-                y2 = view_height * (1 - point[1])
-                point2 = Point(x2, y2)
+            for idx, apoint in enumerate(add_points):
+                x2 = view_width * apoint[0]
+                y2 = view_height * (1 - apoint[1])
+                add_points[idx] = Point(x2, y2)
 
         elif xform == 'data':
             # For Qt, the equivalent of matplotlibs transData
@@ -3236,19 +3303,20 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # This only works on the View (self.mne.view)
             fig = self.mne.view
             point = self.mne.viewbox.mapViewToScene(Point(*point))
-            if point2 is not None:
-                point2 = self.mne.viewbox.mapViewToScene(Point(*point2))
+            for idx, apoint in enumerate(add_points):
+                add_points[idx] = self.mne.viewbox.mapViewToScene(
+                    Point(*apoint))
 
         elif xform == 'none' or xform is None:
             if isinstance(point, (tuple, list)):
                 point = Point(*point)
             else:
                 point = Point(point)
-            if point2 is not None:
-                if isinstance(point, (tuple, list)):
-                    point2 = Point(*point2)
+            for idx, apoint in enumerate(add_points):
+                if isinstance(apoint, (tuple, list)):
+                    add_points[idx] = Point(*apoint)
                 else:
-                    point2 = Point(point2)
+                    add_points[idx] = Point(apoint)
 
         # Use pytest-qt's exception-hook
         with capture_exceptions() as exceptions:
@@ -3262,7 +3330,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             elif kind == 'motion':
                 _mouseMove(widget=fig, pos=point, buttons=button)
             elif kind == 'drag':
-                _mouseDrag(widget=fig, pos1=point, pos2=point2,
+                _mouseDrag(widget=fig, positions=[point] + add_points,
                            button=button)
 
         for exc in exceptions:
@@ -3363,12 +3431,13 @@ def _mouseMove(widget, pos, buttons=None, modifier=None):
     QApplication.sendEvent(widget, event)
 
 
-def _mouseDrag(widget, pos1, pos2, button, modifier=None):
-    _mouseMove(widget, pos1)
-    _mousePress(widget, pos1, button, modifier)
+def _mouseDrag(widget, positions, button, modifier=None):
+    _mouseMove(widget, positions[0])
+    _mousePress(widget, positions[0], button, modifier)
     QTest.qWait(10)
-    _mouseMove(widget, pos2, button, modifier)
-    _mouseRelease(widget, pos2, button, modifier)
+    for pos in positions[1:]:
+        _mouseMove(widget, pos, button, modifier)
+    _mouseRelease(widget, positions[-1], button, modifier)
 
 
 def _mouseClick(widget, pos, button, modifier=None):
@@ -3385,8 +3454,8 @@ def _init_browser(inst, figsize, **kwargs):
     kind = 'bigsur-' if platform.mac_ver()[0] >= '10.16' else ''
     app.setWindowIcon(QIcon(f":/mne-{kind}icon.png"))
     browser = PyQtGraphBrowser(inst=inst, figsize=figsize, **kwargs)
-    width = int(figsize[0] * browser.physicalDpiX())
-    height = int(figsize[1] * browser.physicalDpiY())
+    width = int(figsize[0] * browser.logicalDpiX())
+    height = int(figsize[1] * browser.logicalDpiY())
     browser.resize(width, height)
 
     return browser
