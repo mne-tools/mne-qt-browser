@@ -33,7 +33,7 @@ from PyQt5.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
                        LinearRegionItem, PlotCurveItem, PlotItem,
-                       Point, TextItem, ViewBox, functions, mkBrush,
+                       Point, TextItem, ViewBox, mkBrush,
                        mkPen, setConfigOption, mkQApp, mkColor)
 from scipy.stats import zscore
 
@@ -49,8 +49,8 @@ from mne.viz.backends._utils import _init_qt_resources
 from mne.viz._figure import BrowserBase
 from mne.viz.utils import _simplify_float, _merge_annotations
 from mne.annotations import _sync_onset
-from mne.io.pick import _DATA_CH_TYPES_ORDER_DEFAULT, channel_indices_by_type, \
-    _DATA_CH_TYPES_SPLIT
+from mne.io.pick import (_DATA_CH_TYPES_ORDER_DEFAULT,
+                         channel_indices_by_type, _DATA_CH_TYPES_SPLIT)
 from mne.utils import logger, sizeof_fmt
 
 name = 'pyqtgraph'
@@ -289,7 +289,7 @@ class ChannelAxis(AxisItem):
 
             if ch_name is not None:
                 trace = [tr for tr in self.mne.traces
-                        if tr.ch_name == ch_name][0]
+                         if tr.ch_name == ch_name][0]
                 if event.button() == Qt.LeftButton:
                     self.main._bad_ch_clicked(trace)
                 elif event.button() == Qt.RightButton:
@@ -547,7 +547,7 @@ class OverviewBar(QGraphicsView):
         for add_onset in add_onsets:
             plot_onset = _sync_onset(self.mne.inst, add_onset)
             annot_idx = np.argwhere(self.mne.inst.annotations.onset
-                                 == add_onset)[0][0]
+                                    == add_onset)[0][0]
             duration = annotations.duration[annot_idx]
             description = annotations.description[annot_idx]
             color_name = self.mne.annotation_segment_colors[description]
@@ -787,7 +787,7 @@ class RawViewBox(ViewBox):
                     rm_regions = list()
                     for region in [r for r in self.mne.regions
                                    if r.description ==
-                                      self.mne.current_description]:
+                                   self.mne.current_description]:
                         values = region.getRegion()
                         if any([plot_onset < val < plot_offset for val in
                                 values]):
@@ -2206,7 +2206,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             'o': {
                 'qt_key': Qt.Key_O,
                 'slot': [self._toggle_overview_bar],
-                'description': ['Toggle Overview-Bar',]
+                'description': ['Toggle Overview-Bar']
             },
             't': {
                 'qt_key': Qt.Key_T,
