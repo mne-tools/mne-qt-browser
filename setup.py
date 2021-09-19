@@ -19,7 +19,8 @@ setup(name='mne_qt_browser',
                         'matplotlib',
                         'PyQt5',
                         'qtpy',
-                        'mne',
+                        'mne @ git+https://git@github.com/mne-tools/'
+                        'mne-python@main#egg=mne',
                         'pyqtgraph @ git+https://git@github.com/pyqtgraph/'
                         'pyqtgraph@master#egg=pyqtgraph',
                         'pyopengl',
