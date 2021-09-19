@@ -1301,7 +1301,8 @@ class SelectionDialog(_BaseDialog):
 
     def closeEvent(self, event):
         super().closeEvent(event)
-        self.main.close()
+        if hasattr(self, 'main'):
+            self.main.close()
 
 
 class AnnotRegion(LinearRegionItem):
