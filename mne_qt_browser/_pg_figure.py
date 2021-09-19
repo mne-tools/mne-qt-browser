@@ -987,8 +987,7 @@ class ScaleBar(BaseScaleBar, QGraphicsLineItem):
 
 
 class _BaseDialog(QDialog):
-    def __init__(self, main, modal=False, name=None,
-                 title=None):
+    def __init__(self, main, modal=False, name=None, title=None):
         super().__init__(main)
         self.main = main
         self.mne = main.mne
@@ -1016,10 +1015,11 @@ class _BaseDialog(QDialog):
             self.parent().keyPressEvent(event)
 
     def closeEvent(self, event):
-        if self in self.mne.child_figs:
-            self.mne.child_figs.remove(self)
-        if self.name is not None and hasattr(self.mne, self.name):
-            setattr(self.mne, self.name, None)
+        if hasattr(self, 'name') and hasattr(self, 'mne'):
+            if self.name is not None and hasattr(self.mne, self.name):
+                setattr(self.mne, self.name, None)
+            if self in self.mne.child_figs:
+                self.mne.child_figs.remove(self)
         event.accept()
 
 
@@ -1049,7 +1049,7 @@ class HelpDialog(_BaseDialog):
         scroll_widget.setLayout(form_layout)
         scroll_area.setWidget(scroll_widget)
         layout.addWidget(scroll_area)
-        self.setLayout()
+        self.setLayout(layout)
 
 
 class ProjDialog(_BaseDialog):
@@ -1057,7 +1057,7 @@ class ProjDialog(_BaseDialog):
     def __init__(self, main, **kwargs):
         self.external_change = True
         # Create projection-layout
-        super().__init__(main **kwargs)
+        super().__init__(main, **kwargs)
 
         layout = QVBoxLayout()
         labels = [p['desc'] for p in self.mne.projs]
@@ -1162,7 +1162,6 @@ class SelectionDialog(_BaseDialog):
                                         ch_type='all', title='',
                                         ch_groups=self.mne.group_by,
                                         show=False)[0]
-        self.mne.child_figs.append(self.channel_fig)
         self.channel_fig.canvas.mpl_connect('lasso_event',
                                             self._set_custom_selection)
         self.channel_widget = _ChannelFig(self.channel_fig)
@@ -1387,11 +1386,13 @@ class AnnotRegion(LinearRegionItem):
     def mouseClickEvent(self, event):
         """Customize mouse click events."""
         if self.mne.annotation_mode:
-            event.accept()
             if event.button() == Qt.LeftButton and self.movable:
                 self.select(True)
+                event.accept()
             elif event.button() == Qt.RightButton and self.movable:
                 self.remove()
+                # Propagate remove request to lower annotations if overlapping
+                event.ignore()
         else:
             event.ignore()
 
@@ -1814,7 +1815,7 @@ class LoadRunner(QRunnable):
         # Deactive remove dc because it will be removed for visible range
         stashed_remove_dc = self.mne.remove_dc
         self.mne.remove_dc = False
-        data = self.browser._process_data(data, start, stop, picks,
+        data = self.browser._process_data(data, 0, len(data), picks,
                                           self.sigs)
         self.mne.remove_dc = stashed_remove_dc
 
@@ -3032,6 +3033,12 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         else:
             self.mne.fig_proj.toggle_all()
 
+    def _toggle_whitening(self):
+        super()._toggle_whitening()
+        # If data was preloaded it needs to be preloaded again.
+        self._init_preload()
+        self._redraw()
+
     def _toggle_help_fig(self):
         if self.mne.fig_help is None:
             HelpDialog(self, name='fig_help')
@@ -3088,7 +3095,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _toggle_epoch_histogram(self):
         fig = self._create_epoch_histogram()
-        self.mne.child_figs.append(fig)
         self._get_dlg_from_mpl(fig)
 
     def _set_events_visible(self, visible):
@@ -3176,7 +3182,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _create_ch_context_fig(self, idx):
         fig = super()._create_ch_context_fig(idx)
-        self.mne.child_figs.append(fig)
         if fig is not None:
             self._get_dlg_from_mpl(fig)
 
@@ -3368,8 +3373,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 fig.canvas.close_event()
             except ValueError:  # old mpl with Qt
                 pass  # pragma: no cover
-            else:
-                self.mne.child_figs.remove(fig)
         else:
             fig.close()
 
@@ -3388,7 +3391,8 @@ def _get_n_figs():
 
 
 def _close_all():
-    QApplication.closeAllWindows()
+    if len(QApplication.topLevelWindows()) > 0:
+        QApplication.closeAllWindows()
 
 
 # mouse testing functions copied from pyqtgraph (pyqtgraph.tests.ui_testing.py)
