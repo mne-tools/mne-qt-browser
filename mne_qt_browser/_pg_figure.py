@@ -420,7 +420,8 @@ class ChannelScrollBar(BaseScrollBar):
     def _channel_changed(self, value):
         if not self.external_change:
             if self.mne.fig_selection:
-                self.mne.fig_selection._scroll_to_idx(value)
+                label = list(self.mne.ch_selections.keys())[value]
+                self.mne.fig_selection._chkbx_changed(label)
             elif not self.mne.butterfly:
                 value = min(value, self.mne.ymax - self.mne.n_channels)
                 self.mne.plt.setYRange(value, value + self.mne.n_channels + 1,
@@ -436,8 +437,12 @@ class ChannelScrollBar(BaseScrollBar):
         self._update_nchan()
 
     def _update_nchan(self):
-        self.setPageStep(self.mne.n_channels)
-        self.setMaximum(self.mne.ymax - self.mne.n_channels - 1)
+        if self.mne.group_by in ['position', 'selection']:
+            self.setPageStep(1)
+            self.setMaximum(len(self.mne.ch_selections) - 1)
+        else:
+            self.setPageStep(self.mne.n_channels)
+            self.setMaximum(self.mne.ymax - self.mne.n_channels - 1)
 
     def keyPressEvent(self, event):
         """Customize key press events."""
@@ -911,16 +916,15 @@ class BaseScaleBar:
         if self.mne.butterfly:
             self.ypos = self.mne.butterfly_type_order.index(self.ch_type) + 1
         else:
-            ch_type_idxs = np.argwhere(self.mne.ch_types[self.mne.picks]
-                                       == self.ch_type)
+            ch_type_idxs = np.where(self.mne.ch_types[self.mne.picks]
+                                    == self.ch_type)[0]
 
             for idx in ch_type_idxs:
                 ch_name = self.mne.ch_names[self.mne.picks[idx]]
                 if ch_name not in self.mne.info['bads'] and \
                         ch_name not in self.mne.whitened_ch_names:
+                    self.ypos = self.mne.ch_start + idx + 1
                     break
-
-            self.ypos = self.mne.ch_start + idx + 1
 
     def update_x_position(self):
         """Update x-position of Scalebar."""
@@ -983,17 +987,14 @@ class ScaleBar(BaseScaleBar, QGraphicsLineItem):
 
 
 class _BaseDialog(QDialog):
-    def __init__(self, main, widget=None, modal=False, name=None,
+    def __init__(self, main, modal=False, name=None,
                  title=None):
         super().__init__(main)
         self.main = main
         self.mne = main.mne
-        self.widget = widget
         self.name = name
 
         self.setAttribute(Qt.WA_DeleteOnClose, True)
-
-        self._init_ui()
 
         self.mne.child_figs.append(self)
 
@@ -1007,15 +1008,6 @@ class _BaseDialog(QDialog):
             self.open()
         else:
             self.show()
-
-    def _init_ui(self):
-        layout = QVBoxLayout()
-        if self.widget is not None:
-            layout.addWidget(self.widget)
-        close_bt = QPushButton('Close')
-        close_bt.clicked.connect(self.close)
-        layout.addWidget(close_bt)
-        self.setLayout(layout)
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
@@ -1035,8 +1027,10 @@ class HelpDialog(_BaseDialog):
     """Shows all keyboard-shortcuts."""
 
     def __init__(self, main, **kwargs):
+        super().__init__(main, **kwargs)
 
         # Show all keyboard-shortcuts in a Scroll-Area
+        layout = QVBoxLayout()
         scroll_area = QScrollArea()
         scroll_widget = QWidget()
         form_layout = QFormLayout()
@@ -1054,8 +1048,8 @@ class HelpDialog(_BaseDialog):
                     form_layout.addRow(key_name, QLabel(key_des))
         scroll_widget.setLayout(form_layout)
         scroll_area.setWidget(scroll_widget)
-
-        super().__init__(main, scroll_area, **kwargs)
+        layout.addWidget(scroll_area)
+        self.setLayout()
 
 
 class ProjDialog(_BaseDialog):
@@ -1063,8 +1057,7 @@ class ProjDialog(_BaseDialog):
     def __init__(self, main, **kwargs):
         self.external_change = True
         # Create projection-layout
-        widget = QWidget()
-        super().__init__(main, widget, **kwargs)
+        super().__init__(main **kwargs)
 
         layout = QVBoxLayout()
         labels = [p['desc'] for p in self.mne.projs]
@@ -1090,7 +1083,7 @@ class ProjDialog(_BaseDialog):
         self.toggle_all_bt = QPushButton('Toggle All')
         self.toggle_all_bt.clicked.connect(self.toggle_all)
         layout.addWidget(self.toggle_all_bt)
-        widget.setLayout(layout)
+        self.setLayout(layout)
 
     def _proj_changed(self, _):
         if self.external_change:
@@ -1150,12 +1143,14 @@ class _ChannelFig(FigureCanvasQTAgg):
         self._lasso_path = None
         self.update()
 
+    def keyPressEvent(self, event):
+        event.ignore()
+
 
 class SelectionDialog(_BaseDialog):
     def __init__(self, main):
         # Create widget
-        widget = QWidget()
-        super().__init__(main, widget, name='fig_selection',
+        super().__init__(main, name='fig_selection',
                          title='Channel selection')
         xpos = QApplication.desktop().screenGeometry().width() - 400
         self.setGeometry(xpos, 100, 400, 800)
@@ -1199,7 +1194,7 @@ class SelectionDialog(_BaseDialog):
         help_widget.setReadOnly(True)
         layout.addWidget(help_widget)
 
-        widget.setLayout(layout)
+        self.setLayout(layout)
 
     def _chkbx_changed(self, label):
         # Disable butterfly if checkbox is clicked
@@ -1215,7 +1210,7 @@ class SelectionDialog(_BaseDialog):
         self.chkbxs[label].setChecked(True)
         # Update selections
         self.mne.old_selection = label
-        self.mne.picks = self.mne.ch_selections[label]
+        self.mne.picks = np.asarray(self.mne.ch_selections[label])
         self.mne.n_channels = len(self.mne.picks)
         # Update highlighted sensors
         self._update_highlighted_sensors()
@@ -1230,16 +1225,20 @@ class SelectionDialog(_BaseDialog):
         ch_start = np.where(ch_order == self.mne.picks[0])[0][index]
         self.mne.ch_start = ch_start
 
-        # Adapt ymax to additional channels from 'Custom'
-        self.mne.ymax = (len(self.mne.ch_order) +
-                         len(self.mne.ch_selections['Custom']) + 1)
-        self.mne.plt.setLimits(yMax=self.mne.ymax)
-        self.mne.ax_vscroll._update_nchan()
+        # # Adapt ymax to additional channels from 'Custom'
+        # self.mne.ymax = (len(self.mne.ch_order) +
+        #                  len(self.mne.ch_selections['Custom']) + 1)
+        # self.mne.plt.setLimits(yMax=self.mne.ymax)
+        # self.mne.ax_vscroll._update_nchan()
 
         # Apply changes on view
         self.mne.plt.setYRange(self.mne.ch_start,
                                self.mne.ch_start + self.mne.n_channels + 1,
                                padding=0)
+
+        # Update scrollbar
+        label_idx = list(self.mne.ch_selections.keys()).index(label)
+        self.mne.ax_vscroll.update_value(label_idx)
 
         # Update all y-positions, because channels can appear in multiple
         # selections on different y-positions
@@ -1292,20 +1291,14 @@ class SelectionDialog(_BaseDialog):
         self._chkbx_changed(new_label)
 
     def _scroll_to_idx(self, idx):
-        pick = np.concatenate(list(self.mne.ch_selections.values()))[idx]
-        # Take dictionary without Vertex and Custom
-        sel_dict = self.main._make_butterfly_selections_dict()
-        label = [sel for sel, picks in sel_dict.items()
-                 if pick in picks][0]
-        self._chkbx_changed(label)
-
-    def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Up:
-            self._scroll_selection(-1)
-        elif event.key() == Qt.Key_Down:
-            self._scroll_selection(1)
+        idx = np.clip(idx, 0, self.mne.ymax)
+        if idx >= self.mne.ymax - len(self.mne.ch_selections['Custom']):
+            label = 'Custom'
         else:
-            self.main.keyPressEvent(event)
+            pick = np.concatenate(list(self.mne.ch_selections.values()))[idx]
+            label = [sel for sel, picks in self.mne.ch_selections.items()
+                     if pick in picks][0]
+        self._chkbx_changed(label)
 
     def closeEvent(self, event):
         super().closeEvent(event)
@@ -2600,10 +2593,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                                             - self.mne.n_channels)
                 self.mne.n_channels = round(yrange[1] - yrange[0] - 1)
                 self._update_picks()
+                # Update Channel-Bar
+                self.mne.ax_vscroll.update_value(self.mne.ch_start)
             self._update_data()
-
-            # Update Channel-Bar
-            self.mne.ax_vscroll.update_value(self.mne.ch_start)
 
         # Update Overview-Bar
         self.mne.overview_bar.update_viewrange()
@@ -3341,7 +3333,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         QTest.qWait(10)
 
     def _fake_scroll(self, x, y, step, fig=None):
-        pass
+        # QTest doesn't support simulating scrolling-wheel
+        self.vscroll(step)
 
     def _click_ch_name(self, ch_index, button):
         if not self.mne.butterfly:
