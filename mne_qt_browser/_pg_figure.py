@@ -3336,7 +3336,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                                f'event loop (look above for traceback).')
 
         # Waiting some time for events to be processed.
-        QTest.qWait(10)
+        QTest.qWait(50)
 
     def _fake_scroll(self, x, y, step, fig=None):
         # QTest doesn't support simulating scrolling-wheel
