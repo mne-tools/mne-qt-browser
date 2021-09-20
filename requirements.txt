@@ -2,7 +2,7 @@
 numpy
 scipy
 matplotlib
-git+https://github.com/mne-tools/mne-python@main
+mne
 qtpy
 PyQt5  # Default, but PySide2 will be also tested
 git+https://github.com/pyqtgraph/pyqtgraph@master
