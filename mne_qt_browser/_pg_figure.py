@@ -1846,6 +1846,7 @@ class _PGMetaClass(type(BrowserBase), type(QMainWindow)):
 
 class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     """A PyQtGraph-backend for 2D data browsing."""
+    gotClosed = pyqtSignal()
 
     def __init__(self, **kwargs):
         self.backend_name = 'pyqtgraph'
@@ -3382,6 +3383,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         event.accept()
         if hasattr(self, 'mne'):
             self._close(event)
+        self.gotClosed.emit()
 
 
 def _get_n_figs():
