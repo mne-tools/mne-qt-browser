@@ -11,3 +11,4 @@ pyopengl
 # Testing
 pytest
 pytest-qt
+pooch
