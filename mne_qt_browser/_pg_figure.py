@@ -3238,8 +3238,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             trace.update_data()
 
     def _get_size(self):
-        inch_width = self.width() / self.logicalDpiX()
-        inch_height = self.height() / self.logicalDpiY()
+        inch_width = int(self.width() / self.logicalDpiX())
+        inch_height = int(self.height() / self.logicalDpiY())
 
         return inch_width, inch_height
 
