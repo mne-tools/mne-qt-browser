@@ -115,7 +115,8 @@ class RawTraceItem(PlotCurveItem):
 
     def update_data(self):
         """Update data (fetch data from self.mne according to self.ch_idx)."""
-        if self.mne.is_epochs:
+        if self.mne.is_epochs or (self.mne.clipping is not None and
+                                  self.mne.clipping != 'clamp'):
             connect = 'finite'
             skip = False
         else:
@@ -134,6 +135,14 @@ class RawTraceItem(PlotCurveItem):
             data = data[..., ::self.mne.decim_data[self.range_idx]]
         else:
             times = self.mne.times
+
+        # Apply clipping
+        if self.mne.clipping == 'clamp':
+            data = np.clip(data, -0.5, 0.5)
+        elif self.mne.clipping is not None:
+            data = data.copy()
+            data[abs(data * self.mne.scale_factor)
+                 > self.mne.clipping] = np.nan
 
         self.setData(times, data, connect=connect, skipFiniteCheck=skip)
 
@@ -2369,6 +2378,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Scale Traces (by scaling the Item, not the data)
         for line in self.mne.traces:
             line.setTransform(transform)
+            if self.mne.clipping is not None:
+                line.update_data()
 
         # Update Scalebars
         self._update_scalebar_values()
