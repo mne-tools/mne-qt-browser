@@ -1860,6 +1860,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         BrowserBase.__init__(self, **kwargs)
         QMainWindow.__init__(self)
 
+        if self.mne.window_title is not None:
+            self.setWindowTitle(self.mne.window_title)
+
         # Initialize attributes which are only used by pyqtgraph, not by
         # matplotlib and add them to MNEBrowseParams.
         self.mne.selection_ypos_dict = dict()
