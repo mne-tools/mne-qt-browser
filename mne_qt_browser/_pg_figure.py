@@ -479,7 +479,6 @@ class OverviewBar(QGraphicsView):
         min_h = int(QApplication.desktop().screenGeometry().height() / 10)
         self.setMinimumSize(1, 1)
         self.setFixedHeight(min_h)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
@@ -1747,8 +1746,6 @@ class BrowserView(GraphicsView):
     def __init__(self, plot, **kwargs):
         super().__init__(**kwargs)
         self.setCentralItem(plot)
-        self.setSizePolicy(QSizePolicy.MinimumExpanding,
-                           QSizePolicy.MinimumExpanding)
         self.viewport().setAttribute(Qt.WA_AcceptTouchEvents, True)
 
         self.viewport().grabGesture(Qt.PinchGesture)
@@ -1984,14 +1981,14 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Initialize Scroll-Bars
         ax_hscroll = TimeScrollBar(self.mne)
-        layout.addWidget(ax_hscroll, 1, 0)
+        layout.addWidget(ax_hscroll, 1, 0, 1, 2)
 
         ax_vscroll = ChannelScrollBar(self.mne)
         layout.addWidget(ax_vscroll, 0, 1)
 
         # OverviewBar
         overview_bar = OverviewBar(self)
-        layout.addWidget(overview_bar, 2, 0)
+        layout.addWidget(overview_bar, 2, 0, 1, 2)
 
         widget.setLayout(layout)
         self.setCentralWidget(widget)
@@ -2067,6 +2064,11 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             overview_bar=overview_bar, fig_annotation=fig_annotation,
             toolbar=toolbar
         )
+
+        # Set Size
+        width = int(self.mne.figsize[0] * self.logicalDpiX())
+        height = int(self.mne.figsize[1] * self.logicalDpiY())
+        self.resize(width, height)
 
         # Initialize Keyboard-Shortcuts
         is_mac = platform.system() == 'Darwin'
@@ -3457,16 +3459,13 @@ def _mouseClick(widget, pos, button, modifier=None):
     _mouseRelease(widget, pos, button, modifier)
 
 
-def _init_browser(inst, figsize, **kwargs):
+def _init_browser(**kwargs):
     setConfigOption('enableExperimental', True)
 
     app = mkQApp()
     _init_qt_resources()
     kind = 'bigsur-' if platform.mac_ver()[0] >= '10.16' else ''
     app.setWindowIcon(QIcon(f":/mne-{kind}icon.png"))
-    browser = PyQtGraphBrowser(inst=inst, figsize=figsize, **kwargs)
-    width = int(figsize[0] * browser.logicalDpiX())
-    height = int(figsize[1] * browser.logicalDpiY())
-    browser.resize(width, height)
+    browser = PyQtGraphBrowser(**kwargs)
 
     return browser
