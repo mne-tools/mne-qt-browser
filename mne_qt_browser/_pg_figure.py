@@ -3082,8 +3082,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             ymax = len(selections_dict) + 1
             self.mne.plt.setLimits(yMax=ymax)
             self.mne.plt.setYRange(0, ymax, padding=0)
-            # Update Selection-Dialog
-            self.mne.fig_selection._style_butterfly()
         elif butterfly:
             ymax = len(self.mne.butterfly_type_order) + 1
             self.mne.plt.setLimits(yMax=ymax)
@@ -3093,6 +3091,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.plt.setYRange(self.mne.ch_start,
                                    self.mne.ch_start + self.mne.n_channels + 1,
                                    padding=0)
+
+        if self.mne.fig_selection is not None:
+            # Update Selection-Dialog
+            self.mne.fig_selection._style_butterfly()
 
         # Set vertical scrollbar visible
         self.mne.ax_vscroll.setVisible(not butterfly or
@@ -3258,8 +3260,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             trace.update_data()
 
     def _get_size(self):
-        inch_width = int(self.width() / self.logicalDpiX())
-        inch_height = int(self.height() / self.logicalDpiY())
+        inch_width = self.width() / self.logicalDpiX()
+        inch_height = self.height() / self.logicalDpiY()
 
         return inch_width, inch_height
 
@@ -3409,7 +3411,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
 def _get_n_figs():
     # Wait for a short time to let the Qt-loop clean up
-    QTest.qWait(10)
+    QTest.qWait(100)
     return len([window for window in QApplication.topLevelWindows()
                 if window.isVisible() and window.isExposed()])
 
