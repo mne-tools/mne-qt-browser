@@ -25,8 +25,8 @@ from PyQt5.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
                              QDockWidget, QDoubleSpinBox, QFormLayout,
                              QGridLayout, QHBoxLayout, QInputDialog,
                              QLabel, QMainWindow, QMessageBox,
-                             QPushButton, QScrollBar, QSizePolicy,
-                             QWidget, QStyleOptionSlider, QStyle,
+                             QPushButton, QScrollBar, QWidget,
+                             QStyleOptionSlider, QStyle,
                              QApplication, QGraphicsView, QProgressBar,
                              QVBoxLayout, QLineEdit, QCheckBox, QScrollArea,
                              QGraphicsLineItem, QGraphicsScene, QTextEdit)
@@ -64,12 +64,15 @@ def _get_std_icon(icon_name):
 class RawTraceItem(PlotCurveItem):
     """Graphics-Object for single data trace."""
 
-    def __init__(self, mne, ch_idx):
+    def __init__(self, mne, ch_idx, child=False):
         super().__init__(clickable=True)
         self.mne = mne
 
         # Set default z-value to 1 to be before other items in scene
         self.setZValue(1)
+
+        if self.mne.is_epochs and not child:
+            self.bad_trace = RawTraceItem(self.mne, ch_idx, child=True)
 
         self.set_ch_idx(ch_idx)
         self.update_color()
@@ -1062,6 +1065,7 @@ class HelpDialog(_BaseDialog):
 
 class ProjDialog(_BaseDialog):
     """A dialog to toggle projections."""
+
     def __init__(self, main, **kwargs):
         self.external_change = True
         # Create projection-layout
@@ -2162,7 +2166,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'qt_key': Qt.Key_Minus,
                 'modifier': [None, 'Ctrl'],
                 'slot': [self.scale_all],
-                'parameter': [4/5, 19/20],
+                'parameter': [4 / 5, 19 / 20],
                 'description': ['Decrease Scale',
                                 'Decrease Scale (small step)']
             },
@@ -2170,7 +2174,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'qt_key': Qt.Key_Plus,
                 'modifier': [None, 'Ctrl'],
                 'slot': [self.scale_all],
-                'parameter': [5/4, 20/19],
+                'parameter': [5 / 4, 20 / 19],
                 'description': ['Increase Scale',
                                 'Increase Scale (small step)']
             },
@@ -3335,17 +3339,18 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Use pytest-qt's exception-hook
         with capture_exceptions() as exceptions:
+            widget = fig.viewport() if isinstance(fig, QGraphicsView) else fig
             if kind == 'press':
                 # always click because most interactivity comes form
                 # mouseClickEvent from pyqtgraph (just press doesn't suffice
                 # here).
-                _mouseClick(widget=fig, pos=point, button=button)
+                _mouseClick(widget=widget, pos=point, button=button)
             elif kind == 'release':
-                _mouseRelease(widget=fig, pos=point, button=button)
+                _mouseRelease(widget=widget, pos=point, button=button)
             elif kind == 'motion':
-                _mouseMove(widget=fig, pos=point, buttons=button)
+                _mouseMove(widget=widget, pos=point, buttons=button)
             elif kind == 'drag':
-                _mouseDrag(widget=fig, positions=[point] + add_points,
+                _mouseDrag(widget=widget, positions=[point] + add_points,
                            button=button)
 
         for exc in exceptions:
@@ -3414,10 +3419,9 @@ def _close_all():
         QApplication.closeAllWindows()
 
 
-# mouse testing functions copied from pyqtgraph (pyqtgraph.tests.ui_testing.py)
+# mouse testing functions adapted from pyqtgraph
+# (pyqtgraph.tests.ui_testing.py)
 def _mousePress(widget, pos, button, modifier=None):
-    if isinstance(widget, QGraphicsView):
-        widget = widget.viewport()
     if modifier is None:
         modifier = Qt.KeyboardModifier.NoModifier
     event = QMouseEvent(QEvent.Type.MouseButtonPress, pos, button,
@@ -3426,8 +3430,6 @@ def _mousePress(widget, pos, button, modifier=None):
 
 
 def _mouseRelease(widget, pos, button, modifier=None):
-    if isinstance(widget, QGraphicsView):
-        widget = widget.viewport()
     if modifier is None:
         modifier = Qt.KeyboardModifier.NoModifier
     event = QMouseEvent(QEvent.Type.MouseButtonRelease, pos,
@@ -3436,30 +3438,29 @@ def _mouseRelease(widget, pos, button, modifier=None):
 
 
 def _mouseMove(widget, pos, buttons=None, modifier=None):
-    if isinstance(widget, QGraphicsView):
-        widget = widget.viewport()
-    if modifier is None:
-        modifier = Qt.KeyboardModifier.NoModifier
     if buttons is None:
         buttons = Qt.MouseButton.NoButton
+    if modifier is None:
+        modifier = Qt.KeyboardModifier.NoModifier
     event = QMouseEvent(QEvent.Type.MouseMove, pos,
                         Qt.MouseButton.NoButton, buttons, modifier)
     QApplication.sendEvent(widget, event)
-
-
-def _mouseDrag(widget, positions, button, modifier=None):
-    _mouseMove(widget, positions[0])
-    _mousePress(widget, positions[0], button, modifier)
-    QTest.qWait(10)
-    for pos in positions[1:]:
-        _mouseMove(widget, pos, button, modifier)
-    _mouseRelease(widget, positions[-1], button, modifier)
 
 
 def _mouseClick(widget, pos, button, modifier=None):
     _mouseMove(widget, pos)
     _mousePress(widget, pos, button, modifier)
     _mouseRelease(widget, pos, button, modifier)
+
+
+def _mouseDrag(widget, positions, button, modifier=None):
+    _mouseMove(widget, positions[0])
+    _mousePress(widget, positions[0], button, modifier)
+    # Delay for 10 ms for drag to be recognized.
+    QTest.qWait(10)
+    for pos in positions[1:]:
+        _mouseMove(widget, pos, button, modifier)
+    _mouseRelease(widget, positions[-1], button, modifier)
 
 
 def _init_browser(**kwargs):
