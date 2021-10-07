@@ -1099,7 +1099,6 @@ class ProjDialog(_BaseDialog):
 
     def _proj_changed(self, _):
         if self.external_change:
-            print('Projection-Checkbox was clicked!')
             applied = self.mne.projs_active
             new_state = np.array([chkbx.isChecked()
                                   for chkbx in self.checkboxes])
@@ -3413,7 +3412,7 @@ def _get_n_figs():
     # Wait for a short time to let the Qt-loop clean up
     QTest.qWait(100)
     return len([window for window in QApplication.topLevelWindows()
-                if window.isVisible() and window.isExposed()])
+                if window.isVisible()])
 
 
 def _close_all():
