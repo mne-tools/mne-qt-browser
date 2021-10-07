@@ -1086,8 +1086,8 @@ class ProjDialog(_BaseDialog):
         for idx, label in enumerate(labels):
             chkbx = QCheckBox(label)
             chkbx.setChecked(bool(self.mne.projs_on[idx]))
-            chkbx.stateChanged.connect(self._proj_changed)
-            if label.endswith('(already applied)'):
+            chkbx.clicked.connect(partial(self._proj_changed, idx=idx))
+            if self.mne.projs_active[idx]:
                 chkbx.setEnabled(False)
             self.checkboxes.append(chkbx)
             layout.addWidget(chkbx)
@@ -1097,25 +1097,19 @@ class ProjDialog(_BaseDialog):
         layout.addWidget(self.toggle_all_bt)
         self.setLayout(layout)
 
-    def _proj_changed(self, _):
-        if self.external_change:
-            applied = self.mne.projs_active
-            new_state = np.array([chkbx.isChecked()
-                                  for chkbx in self.checkboxes])
-            # Always activate applied projections
-            new_state[applied] = True
-            self.mne.projs_on = new_state
+    def _proj_changed(self, state, idx):
+        # Only change if proj wasn't already applied.
+        if not self.mne.projs_active[idx]:
+            self.mne.projs_on[idx] = state
             self.main._apply_update_projectors()
 
     def toggle_all(self):
         """Toggle all projectors."""
         self.main._apply_update_projectors(toggle_all=True)
 
-        # Update all checkboxes without consequences in _proj_changed
-        self.external_change = False
+        # Update all checkboxes
         for idx, chkbx in enumerate(self.checkboxes):
             chkbx.setChecked(bool(self.mne.projs_on[idx]))
-        self.external_change = True
 
 
 class _ChannelFig(FigureCanvasQTAgg):
