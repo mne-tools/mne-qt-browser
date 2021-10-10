@@ -29,7 +29,8 @@ from PyQt5.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
                              QStyleOptionSlider, QStyle,
                              QApplication, QGraphicsView, QProgressBar,
                              QVBoxLayout, QLineEdit, QCheckBox, QScrollArea,
-                             QGraphicsLineItem, QGraphicsScene, QTextEdit)
+                             QGraphicsLineItem, QGraphicsScene, QTextEdit,
+                             QSizePolicy)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
                        LinearRegionItem, PlotCurveItem, PlotItem,
@@ -1034,6 +1035,8 @@ class HelpDialog(_BaseDialog):
         # Show all keyboard-shortcuts in a Scroll-Area
         layout = QVBoxLayout()
         scroll_area = QScrollArea()
+        scroll_area.setSizePolicy(QSizePolicy.MinimumExpanding,
+                                  QSizePolicy.MinimumExpanding)
         scroll_widget = QWidget()
         form_layout = QFormLayout()
         for key in main.mne.keyboard_shortcuts:
