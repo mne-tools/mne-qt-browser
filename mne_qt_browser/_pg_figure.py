@@ -131,21 +131,12 @@ class RawTraceItem(PlotCurveItem):
         else:
             data = self.mne.data[self.range_idx]
 
-        # Apply decim
-        if all([i is not None for i in [self.mne.decim_times,
-                                        self.mne.decim_data]]):
+        # Get decim-specific time if enabled
+        if self.mne.decim != 1:
             times = self.mne.decim_times[self.mne.decim_data[self.range_idx]]
             data = data[..., ::self.mne.decim_data[self.range_idx]]
         else:
             times = self.mne.times
-
-        # Apply clipping
-        if self.mne.clipping == 'clamp':
-            data = np.clip(data, -0.5, 0.5)
-        elif self.mne.clipping is not None:
-            data = data.copy()
-            data[abs(data * self.mne.scale_factor)
-                 > self.mne.clipping] = np.nan
 
         self.setData(times, data, connect=connect, skipFiniteCheck=skip)
 
@@ -1823,9 +1814,6 @@ class LoadRunner(QRunnable):
                                           self.sigs)
         self.mne.remove_dc = stashed_remove_dc
 
-        # Invert Data to be displayed from top on inverted Y-Axis.
-        data *= -1
-
         self.browser.mne.global_data = data
         self.browser.mne.global_times = times
 
@@ -1862,6 +1850,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Initialize attributes which are only used by pyqtgraph, not by
         # matplotlib and add them to MNEBrowseParams.
+        self.mne.decim_data = None
+        self.mne.decim_times = None
         self.mne.selection_ypos_dict = dict()
         self.mne.ds_cache = dict()
         self.mne.enable_preload = False
@@ -2822,17 +2812,14 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                              'then set preload to True instead of "auto")')
                 return False
 
-    def _get_decim(self):
-        if self.mne.decim != 1:
-            self.mne.decim_data = np.ones_like(self.mne.picks)
-            data_picks_mask = np.in1d(self.mne.picks, self.mne.picks_data)
-            self.mne.decim_data[data_picks_mask] = self.mne.decim
-            # decim can vary by channel type,
-            # so compute different `times` vectors
-            self.mne.decim_times = {decim_value:
-                                    self.mne.times[::decim_value]
-                                    + self.mne.first_time for
-                                    decim_value in set(self.mne.decim_data)}
+    def _process_data(self, data, start, stop, picks,
+                      signals=None):
+        data = super()._process_data(data, start, stop, picks, signals)
+
+        # Invert Data to be displayed from top on inverted Y-Axis
+        data *= -1
+
+        return data
 
     def _update_data(self):
         if self.mne.data_preloaded:
@@ -2845,14 +2832,32 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             if self.mne.remove_dc:
                 self.mne.data = self.mne.data - \
                                 self.mne.data.mean(axis=1, keepdims=True)
+
         else:
+            # While data is not preloaded get data only from shown range and
+            # process only those.
             super()._update_data()
 
-            # Invert Data to be displayed from top on inverted Y-Axis.
-            self.mne.data *= -1
+        # Initialize decim
+        self.mne.decim_data = np.ones_like(self.mne.picks)
+        data_picks_mask = np.in1d(self.mne.picks, self.mne.picks_data)
+        self.mne.decim_data[data_picks_mask] = self.mne.decim
 
-        # Get decim
-        self._get_decim()
+        # Get decim_times
+        if self.mne.decim != 1:
+            # decim can vary by channel type,
+            # so compute different `times` vectors.
+            self.mne.decim_times = {decim_value: self.mne.times[::decim_value]
+                                    + self.mne.first_time for
+                                    decim_value in set(self.mne.decim_data)}
+
+        # Apply clipping
+        if self.mne.clipping == 'clamp':
+            self.mne.data = np.clip(self.mne.data, -0.5, 0.5)
+        elif self.mne.clipping is not None:
+            self.mne.data = self.mne.data.copy()
+            self.mne.data[abs(self.mne.data * self.mne.scale_factor)
+                          > self.mne.clipping] = np.nan
 
         # Apply Downsampling (if enabled)
         self._apply_downsampling()
