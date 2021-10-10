@@ -1850,6 +1850,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Initialize attributes which are only used by pyqtgraph, not by
         # matplotlib and add them to MNEBrowseParams.
+        self.mne.scroll_sensitivity = 100  # Steps per view (relative to time)
         self.mne.decim_data = None
         self.mne.decim_times = None
         self.mne.selection_ypos_dict = dict()
