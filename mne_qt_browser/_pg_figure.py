@@ -1440,9 +1440,11 @@ class AnnotationDock(QDockWidget):
         edit_bt.clicked.connect(self._edit_description)
         layout.addWidget(edit_bt)
 
-        color_bt = QPushButton('Edit Color')
-        color_bt.clicked.connect(self._set_color)
-        layout.addWidget(color_bt)
+        # Uncomment when custom colors for annotations are implemented in
+        # MNE-Python.
+        # color_bt = QPushButton('Edit Color')
+        # color_bt.clicked.connect(self._set_color)
+        # layout.addWidget(color_bt)
 
         select_bt = QPushButton('Select Visible')
         select_bt.clicked.connect(self._select_annotations)
@@ -1703,6 +1705,7 @@ class AnnotationDock(QDockWidget):
             self.mne.annotation_segment_colors[curr_descr] = color
             self._update_description_cmbx()
             self._update_regions_colors()
+            self.mne.overview_bar.update_annotations()
 
     def update_values(self, region):
         """Update spinbox-values from region."""
