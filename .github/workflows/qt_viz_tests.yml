@@ -14,7 +14,14 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-
+    defaults:
+      run:
+        shell: bash
+    env:
+      DISPLAY: ':99.0'
+      MNE_LOGGING_LEVEL: 'warning'
+      MKL_NUM_THREADS: '1'
+      PYTHONUNBUFFERED: '1'
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python
@@ -28,12 +35,10 @@ jobs:
           git clone -b pg_test --single-branch --depth=1 https://github.com/marsipu/mne-python.git
           python -m pip install -e ./mne-python
           python -m pip install -r requirements.txt -r requirements_testing.txt
-        shell: bash
       - run: |
           set -e
           git clone --depth 1 git://github.com/pyvista/gl-ci-helpers.git
           powershell gl-ci-helpers/appveyor/install_opengl.ps1
-        shell: bash
         name: Setup OpenGL on Windows
         if: runner.os == 'Windows'
       - run: ./tools/setup_xvfb.sh
@@ -49,7 +54,6 @@ jobs:
           mkdir ./tests
           cp $mnePath/viz/tests/test_raw.py ./tests/test_raw.py
           pytest --cov=mne_qt_browser tests
-        shell: bash
       - uses: codecov/codecov-action@v1
         if: success()
         name: 'Upload coverage to CodeCov'
