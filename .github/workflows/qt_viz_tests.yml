@@ -5,24 +5,25 @@ concurrency:
 on:
     pull_request:
     push:
-      branches: main
+      branches: [main]
 
 jobs:
   raw-viz-tests:
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.experimental }}
     strategy:
       fail-fast: false
       matrix:
         include:
         - os: ubuntu-latest
-        - os: macos-latest
-          experimental: true
+          env:
+            DISPLAY: ':99.0'
         - os: windows-latest
+        # - os: macos-latest
     defaults:
       run:
         shell: bash
     env:
-      DISPLAY: ':99.0'
       MNE_LOGGING_LEVEL: 'warning'
       MKL_NUM_THREADS: '1'
       PYTHONUNBUFFERED: '1'
