@@ -1,4 +1,4 @@
-name: qt_viz_tests
+name: CIs
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.number }}-${{ github.event.type }}
   cancel-in-progress: true
@@ -8,7 +8,7 @@ on:
       branches: [main]
 
 jobs:
-  raw-viz-tests:
+  pytest:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
