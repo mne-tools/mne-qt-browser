@@ -16,7 +16,7 @@ jobs:
         include:
         - os: ubuntu-latest
         - os: windows-latest
-        # - os: macos-latest
+        - os: macos-latest
     defaults:
       run:
         shell: bash
