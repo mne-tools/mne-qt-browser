@@ -15,7 +15,7 @@ You need to fork it to run the new backend._
 
 To use the new backend, set `pyqtgraph` as backend with 
 ```
-mne.viz.set_browse_backend("pyqtgraph")
+mne.viz.set_browser_backend("pyqtgraph")
 ``` 
 
 You will be prompted to install `mne_qt_browser` if you haven't installed it yet.
