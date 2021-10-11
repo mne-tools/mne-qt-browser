@@ -31,11 +31,11 @@ jobs:
           powershell gl-ci-helpers/appveyor/install_opengl.ps1
         shell: bash
         name: Setup OpenGL on Windows
-        if: contains(matrix.os, "windows")
+        if: contains(${{ matrix.os }}, "windows")
         working-directory: mne-python
       - run: ./tools/setup_xvfb.sh
         name: Setup xvfb on Linux
-        if: contains(matrix.os, "ubuntu")
+        if: contains(${{ matrix.os }}, "ubuntu")
       - name: Run MNE-Tests
         run: |
           pwd
