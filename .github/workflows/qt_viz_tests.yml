@@ -27,7 +27,7 @@ jobs:
           python -m pip install --upgrade pip
           git clone -b pg_test --single-branch --depth=1 https://github.com/marsipu/mne-python.git
           python -m pip install -e ./mne-python
-          python -m pip install -r requirements.txt
+          python -m pip install -r requirements.txt -r requirements_testing.txt
         shell: bash
       - run: |
           set -e
@@ -46,11 +46,13 @@ jobs:
         run: |
           pwd
           mnePath=$(python -c "import mne; print(mne.__path__[0])")
-          mkdir ./_temp_tests
-          cp $mnePath/viz/tests/test_raw.py ./_temp_tests/test_raw.py
-          pytest
-          rm -r ./_temp_tests
+          mkdir ./tests
+          cp $mnePath/viz/tests/test_raw.py ./tests/test_raw.py
+          pytest --cov=mne_qt_browser tests
         shell: bash
+      - uses: codecov/codecov-action@v1
+        if: success()
+        name: 'Upload coverage to CodeCov'
 
   flake:
     runs-on: ubuntu-latest
