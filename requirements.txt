@@ -4,6 +4,6 @@ scipy
 matplotlib
 mne
 qtpy
-PyQt5  # Default, but PySide2 will be also tested
-git+https://github.com/pyqtgraph/pyqtgraph@master
+PyQt5
+pyqtgraph
 pyopengl
