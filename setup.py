@@ -20,10 +20,8 @@ setup(name='mne_qt_browser',
                         'PyQt5',
                         'qtpy',
                         'mne',
-                        'pyqtgraph @ git+https://git@github.com/pyqtgraph/'
-                        'pyqtgraph@master#egg=pyqtgraph',
-                        'pyopengl',
-                        'pytest-qt'],
+                        'pyqtgraph@git+https://git@github.com/pyqtgraph/pyqtgraph@master#egg=pyqtgraph',  # noqa: E501
+                        'pyopengl'],
       entrypoints={'console_scripts':
                        ['mne_qt_browser = mne_qt_browser.__main__:main']}
       )

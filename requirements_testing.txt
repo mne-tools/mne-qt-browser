@@ -1,0 +1,6 @@
+pytest
+pytest-qt
+pytest-cov
+pooch
+pyvista  # for mne sys_info to tell us about OpenGL
+tqdm
