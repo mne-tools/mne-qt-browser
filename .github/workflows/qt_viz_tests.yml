@@ -25,11 +25,8 @@ jobs:
         run: |  # use MNE main to ensure test files are available
           set -e
           python -m pip install --upgrade pip
-          git clone --depth=1 https://github.com/marsipu/mne-python.git
-          pushd mne-python
-          git checkout -b pg_test origin/pg_test
-          python -m pip install -e .
-          popd
+          git clone -b pg_test --single-branch --depth=1 https://github.com/marsipu/mne-python.git
+          python -m pip install -e ./mne-python
           python -m pip install -r requirements.txt
         shell: bash
       - run: |
