@@ -15,11 +15,8 @@ jobs:
       matrix:
         include:
         - os: ubuntu-latest
-          name: Linux
         - os: windows-latest
-          name: Windows
         # - os: macos-latest
-        #   name: macOS
     defaults:
       run:
         shell: bash
