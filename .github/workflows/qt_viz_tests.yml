@@ -40,6 +40,15 @@ jobs:
           git clone -b pg_test --single-branch --depth=1 https://github.com/marsipu/mne-python.git
           python -m pip install -e ./mne-python
           python -m pip install -r requirements.txt -r requirements_testing.txt
+      - shell: bash -el {0}
+        run: ./tools/get_testing_version.sh
+        name: 'Get testing version'
+        working-directory: mne-python
+      - uses: actions/cache@v2
+        with:
+          key: ${{ env.TESTING_VERSION }}
+          path: ~/mne_data
+        name: 'Cache testing data'
       - run: |
           set -e
           git clone --depth 1 git://github.com/pyvista/gl-ci-helpers.git
