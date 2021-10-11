@@ -20,11 +20,13 @@ jobs:
           python-version: 3.9
       - name: Install dependencies
         run: |  # use MNE main to ensure test files are available
+          set -e
           python -m pip install --upgrade pip
           git clone --depth=1 https://github.com/mne-tools/mne-python
-          pip install -e mne-python
+          pip install -e ./mne-python
           python -m pip install -r requirements.txt
           python -m pip install git+https://github.com/marsipu/mne-python.git@pg_test
+        shell: bash
       - run: |
           set -e
           git clone --depth 1 git://github.com/pyvista/gl-ci-helpers.git
