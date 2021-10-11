@@ -1,4 +1,7 @@
 name: qt_viz_tests
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.number }}-${{ github.event.type }}
+  cancel-in-progress: true
 on:
     pull_request:
     push:
