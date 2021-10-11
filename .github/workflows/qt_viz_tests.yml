@@ -28,8 +28,8 @@ jobs:
           git clone --depth=1 https://github.com/marsipu/mne-python.git
           pushd mne-python
           git checkout -b pg_test origin/pg_test
+          python -m pip install -e .
           popd
-          python -m pip install -e ./mne-python
           python -m pip install -r requirements.txt
         shell: bash
       - run: |
@@ -43,6 +43,8 @@ jobs:
         name: Setup xvfb on Linux
         working-directory: mne-python
         if: runner.os == 'Linux'
+      - name: Show system information
+        run: mne sys_info
       - name: Run MNE-Tests
         run: |
           pwd
