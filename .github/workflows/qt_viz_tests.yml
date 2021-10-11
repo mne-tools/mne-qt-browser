@@ -13,7 +13,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+        - os: ubuntu-latest
+        - os: macos-latest
+          experimental: true
+        - os: windows-latest
     defaults:
       run:
         shell: bash
