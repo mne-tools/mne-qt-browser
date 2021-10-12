@@ -2108,22 +2108,16 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             'up': {
                 'alias': '↑',
                 'qt_key': Qt.Key_Up,
-                'modifier': [None, 'Ctrl', 'Shift'],
                 'slot': [self.vscroll],
-                'parameter': [-10, -1, '-full'],
-                'description': ['Move up',
-                                'Move up (tiny step)',
-                                'Move up (page)']
+                'parameter': ['-full'],
+                'description': ['Move up (page)']
             },
             'down': {
                 'alias': '↓',
                 'qt_key': Qt.Key_Down,
-                'modifier': [None, 'Ctrl', 'Shift'],
                 'slot': [self.vscroll],
-                'parameter': [10, 1, '+full'],
-                'description': ['Move down',
-                                'Move down (tiny step)',
-                                'Move down (page)']
+                'parameter': ['+full'],
+                'description': ['Move down (page)']
             },
             'home': {
                 'alias': dur_keys[0],
