@@ -2038,15 +2038,30 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         aincr_nchan.triggered.connect(partial(self.change_nchan, 10))
         toolbar.addAction(aincr_nchan)
 
+        adecr_nchan = QAction(_get_std_icon('SP_ArrowDown'),
+                              'Zoom', parent=self)
+        adecr_nchan.triggered.connect(partial(self.scale_all, 4 / 5))
+        toolbar.addAction(adecr_nchan)
+
+        aincr_nchan = QAction(_get_std_icon('SP_ArrowUp'),
+                              'Zoom', parent=self)
+        aincr_nchan.triggered.connect(partial(self.scale_all, 5 / 4))
+        toolbar.addAction(aincr_nchan)
+
         atoggle_annot = QAction(_get_std_icon('SP_DialogResetButton'),
-                                'Toggle Annotations', parent=self)
+                                'Annotations', parent=self)
         atoggle_annot.triggered.connect(self._toggle_annotation_fig)
         toolbar.addAction(atoggle_annot)
 
         atoggle_proj = QAction(_get_std_icon('SP_DialogOkButton'),
-                               'Toggle Projections', parent=self)
+                               'SSP', parent=self)
         atoggle_proj.triggered.connect(self._toggle_proj_fig)
         toolbar.addAction(atoggle_proj)
+
+        atoggle_fullscreen = QAction(_get_std_icon('SP_TitleBarMaxButton'),
+                                     'Full-Screen', parent=self)
+        atoggle_fullscreen.triggered.connect(self._toggle_fullscreen)
+        toolbar.addAction(atoggle_fullscreen)
 
         ahelp = QAction(_get_std_icon('SP_MessageBoxQuestion'),
                         'Help', parent=self)
@@ -2170,7 +2185,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'qt_key': Qt.Key_Equal,
                 'modifier': [None, 'Ctrl'],
                 'slot': [self.scale_all],
-                'parameter': [1.25, 1.05],
+                'parameter': [5 / 4, 20 / 19],
                 'description': ['Increase Scale',
                                 'Increase Scale (small step)']
             },
@@ -2180,12 +2195,12 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                          self._toggle_annotations],
                 'modifier': [None, 'Shift'],
                 'description': ['Toggle Annotation-Tool',
-                                'Toggle All Annotations']
+                                'Toggle Annotations visible']
             },
             'b': {
                 'qt_key': Qt.Key_B,
                 'slot': [self._toggle_butterfly],
-                'description': ['Toggle Annotation-Tool']
+                'description': ['Toggle Butterfly']
             },
             'd': {
                 'qt_key': Qt.Key_D,
@@ -2195,7 +2210,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             'e': {
                 'qt_key': Qt.Key_E,
                 'slot': [self._toggle_events],
-                'description': ['Toggle Events']
+                'description': ['Toggle Events visible']
             },
             'h': {
                 'qt_key': Qt.Key_H,
@@ -2208,7 +2223,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                          self._toggle_all_projs],
                 'modifier': [None, 'Shift'],
                 'description': ['Toggle Projection Figure',
-                                'Toggle All Projections']
+                                'Toggle all projections']
             },
             'o': {
                 'qt_key': Qt.Key_O,
