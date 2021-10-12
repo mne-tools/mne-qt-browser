@@ -19,7 +19,7 @@ import numpy as np
 from PyQt5.QtCore import (QEvent, Qt, pyqtSignal, QRunnable,
                           QObject, QThreadPool, QRectF, QLineF, QPoint)
 from PyQt5.QtGui import (QFont, QIcon, QPixmap, QTransform,
-                         QMouseEvent, QImage, QPen, QPainter, QPainterPath)
+                         QMouseEvent, QImage, QPainter, QPainterPath)
 from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
                              QDockWidget, QDoubleSpinBox, QFormLayout,
