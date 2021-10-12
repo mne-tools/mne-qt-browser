@@ -953,7 +953,7 @@ class ScaleBarText(BaseScaleBar, TextItem):
         BaseScaleBar.__init__(self, mne, ch_type)
         TextItem.__init__(self, color='#AA3377')
 
-        self.setFont(QFont('AnyStyle', 10, QFont.Bold))
+        self.setFont(QFont('AnyStyle', 10))
         self.setZValue(2)  # To draw over RawTraceItems
 
         self.update_value()
@@ -979,7 +979,7 @@ class ScaleBar(BaseScaleBar, QGraphicsLineItem):
         QGraphicsLineItem.__init__(self)
 
         self.setZValue(1)
-        self.setPen(mkPen(color='#AA3377', width=2))
+        self.setPen(mkPen(color='#AA3377', width=5))
         self.update_y_position()
 
     def _set_position(self, x, y):
