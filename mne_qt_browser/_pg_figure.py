@@ -1312,7 +1312,6 @@ class AnnotRegion(LinearRegionItem):
     removeRequested = pyqtSignal(object)
 
     def __init__(self, mne, description, values):
-
         super().__init__(values=values, orientation='vertical',
                          movable=True, swapMode='sort')
         # Set default z-value to 0 to be behind other items in scene
@@ -1336,16 +1335,21 @@ class AnnotRegion(LinearRegionItem):
 
     def update_color(self):
         """Update color of annotation-region."""
-        color = self.mne.annotation_segment_colors[self.description]
-        color = mkColor(color)
-        hover_color = mkColor(color)
-        text_color = mkColor(color)
-        color.setAlpha(75)
-        hover_color.setAlpha(150)
-        text_color.setAlpha(255)
-        self.setBrush(color)
-        self.setHoverBrush(hover_color)
-        self.label_item.setColor(text_color)
+        color_string = self.mne.annotation_segment_colors[self.description]
+        self.base_color = mkColor(color_string)
+        self.hover_color = mkColor(color_string)
+        self.text_color = mkColor(color_string)
+        self.base_color.setAlpha(75)
+        self.hover_color.setAlpha(150)
+        self.text_color.setAlpha(255)
+        self.line_pen = mkPen(color=self.hover_color, width=2)
+        self.hover_pen = mkPen(color=self.text_color, width=2)
+        self.setBrush(self.base_color)
+        self.setHoverBrush(self.hover_color)
+        self.label_item.setColor(self.text_color)
+        for line in self.lines:
+            line.setPen(self.line_pen)
+            line.setHoverPen(self.hover_pen)
         self.update()
 
     def update_description(self, description):
@@ -1359,16 +1363,6 @@ class AnnotRegion(LinearRegionItem):
         self.setVisible(visible)
         self.label_item.setVisible(visible)
 
-    def paint(self, p, *args):
-        """Customize painting of annotation-region (add selection-rect)."""
-        super().paint(p, *args)
-
-        if self.selected:
-            # Draw selection rectangle
-            p.setBrush(mkBrush(None))
-            p.setPen(mkPen(color='c', width=3))
-            p.drawRect(self.boundingRect())
-
     def remove(self):
         """Remove annotation-region."""
         self.removeRequested.emit(self)
@@ -1380,8 +1374,13 @@ class AnnotRegion(LinearRegionItem):
         """Update select-state of annotation-region."""
         self.selected = selected
         if selected:
+            self.label_item.setColor('w')
+            self.label_item.fill = mkBrush(self.hover_color)
             self.gotSelected.emit(self)
-        self.update()
+        else:
+            self.label_item.setColor(self.text_color)
+            self.label_item.fill = mkBrush(None)
+        self.label_item.update()
 
     def mouseClickEvent(self, event):
         """Customize mouse click events."""
@@ -2949,8 +2948,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         old_region = self.mne.selected_region
         # Remove selected-status from old region
         if old_region and old_region != region:
-            old_region.selected = False
-            old_region.update()
+            old_region.select(False)
         self.mne.selected_region = region
         self.mne.current_description = region.description
         self.mne.fig_annotation.update_values(region)
