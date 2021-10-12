@@ -1914,7 +1914,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                               viewbox=viewbox)
 
         # Start preloading if enabled
-        QThreadPool.globalInstance().setMaxThreadCount(1)
         self._init_preload()
         # Initialize data (needed in RawTraceItem.update_data).
         self._update_data()
