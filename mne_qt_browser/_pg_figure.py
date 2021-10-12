@@ -969,7 +969,7 @@ class ScaleBarText(BaseScaleBar, TextItem):
                     self.mne.scalings[self.ch_type] *
                     self.mne.unit_scalings[self.ch_type] /
                     self.mne.scale_factor)
-        self.setText(f'{_simplify_float(inv_norm)} '
+        self.setText(f'{int(inv_norm)} '
                      f'{self.mne.units[self.ch_type]}')
 
     def _set_position(self, x, y):
@@ -2176,27 +2176,21 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             },
             '-': {
                 'qt_key': Qt.Key_Minus,
-                'modifier': [None, 'Ctrl'],
                 'slot': [self.scale_all],
-                'parameter': [4 / 5, 19 / 20],
-                'description': ['Decrease Scale',
-                                'Decrease Scale (small step)']
+                'parameter': [4 / 5],
+                'description': ['Decrease Scale']
             },
             '+': {
                 'qt_key': Qt.Key_Plus,
-                'modifier': [None, 'Ctrl'],
                 'slot': [self.scale_all],
-                'parameter': [5 / 4, 20 / 19],
-                'description': ['Increase Scale',
-                                'Increase Scale (small step)']
+                'parameter': [5 / 4],
+                'description': ['Increase Scale']
             },
             '=': {
                 'qt_key': Qt.Key_Equal,
-                'modifier': [None, 'Ctrl'],
                 'slot': [self.scale_all],
-                'parameter': [5 / 4, 20 / 19],
-                'description': ['Increase Scale',
-                                'Increase Scale (small step)']
+                'parameter': [5 / 4],
+                'description': ['Increase Scale']
             },
             'a': {
                 'qt_key': Qt.Key_A,
