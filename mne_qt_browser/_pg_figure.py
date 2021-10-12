@@ -388,10 +388,10 @@ class TimeScrollBar(BaseScrollBar):
         """Update value of the ScrollBar."""
         # Mark change as external to avoid setting
         # XRange again in _time_changed.
+        self._update_duration()
         self.external_change = True
         self.setValue(int(value * self.step_factor))
         self.external_change = False
-        self._update_duration()
 
     def _update_duration(self):
         new_step_factor = self.mne.scroll_sensitivity / self.mne.duration
@@ -725,7 +725,7 @@ class OverviewBar(QGraphicsView):
 
     def _mapFromData(self, x, y):
         # Include padding from black frame
-        point_x = self.width() * x / self.mne.inst.times[-1]
+        point_x = self.width() * x / self.mne.xmax
         point_y = self.height() * y / len(self.mne.ch_order)
 
         return Point(point_x, point_y)
@@ -2135,42 +2135,38 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             'home': {
                 'alias': dur_keys[0],
                 'qt_key': Qt.Key_Home,
-                'modifier': [None, 'Ctrl', 'Shift'],
+                'modifier': [None, 'Ctrl'],
                 'slot': [self.change_duration],
-                'parameter': [-10, -1, '-full'],
+                'parameter': [-10, -1],
                 'description': ['Decrease duration',
-                                'Decrease duration (tiny step)',
-                                'Decrease duration (page)']
+                                'Decrease duration (tiny step)']
             },
             'end': {
                 'alias': dur_keys[1],
                 'qt_key': Qt.Key_End,
-                'modifier': [None, 'Ctrl', 'Shift'],
+                'modifier': [None, 'Ctrl'],
                 'slot': [self.change_duration],
-                'parameter': [10, 1, '+full'],
+                'parameter': [10, 1],
                 'description': ['Increase duration',
-                                'Increase duration (tiny step)',
-                                'Increase duration (page)']
+                                'Increase duration (tiny step)']
             },
             'pagedown': {
                 'alias': ch_keys[1],
                 'qt_key': Qt.Key_PageUp,
-                'modifier': [None, 'Ctrl', 'Shift'],
+                'modifier': [None, 'Ctrl'],
                 'slot': [self.change_nchan],
-                'parameter': [-10, -1, '-full'],
+                'parameter': [-10, -1],
                 'description': ['Decrease shown channels',
-                                'Decrease shown channels (tiny step)',
-                                'Decrease shown channels (page)']
+                                'Decrease shown channels (tiny step)']
             },
             'pageup': {
                 'alias': ch_keys[0],
                 'qt_key': Qt.Key_PageDown,
-                'modifier': [None, 'Ctrl', 'Shift'],
+                'modifier': [None, 'Ctrl'],
                 'slot': [self.change_nchan],
-                'parameter': [10, 1, '+full'],
+                'parameter': [10, 1],
                 'description': ['Increase shown channels',
-                                'Increase shown channels (tiny step)',
-                                'Increase shown channels (page)']
+                                'Increase shown channels (tiny step)']
             },
             '-': {
                 'qt_key': Qt.Key_Minus,
@@ -2452,8 +2448,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 rel_step = (self.mne.duration * step) / (
                         self.mne.scroll_sensitivity * 2)
             xmin, xmax = self.mne.viewbox.viewRange()[0]
-            xmax += rel_step
-            xmin -= rel_step
 
             if self.mne.is_epochs:
                 # use the length of one epoch as duration change
@@ -2462,11 +2456,15 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 # never show fewer than 3 samples
                 min_dur = 3 * np.diff(self.mne.inst.times[:2])[0]
 
+            xmax += rel_step
+
             if xmax - xmin < min_dur:
                 xmax = xmin + min_dur
 
             if xmax > self.mne.xmax:
+                diff = xmax - self.mne.xmax
                 xmax = self.mne.xmax
+                xmin -= diff
 
             if xmin < 0:
                 xmin = 0
