@@ -20,7 +20,7 @@ setup(name='mne_qt_browser',
                         'PyQt5',
                         'qtpy',
                         'mne',
-                        'pyqtgraph'
+                        'pyqtgraph',
                         'pyopengl'],
       entrypoints={'console_scripts':
                        ['mne_qt_browser = mne_qt_browser.__main__:main']}
