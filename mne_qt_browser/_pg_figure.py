@@ -969,7 +969,7 @@ class ScaleBarText(BaseScaleBar, TextItem):
                     self.mne.scalings[self.ch_type] *
                     self.mne.unit_scalings[self.ch_type] /
                     self.mne.scale_factor)
-        self.setText(f'{int(inv_norm)} '
+        self.setText(f'{_simplify_float(inv_norm)} '
                      f'{self.mne.units[self.ch_type]}')
 
     def _set_position(self, x, y):
