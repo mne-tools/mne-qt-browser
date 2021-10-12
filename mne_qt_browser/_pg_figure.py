@@ -992,9 +992,11 @@ class ScaleBar(BaseScaleBar, QGraphicsLineItem):
 
 
 class _BaseDialog(QDialog):
-    def __init__(self, main, modal=False, name=None, title=None):
+    def __init__(self, main, widget=None,
+                 modal=False, name=None, title=None):
         super().__init__(main)
         self.main = main
+        self.widget = widget
         self.mne = main.mne
         self.name = name
 
@@ -1007,6 +1009,11 @@ class _BaseDialog(QDialog):
 
         if title is not None:
             self.setWindowTitle(title)
+
+        if self.widget is not None:
+            layout = QVBoxLayout()
+            layout.addWidget(self.widget)
+            self.setLayout(layout)
 
         if modal:
             self.open()
@@ -3215,7 +3222,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             title = canvas.title
         else:
             title = None
-        _BaseDialog(self, canvas, title=title, name=name)
+        _BaseDialog(self, widget=canvas, title=title, name=name)
 
     def _create_ch_context_fig(self, idx):
         fig = super()._create_ch_context_fig(idx)
