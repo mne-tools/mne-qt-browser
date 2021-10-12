@@ -94,6 +94,9 @@ class RawTraceItem(PlotCurveItem):
         """Should be updated when butterfly is toggled or ch_idx changes."""
         if self.mne.butterfly and self.mne.fig_selection is not None:
             self.ypos = self.mne.selection_ypos_dict[self.ch_idx]
+        elif self.mne.fig_selection is not None and \
+                self.mne.old_selection == 'Custom':
+            self.ypos = self.range_idx + 1
         elif self.mne.butterfly:
             self.ypos = self.mne.butterfly_type_order.index(self.ch_type) + 1
         else:
@@ -1226,11 +1229,14 @@ class SelectionDialog(_BaseDialog):
         # otherwise it should be the *last* match (since "Vertex" is
         # always the first selection group, if it exists).
         index = 0
-        if label != 'Vertex' and 'Vertex' in self.mne.ch_selections:
-            index = -1
-        ch_order = np.concatenate(list(self.mne.ch_selections.values()))
-        ch_start = np.where(ch_order == self.mne.picks[0])[0][index]
-        self.mne.ch_start = ch_start
+        if label == 'Custom':
+            self.mne.ch_start = 0
+        else:
+            if label != 'Vertex' and 'Vertex' in self.mne.ch_selections:
+                index = -1
+            ch_order = np.concatenate(list(self.mne.ch_selections.values()))
+            ch_start = np.where(ch_order == self.mne.picks[0])[0][index]
+            self.mne.ch_start = ch_start
 
         # # Adapt ymax to additional channels from 'Custom'
         # self.mne.ymax = (len(self.mne.ch_order) +
@@ -2422,7 +2428,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def vscroll(self, step):
         """Scroll vertically by step."""
         if self.mne.fig_selection is not None:
-            if step > 0 or step == '+full':
+            if step == '+full':
                 self.mne.fig_selection._scroll_selection(1)
             else:
                 self.mne.fig_selection._scroll_selection(-1)
