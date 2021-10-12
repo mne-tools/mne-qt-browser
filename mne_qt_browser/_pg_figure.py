@@ -602,9 +602,9 @@ class OverviewBar(QGraphicsView):
                                              + self.mne.n_channels)
         rect = QRectF(top_left, bottom_right)
         if self.viewrange_rect is None:
-            pen = QPen(mkColor('g'))
-            pen.setWidth(2)
-            self.viewrange_rect = self.scene().addRect(rect, pen)
+            pen = mkPen(color='g')
+            brush = mkBrush(color=(0, 0, 0, 100))
+            self.viewrange_rect = self.scene().addRect(rect, pen, brush)
             self.viewrange_rect.setZValue(4)
         else:
             self.viewrange_rect.setRect(rect)
