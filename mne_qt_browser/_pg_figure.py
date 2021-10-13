@@ -38,13 +38,6 @@ from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
                        mkPen, setConfigOption, mkQApp, mkColor)
 from scipy.stats import zscore
 
-try:
-    from pytestqt.exceptions import capture_exceptions
-except ImportError:
-    @contextmanager
-    def capture_exceptions():
-        yield [None]
-
 from mne.viz import plot_sensors
 from mne.viz.backends._utils import _init_qt_resources
 from mne.viz._figure import BrowserBase
@@ -53,6 +46,17 @@ from mne.annotations import _sync_onset
 from mne.io.pick import (_DATA_CH_TYPES_ORDER_DEFAULT,
                          channel_indices_by_type, _DATA_CH_TYPES_SPLIT)
 from mne.utils import logger, sizeof_fmt
+
+try:
+    from pytestqt.exceptions import capture_exceptions
+except ImportError:
+    logger.debug('If pytest-qt is not installed, the errors from inside '
+                 'the Qt-loop will be occluded and it will be harder '
+                 'to trace back the cause.')
+
+    @contextmanager
+    def capture_exceptions():
+        yield []
 
 name = 'pyqtgraph'
 
