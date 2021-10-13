@@ -529,7 +529,7 @@ class OverviewBar(QGraphicsView):
             for ev_t, ev_id in zip(self.mne.event_times, self.mne.event_nums):
                 color_name = self.mne.event_color_dict[ev_id]
                 color = mkColor(color_name)
-                color.setAlpha(200)
+                color.setAlpha(100)
                 pen = mkPen(color)
                 top_left = self._mapFromData(ev_t, 0)
                 bottom_right = self._mapFromData(ev_t, len(self.mne.ch_order))
@@ -562,7 +562,7 @@ class OverviewBar(QGraphicsView):
             description = annotations.description[annot_idx]
             color_name = self.mne.annotation_segment_colors[description]
             color = mkColor(color_name)
-            color.setAlpha(200)
+            color.setAlpha(150)
             pen = mkPen(color)
             brush = mkBrush(color)
             top_left = self._mapFromData(plot_onset, 0)
@@ -891,6 +891,7 @@ class EventLine(InfiniteLine):
                                                    'anchors': [(0, 0.5),
                                                                (0, 0.5)]})
         self.label.setFont(QFont('AnyStyle', 10, QFont.Bold))
+        self.setZValue(0)
 
 
 class Crosshair(InfiniteLine):
@@ -1423,6 +1424,92 @@ class AnnotRegion(LinearRegionItem):
             self.label_item.setPos(sum(rgn) / 2, ymax - 0.3)
 
 
+class _AnnotEditDialog(_BaseDialog):
+    def __init__(self, annot_dock):
+        super().__init__(annot_dock.main, title='Edit Annotations')
+        self.ad = annot_dock
+
+        self.current_mode = None
+        self.curr_des = None
+
+        layout = QVBoxLayout()
+        self.descr_label = QLabel()
+        if self.mne.selected_region:
+            self.mode_cmbx = QComboBox()
+            self.mode_cmbx.addItems(['group', 'current'])
+            self.mode_cmbx.currentTextChanged.connect(self._mode_changed)
+            layout.addWidget(QLabel('Edit Scope:'))
+            layout.addWidget(self.mode_cmbx)
+        # Set group as default
+        self._mode_changed('group')
+
+        layout.addWidget(self.descr_label)
+        self.input_w = QLineEdit()
+        layout.addWidget(self.input_w)
+        bt_layout = QHBoxLayout()
+        ok_bt = QPushButton('Ok')
+        ok_bt.clicked.connect(self._edit)
+        bt_layout.addWidget(ok_bt)
+        cancel_bt = QPushButton('Cancel')
+        cancel_bt.clicked.connect(self.close)
+        bt_layout.addWidget(cancel_bt)
+        layout.addLayout(bt_layout)
+        self.setLayout(layout)
+
+    def _mode_changed(self, mode):
+        self.current_mode = mode
+        if mode == 'group':
+            curr_des = self.ad.description_cmbx.currentText()
+        else:
+            curr_des = self.mne.selected_region.description
+        self.descr_label.setText(f'Change "{curr_des}" to:')
+        self.curr_des = curr_des
+
+    def _edit(self):
+        new_des = self.input_w.text()
+        if new_des:
+            if self.current_mode == 'group' or self.mne.selected_region is \
+                    None:
+                edit_regions = [r for r in self.mne.regions
+                                if r.description == self.curr_des]
+                for ed_region in edit_regions:
+                    idx = self.main._get_onset_idx(
+                        ed_region.getRegion()[0])
+                    self.mne.inst.annotations.description[idx] = new_des
+                    ed_region.update_description(new_des)
+                self.mne.new_annotation_labels.remove(self.curr_des)
+                self.mne.new_annotation_labels = \
+                    self.main._get_annotation_labels()
+                self.mne.visible_annotations[new_des] = \
+                    self.mne.visible_annotations.pop(self.curr_des)
+                self.mne.annotation_segment_colors[new_des] = \
+                    self.mne.annotation_segment_colors.pop(
+                        self.curr_des)
+            else:
+                idx = self.main._get_onset_idx(
+                    self.mne.selected_region.getRegion()[0])
+                self.mne.inst.annotations.description[idx] = new_des
+                self.mne.selected_region.update_description(new_des)
+                if new_des not in self.mne.new_annotation_labels:
+                    self.mne.new_annotation_labels.append(new_des)
+                self.mne.visible_annotations[new_des] = \
+                    self.mne.visible_annotations[self.curr_des]
+                self.mne.annotation_segment_colors[new_des] = \
+                    self.mne.annotation_segment_colors[self.curr_des]
+                if self.curr_des not in \
+                        self.mne.inst.annotations.description:
+                    self.mne.new_annotation_labels.remove(
+                        self.curr_des)
+                    self.mne.visible_annotations.pop(self.curr_des)
+                    self.mne.annotation_segment_colors.pop(
+                        self.curr_des)
+            self.mne.current_description = new_des
+            self.main._setup_annotation_colors()
+            self.ad._update_description_cmbx()
+            self.ad._update_regions_colors()
+            self.close()
+
+
 class AnnotationDock(QDockWidget):
     """Dock-Window for Management of annotations."""
 
@@ -1483,6 +1570,10 @@ class AnnotationDock(QDockWidget):
         self.stop_bx.editingFinished.connect(self._stop_changed)
         layout.addWidget(self.stop_bx)
 
+        help_bt = QPushButton(_get_std_icon('SP_MessageBoxQuestion'), 'Help')
+        help_bt.clicked.connect(self._show_help)
+        layout.addWidget(help_bt)
+
         widget.setLayout(layout)
         self.setWidget(widget)
 
@@ -1511,78 +1602,8 @@ class AnnotationDock(QDockWidget):
             self._add_description(new_description)
 
     def _edit_description(self):
-        curr_des = self.description_cmbx.currentText()
-
-        # This is a inline approach of creating the dialog and thus preventing
-        # an additional class.
-        def get_edited_values():
-            new_des = input_w.text()
-            if mode_cmbx:
-                mode = mode_cmbx.currentText()
-            else:
-                mode = 'group'
-            if new_des:
-                if mode == 'group' or self.mne.selected_region is None:
-                    edit_regions = [r for r in self.mne.regions
-                                    if r.description == curr_des]
-                    for ed_region in edit_regions:
-                        idx = self.main._get_onset_idx(
-                            ed_region.getRegion()[0])
-                        self.mne.inst.annotations.description[idx] = new_des
-                        ed_region.update_description(new_des)
-                    self.mne.new_annotation_labels.remove(curr_des)
-                    self.mne.new_annotation_labels = \
-                        self.main._get_annotation_labels()
-                    self.mne.visible_annotations[new_des] = \
-                        self.mne.visible_annotations.pop(curr_des)
-                    self.mne.annotation_segment_colors[new_des] = \
-                        self.mne.annotation_segment_colors.pop(curr_des)
-                else:
-                    idx = self.main._get_onset_idx(
-                        self.mne.selected_region.getRegion()[0])
-                    self.mne.inst.annotations.description[idx] = new_des
-                    self.mne.selected_region.update_description(new_des)
-                    if new_des not in self.mne.new_annotation_labels:
-                        self.mne.new_annotation_labels.append(new_des)
-                    self.mne.visible_annotations[new_des] = \
-                        self.mne.visible_annotations[curr_des]
-                    self.mne.annotation_segment_colors[new_des] = \
-                        self.mne.annotation_segment_colors[curr_des]
-                    if curr_des not in \
-                            self.mne.inst.annotations.description:
-                        self.mne.new_annotation_labels.remove(curr_des)
-                        self.mne.visible_annotations.pop(curr_des)
-                        self.mne.annotation_segment_colors.pop(curr_des)
-                self.mne.current_description = new_des
-                self.main._setup_annotation_colors()
-                self._update_description_cmbx()
-                self._update_regions_colors()
-
-            edit_dlg.close()
-
         if len(self.mne.inst.annotations.description) > 0:
-            edit_dlg = QDialog()
-            layout = QVBoxLayout()
-            if self.mne.selected_region:
-                mode_cmbx = QComboBox()
-                mode_cmbx.addItems(['group', 'current'])
-                layout.addWidget(QLabel('Edit Scope:'))
-                layout.addWidget(mode_cmbx)
-            else:
-                mode_cmbx = None
-            layout.addWidget(QLabel(f'Change "{curr_des}" to:'))
-            input_w = QLineEdit()
-            layout.addWidget(input_w)
-            bt_layout = QHBoxLayout()
-            ok_bt = QPushButton('Ok')
-            ok_bt.clicked.connect(get_edited_values)
-            bt_layout.addWidget(ok_bt)
-            cancel_bt = QPushButton('Cancel')
-            cancel_bt.clicked.connect(edit_dlg.close)
-            bt_layout.addWidget(cancel_bt)
-            layout.addLayout(bt_layout)
-            edit_dlg.setLayout(layout)
-            edit_dlg.exec()
+            _AnnotEditDialog(self)
         else:
             QMessageBox.information(self, 'No Annotations!',
                                     'There are no annotations yet to edit!')
@@ -1728,7 +1749,6 @@ class AnnotationDock(QDockWidget):
     def update_values(self, region):
         """Update spinbox-values from region."""
         rgn = region.getRegion()
-        self.description_cmbx.setCurrentText(region.description)
         self.start_bx.setValue(rgn[0])
         self.stop_bx.setValue(rgn[1])
 
@@ -1750,6 +1770,38 @@ class AnnotationDock(QDockWidget):
             self.mne.current_description = self.description_cmbx.currentText()
         self.start_bx.setValue(0)
         self.stop_bx.setValue(0)
+
+    def _show_help(self):
+        QMessageBox.information(self, 'Annotations-Help',
+                                '<h1>Help</h1>'
+                                '<h2>Annotations</h2>'
+                                '<h3>Add Annotations</h3>'
+                                'Drag inside the data-view to create '
+                                'annotations with the description currently '
+                                'selected (leftmost item of the toolbar).'
+                                'If there is no description yet, add one '
+                                'with the button "Add description".'
+                                '<h3>Remove Annotations</h3>'
+                                'You can remove single annotations by '
+                                'right-clicking on them.'
+                                '<h3>Edit Annotations</h3>'
+                                'You can edit annotations by dragging them or '
+                                'their boundaries. Or you can use the dials '
+                                'in the toolbar to adjust the boundaries for '
+                                'the current selected annotation.'
+                                '<h2>Descriptions</h2>'
+                                '<h3>Add Description</h3>'
+                                'Add a new description with the button'
+                                '"Add description".'
+                                '<h3>Edit Description</h3>'
+                                'You can edit the description of one single '
+                                'annotation or all annotations of the '
+                                'currently selected kind with the button '
+                                '"Edit description".'
+                                '<h3>Remove Description</h3>'
+                                'You can remove all annotations of the '
+                                'currently selected kind with the button '
+                                '"Remove description".')
 
 
 class BrowserView(GraphicsView):
@@ -2083,7 +2135,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         toolbar.addAction(atoggle_fullscreen)
 
         ahelp = QAction(_get_std_icon('SP_MessageBoxQuestion'),
-                        'Help', parent=self)
+                        'Shortcuts', parent=self)
         ahelp.triggered.connect(self._toggle_help_fig)
         toolbar.addAction(ahelp)
 
@@ -2968,7 +3020,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if old_region and old_region != region:
             old_region.select(False)
         self.mne.selected_region = region
-        self.mne.current_description = region.description
         self.mne.fig_annotation.update_values(region)
 
     def _get_onset_idx(self, plot_onset):
