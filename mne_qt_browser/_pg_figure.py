@@ -240,6 +240,7 @@ class ChannelAxis(AxisItem):
         self.mne = main.mne
         self.ch_texts = dict()
         super().__init__(orientation='left')
+        self.style['autoReduceTextSpace'] = False
 
     def tickValues(self, minVal, maxVal, size):
         """Customize creation of axis values from visible axis range."""
