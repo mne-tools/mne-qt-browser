@@ -844,6 +844,9 @@ class RawViewBox(ViewBox):
         elif ev.orientation() == Qt.Vertical:
             self.main.vscroll(scroll)
 
+    def keyPressEvent(self, event):
+        self.main.keyPressEvent(event)
+
 
 class VLineLabel(InfLineLabel):
     """Label of the vline displaying the time."""
