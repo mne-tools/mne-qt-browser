@@ -3066,10 +3066,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             else:
                 region.setZValue(0)
 
-        # Remove selection-rectangle.
-        if not self.mne.annotation_mode and self.mne.selected_region:
-            self.mne.selected_region.select(False)
-            self.mne.selected_region = None
+        # Add/Remove selection-rectangle.
+        if self.mne.selected_region:
+            self.mne.selected_region.select(self.mne.annotation_mode)
 
     def _toggle_annotation_fig(self):
         self.mne.annotation_mode = not self.mne.annotation_mode
