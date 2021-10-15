@@ -887,7 +887,7 @@ class EventLine(InfiniteLine):
 
     def __init__(self, pos, id, color):
         super().__init__(pos, pen=color, movable=False,
-                         label=str(id), labelOpts={'position': 0.99,
+                         label=str(id), labelOpts={'position': 0.98,
                                                    'color': color,
                                                    'anchors': [(0, 0.5),
                                                                (0, 0.5)]})
