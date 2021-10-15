@@ -3237,9 +3237,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         for bar in [self.mne.ax_hscroll, self.mne.ax_vscroll]:
             bar.setVisible(self.mne.scrollbars_visible)
         self.mne.toolbar.setVisible(self.mne.scrollbars_visible)
-        self.mne.overview_bar.setVisible(self.mne.scrollbars_visible)
-        self._set_annotations_visible(self.mne.scrollbars_visible)
-        self._set_events_visible(self.mne.scrollbars_visible)
 
     def _new_child_figure(self, fig_name, window_title, **kwargs):
         from matplotlib.figure import Figure
