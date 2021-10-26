@@ -134,7 +134,7 @@ class RawTraceItem(PlotCurveItem):
             connect = 'all'
             skip = True
 
-        if self.mne.data_preloaded:
+        if self.mne.data_precomputed:
             data = self.mne.data[self.order_idx]
         else:
             data = self.mne.data[self.range_idx]
@@ -703,7 +703,8 @@ class OverviewBar(QGraphicsView):
     def set_background(self):
         """Set the background-image for the selected overview-mode."""
         # Add Overview-Pixmap
-        if self.mne.overview_mode == 'channels' or not self.mne.enable_preload:
+        if (self.mne.overview_mode == 'channels'
+                or not self.mne.enable_precompute):
             channel_rgba = np.empty((len(self.mne.ch_order),
                                      2, 4))
             for line_idx, ch_idx in enumerate(self.mne.ch_order):
@@ -1846,7 +1847,7 @@ class LoadRunnerSignals(QObject):
 
 
 class LoadRunner(QRunnable):
-    """A QRunnable for preloading in a separate QThread."""
+    """A QRunnable for precomputing in a separate QThread."""
 
     def __init__(self, browser):
         super().__init__()
@@ -1935,8 +1936,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.decim_times = None
         self.mne.selection_ypos_dict = dict()
         self.mne.ds_cache = dict()
-        self.mne.enable_preload = False
-        self.mne.data_preloaded = False
+        self.mne.enable_precompute = False
+        self.mne.data_precomputed = False
         self.mne.show_overview_bar = True
 
         # Initialize channel-colors for faster indexing later
@@ -1987,8 +1988,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         vars(self.mne).update(time_axis=time_axis, channel_axis=channel_axis,
                               viewbox=viewbox)
 
-        # Start preloading if enabled
-        self._init_preload()
+        # Start precomputing if enabled
+        self._init_precompute()
         # Initialize data (needed in RawTraceItem.update_data).
         self._update_data()
 
@@ -2765,7 +2766,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
             if ds in self.mne.ds_cache:
                 # Caching is only activated if downsampling is applied
-                # on the preloaded data.
+                # on the precomputed data.
                 times, data = self.mne.ds_cache[ds]
             else:
                 if self.mne.ds_method == 'subsample':
@@ -2797,8 +2798,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                     y1[:, :, 1] = y2.min(axis=2)
                     data = y1.reshape((n_ch, n * 2))
 
-                # Only cache downsampled data if preloading is enabled
-                if self.mne.enable_preload and self.mne.data_preloaded:
+                # Only cache downsampled data if precomputing is enabled
+                if self.mne.enable_precompute and self.mne.data_precomputed:
                     self.mne.ds_cache[ds] = times, data
 
             self.mne.times, self.mne.data = times, data
@@ -2809,45 +2810,45 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.load_prog_label.hide()
         self.statusBar().showMessage(message)
 
-    def _preload_finished(self):
+    def _precompute_finished(self):
         self.statusBar().showMessage('Loading Finished', 5)
-        self.mne.data_preloaded = True
+        self.mne.data_precomputed = True
 
         if self.mne.overview_mode == 'zscore':
             # Show loaded overview image
             self.mne.overview_bar.set_background()
 
-    def _init_preload(self):
+    def _init_precompute(self):
         # Remove previously loaded data
-        self.mne.data_preloaded = False
+        self.mne.data_precomputed = False
         if all([hasattr(self.mne, st)
                 for st in ['global_data', 'global_times']]):
             del self.mne.global_data, self.mne.global_times
         gc.collect()
 
-        if self.mne.preload == 'auto':
-            self.mne.enable_preload = self._check_space_for_preload()
-        elif isinstance(self.mne.preload, bool):
-            self.mne.enable_preload = self.mne.preload
+        if self.mne.precompute == 'auto':
+            self.mne.enable_precompute = self._check_space_for_precompute()
+        elif isinstance(self.mne.precompute, bool):
+            self.mne.enable_precompute = self.mne.precompute
 
-        if self.mne.enable_preload:
-            # Start preload thread
+        if self.mne.enable_precompute:
+            # Start precompute thread
             self.mne.load_progressbar.show()
             self.mne.load_prog_label.show()
             load_runner = LoadRunner(self)
             load_runner.sigs.loadProgress.connect(self.mne.
                                                   load_progressbar.setValue)
             load_runner.sigs.processText.connect(self._show_process)
-            load_runner.sigs.loadingFinished.connect(self._preload_finished)
+            load_runner.sigs.loadingFinished.connect(self._precompute_finished)
             QThreadPool.globalInstance().start(load_runner)
 
-    def _check_space_for_preload(self):
+    def _check_space_for_precompute(self):
         try:
             import psutil
         except ImportError:
             logger.info('Free RAM space could not be determined because'
                         '"psutil" is not installed. '
-                        'Setting preload to False.')
+                        'Setting precompute to False.')
             return False
         else:
             if self.mne.inst.filenames[0]:
@@ -2878,17 +2879,17 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             left_ram_str = sizeof_fmt(free_ram - expected_ram)
 
             if expected_ram < free_ram:
-                logger.debug('The data preloaded for visualization takes '
+                logger.debug('The data precomputed for visualization takes '
                              f'{expected_ram_str} with {left_ram_str} of '
                              f'RAM left.')
                 return True
             else:
-                logger.debug(f'The preloaded data with {expected_ram_str} '
+                logger.debug(f'The precomputed data with {expected_ram_str} '
                              f'will surpass your current {free_ram_str} '
                              f'of free RAM.\n'
-                             'Thus preload will be set to False.\n'
-                             '(If you want to preload nevertheless, '
-                             'then set preload to True instead of "auto")')
+                             'Thus precompute will be set to False.\n'
+                             '(If you want to precompute nevertheless, '
+                             'then set precompute to True instead of "auto")')
                 return False
 
     def _process_data(self, data, start, stop, picks,
@@ -2901,7 +2902,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         return data
 
     def _update_data(self):
-        if self.mne.data_preloaded:
+        if self.mne.data_precomputed:
             # get start/stop-samples
             start, stop = self._get_start_stop()
             self.mne.times = self.mne.global_times[start:stop]
@@ -2913,7 +2914,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                                 self.mne.data.mean(axis=1, keepdims=True)
 
         else:
-            # While data is not preloaded get data only from shown range and
+            # While data is not precomputed get data only from shown range and
             # process only those.
             super()._update_data()
 
@@ -3113,8 +3114,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             new_state[applied] = True
             self.mne.projs_on = new_state
         self._update_projector()
-        # If data was preloaded it needs to be preloaded again.
-        self._init_preload()
+        # If data was precomputed it needs to be precomputed again.
+        self._init_precompute()
         self._redraw()
 
     def _toggle_proj_fig(self):
@@ -3131,8 +3132,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _toggle_whitening(self):
         super()._toggle_whitening()
-        # If data was preloaded it needs to be preloaded again.
-        self._init_preload()
+        # If data was precomputed it needs to be precomputed again.
+        self._init_precompute()
         self._redraw()
 
     def _toggle_help_fig(self):
