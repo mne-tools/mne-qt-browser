@@ -719,8 +719,7 @@ class OverviewBar(QGraphicsView):
                                  QImage.Format_RGBA8888)
             self.bg_pxmp = QPixmap.fromImage(self.bg_img)
 
-        elif self.mne.overview_mode == 'zscore' \
-                and hasattr(self.mne, 'zscore_rgba'):
+        elif self.mne.overview_mode == 'zscore':
             self.bg_img = QImage(self.mne.zscore_rgba,
                                  self.mne.zscore_rgba.shape[1],
                                  self.mne.zscore_rgba.shape[0],
@@ -1899,9 +1898,8 @@ class LoadRunner(QRunnable):
         self.browser.mne.global_times = times
 
         # Calculate Z-Scores
-        if self.mne.overview_mode == 'zscore':
-            self.sigs.processText.emit('Calculating Z-Scores...')
-            self.browser._get_zscore(data)
+        self.sigs.processText.emit('Calculating Z-Scores...')
+        self.browser._get_zscore(data)
 
         self.sigs.loadingFinished.emit()
 
@@ -1939,6 +1937,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.enable_precompute = False
         self.mne.data_precomputed = False
         self.mne.show_overview_bar = True
+        self.mne.overview_mode = 'channels'
+        self.mne.zscore_rgba = None
 
         # Initialize channel-colors for faster indexing later
         self.mne.ch_color_assoc = dict()
@@ -1990,6 +1990,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Start precomputing if enabled
         self._init_precompute()
+
         # Initialize data (needed in RawTraceItem.update_data).
         self._update_data()
 
@@ -2060,6 +2061,40 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # OverviewBar
         overview_bar = OverviewBar(self)
         layout.addWidget(overview_bar, 2, 0, 1, 2)
+
+        # Add Combobox to select Overview-Mode
+        self.overview_mode_chkbx = QComboBox()
+        self.overview_mode_chkbx.addItems(['channels'])
+        self.overview_mode_chkbx.setToolTip('<h2>Overview-Modes</h2>'
+                                            '<ul>'
+                                            '<li>channels:<br> '
+                                            'Display each channel with its '
+                                            'channel-type color.</li>'
+                                            '<li>zscore:<br>'
+                                            ' Display the zscore for the '
+                                            'data from each channel across '
+                                            'time. '
+                                            'Red indicates high z - scores,'
+                                            'Blue indicates low z - scores '
+                                            ' whilethe boundaries of the '
+                                            ' color gradientare defined by '
+                                            ' the minimum/maximum z-score. '
+                                            'This only works if precompute '
+                                            'is set to "True" or it is '
+                                            'enabled with "auto" and enough '
+                                            'free RAM.</li>'
+                                            '</ul>')
+        if self.mne.enable_precompute:
+            self.overview_mode_chkbx.addItems(['zscore'])
+        self.overview_mode_chkbx.currentTextChanged.connect(
+            self._overview_mode_changed)
+        self.overview_mode_chkbx.setCurrentIndex(0)
+        overview_mode_layout = QHBoxLayout()
+        overview_mode_layout.addWidget(QLabel('Overview-Mode:'))
+        overview_mode_layout.addWidget(self.overview_mode_chkbx)
+        overview_mode_widget = QWidget()
+        overview_mode_widget.setLayout(overview_mode_layout)
+        self.statusBar().addPermanentWidget(overview_mode_widget)
 
         widget.setLayout(layout)
         self.setCentralWidget(widget)
@@ -2439,6 +2474,13 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def _toggle_scalebars(self):
         self.mne.scalebars_visible = not self.mne.scalebars_visible
         self._set_scalebars_visible(self.mne.scalebars_visible)
+
+    def _overview_mode_changed(self, new_mode):
+        self.mne.overview_mode = new_mode
+        if self.mne.overview_mode == 'zscore':
+            while self.mne.zscore_rgba is None:
+                QApplication.processEvents()
+        self.mne.overview_bar.set_background()
 
     def scale_all(self, step):
         """Scale all traces by multiplying with step."""
