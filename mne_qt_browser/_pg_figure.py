@@ -3090,33 +3090,34 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         max_pixel_width = QApplication.desktop().screenGeometry().width()
         collapse_by = data.shape[1] // max_pixel_width
         data = data[:, :max_pixel_width * collapse_by]
-        data = data.reshape(data.shape[0], max_pixel_width, collapse_by)
-        data = data.mean(axis=2)
+        if collapse_by > 0:
+            data = data.reshape(data.shape[0], max_pixel_width, collapse_by)
+            data = data.mean(axis=2)
         z = zscore(data, axis=1)
+        if z.size > 0:
+            zmin = np.min(z, axis=1)
+            zmax = np.max(z, axis=1)
 
-        zmin = np.min(z, axis=1)
-        zmax = np.max(z, axis=1)
+            # Convert into RGBA
+            zrgba = np.empty((*z.shape, 4))
+            for row_idx, row in enumerate(z):
+                for col_idx, value in enumerate(row):
+                    if math.isnan(value):
+                        value = 0
+                    if value == 0:
+                        rgba = [0, 0, 0, 0]
+                    elif value < 0:
+                        alpha = int(255 * value / abs(zmin[row_idx]))
+                        rgba = [0, 0, 255, alpha]
+                    else:
+                        alpha = int(255 * value / zmax[row_idx])
+                        rgba = [255, 0, 0, alpha]
 
-        # Convert into RGBA
-        zrgba = np.empty((*z.shape, 4))
-        for row_idx, row in enumerate(z):
-            for col_idx, value in enumerate(row):
-                if math.isnan(value):
-                    value = 0
-                if value == 0:
-                    rgba = [0, 0, 0, 0]
-                elif value < 0:
-                    alpha = int(255 * value / abs(zmin[row_idx]))
-                    rgba = [0, 0, 255, alpha]
-                else:
-                    alpha = int(255 * value / zmax[row_idx])
-                    rgba = [255, 0, 0, alpha]
+                    zrgba[row_idx, col_idx] = rgba
 
-                zrgba[row_idx, col_idx] = rgba
+            zrgba = np.require(zrgba, np.uint8, 'C')
 
-        zrgba = np.require(zrgba, np.uint8, 'C')
-
-        self.mne.zscore_rgba = zrgba
+            self.mne.zscore_rgba = zrgba
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     # ANNOTATIONS
