@@ -17,7 +17,8 @@ from os.path import getsize
 
 import numpy as np
 from PyQt5.QtCore import (QEvent, Qt, pyqtSignal, QRunnable,
-                          QObject, QThreadPool, QRectF, QLineF, QPoint)
+                          QObject, QThreadPool, QRectF, QLineF, QPoint,
+                          QSettings)
 from PyQt5.QtGui import (QFont, QIcon, QPixmap, QTransform,
                          QMouseEvent, QImage, QPainter, QPainterPath)
 from PyQt5.QtTest import QTest
@@ -30,7 +31,7 @@ from PyQt5.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
                              QApplication, QGraphicsView, QProgressBar,
                              QVBoxLayout, QLineEdit, QCheckBox, QScrollArea,
                              QGraphicsLineItem, QGraphicsScene, QTextEdit,
-                             QSizePolicy)
+                             QSizePolicy, QSpinBox, QDesktopWidget, QSlider)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
                        LinearRegionItem, PlotCurveItem, PlotItem,
@@ -146,7 +147,8 @@ class RawTraceItem(PlotCurveItem):
         else:
             times = self.mne.times
 
-        self.setData(times, data, connect=connect, skipFiniteCheck=skip)
+        self.setData(times, data, connect=connect, skipFiniteCheck=skip,
+                     antialias=self.mne.antialiasing)
 
         self.setPos(0, self.ypos)
 
@@ -405,6 +407,10 @@ class TimeScrollBar(BaseScrollBar):
             new_maximum = int((self.mne.xmax - self.mne.duration)
                               * self.step_factor)
             self.setMaximum(new_maximum)
+
+    def _update_scroll_sensitivity(self):
+        self.setPageStep(self.mne.scroll_sensitivity)
+        self.update_value(self.value() / self.step_factor)
 
     def keyPressEvent(self, event):
         """Customize key press events."""
@@ -1011,6 +1017,7 @@ class _BaseDialog(QDialog):
         self.widget = widget
         self.mne = main.mne
         self.name = name
+        self.modal = modal
 
         self.setAttribute(Qt.WA_DeleteOnClose, True)
 
@@ -1027,10 +1034,17 @@ class _BaseDialog(QDialog):
             layout.addWidget(self.widget)
             self.setLayout(layout)
 
-        if modal:
+    def show(self):
+        if self.modal:
             self.open()
         else:
-            self.show()
+            super().show()
+
+        # center dialog
+        qr = self.frameGeometry()
+        cp = QDesktopWidget().availableGeometry().center()
+        qr.moveCenter(cp)
+        self.move(qr.topLeft())
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
@@ -1045,6 +1059,79 @@ class _BaseDialog(QDialog):
             if self in self.mne.child_figs:
                 self.mne.child_figs.remove(self)
         event.accept()
+
+
+class SettingsDialog(_BaseDialog):
+    """Shows additional settings."""
+
+    def __init__(self, main, **kwargs):
+        super().__init__(main, **kwargs)
+
+        layout = QFormLayout()
+
+        self.downsampling_box = QSpinBox()
+        self.downsampling_box.setToolTip('Set an integer as the downsampling'
+                                         ' factor or "Auto" to get the factor'
+                                         ' from the visible range.\n'
+                                         ' Setting the factor 1 means no '
+                                         'downsampling.\n'
+                                         ' Default is "Auto"')
+        self.downsampling_box.setMinimum(0)
+        self.downsampling_box.setSpecialValueText('Auto')
+        self.downsampling_box.valueChanged.connect(partial(
+            self._value_changed, value_name='downsampling'))
+        self.downsampling_box.setValue(0 if self.mne.downsampling == 'auto'
+                                       else self.mne.downsampling)
+        layout.addRow('downsampling', self.downsampling_box)
+
+        self.ds_method_cmbx = QComboBox()
+        self.ds_method_cmbx.setToolTip(
+            '<h2>Downsampling Method</h2>'
+            '<ul>'
+            '<li>subsample:<br>'
+            'Only take every n-th sample.</li>'
+            '<li>mean:<br>'
+            'Take the mean of n samples.</li>'
+            '<li>peak:<br>'
+            'Draws a saw wave from the minimum to the maximum from a '
+            'collection of n samples.</li>'
+            '</ul>'
+            '<i>(Those methods are adapted from '
+            'pyqtgraph)</i><br>'
+            'Default is "peak".')
+        self.ds_method_cmbx.addItems(['subsample', 'mean', 'peak'])
+        self.ds_method_cmbx.currentTextChanged.connect(partial(
+            self._value_changed, value_name='ds_method'))
+        self.ds_method_cmbx.setCurrentText(
+            self.mne.ds_method)
+        layout.addRow('ds_method', self.ds_method_cmbx)
+
+        self.scroll_sensitivity_slider = QSlider(Qt.Horizontal)
+        self.scroll_sensitivity_slider.setMinimum(10)
+        self.scroll_sensitivity_slider.setMaximum(1000)
+        self.scroll_sensitivity_slider.setToolTip('Set the sensitivity of '
+                                                  'the scrolling in '
+                                                  'horizontal direction.')
+        self.scroll_sensitivity_slider.valueChanged.connect(partial(
+            self._value_changed, value_name='scroll_sensitivity'))
+        # Set default
+        self.scroll_sensitivity_slider.setValue(self.mne.scroll_sensitivity)
+        layout.addRow('horizontal scroll sensitivity',
+                      self.scroll_sensitivity_slider)
+        self.setLayout(layout)
+        self.show()
+
+    def _value_changed(self, new_value, value_name):
+        if value_name == 'downsampling' and new_value == 0:
+            new_value = 'auto'
+
+        setattr(self.mne, value_name, new_value)
+        QSettings().setValue(value_name, new_value)
+
+        if value_name == 'scroll_sensitivity':
+            self.mne.ax_hscroll._update_scroll_sensitivity()
+        else:
+            self.main._redraw()
 
 
 class HelpDialog(_BaseDialog):
@@ -1076,6 +1163,7 @@ class HelpDialog(_BaseDialog):
         scroll_area.setWidget(scroll_widget)
         layout.addWidget(scroll_area)
         self.setLayout(layout)
+        self.show()
 
 
 class ProjDialog(_BaseDialog):
@@ -1111,6 +1199,7 @@ class ProjDialog(_BaseDialog):
         self.toggle_all_bt.clicked.connect(self.toggle_all)
         layout.addWidget(self.toggle_all_bt)
         self.setLayout(layout)
+        self.show()
 
     def _proj_changed(self, state, idx):
         # Only change if proj wasn't already applied.
@@ -1214,6 +1303,7 @@ class SelectionDialog(_BaseDialog):
         layout.addWidget(help_widget)
 
         self.setLayout(layout)
+        self.show()
 
     def _chkbx_changed(self, label):
         # Disable butterfly if checkbox is clicked
@@ -1459,6 +1549,7 @@ class _AnnotEditDialog(_BaseDialog):
         bt_layout.addWidget(cancel_bt)
         layout.addLayout(bt_layout)
         self.setLayout(layout)
+        self.show()
 
     def _mode_changed(self, mode):
         self.current_mode = mode
@@ -1574,7 +1665,7 @@ class AnnotationDock(QDockWidget):
         self.stop_bx.editingFinished.connect(self._stop_changed)
         layout.addWidget(self.stop_bx)
 
-        help_bt = QPushButton(_get_std_icon('SP_MessageBoxQuestion'), 'Help')
+        help_bt = QPushButton(_get_std_icon('SP_DialogHelpButton'), 'Help')
         help_bt.clicked.connect(self._show_help)
         layout.addWidget(help_bt)
 
@@ -1929,16 +2020,29 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Initialize attributes which are only used by pyqtgraph, not by
         # matplotlib and add them to MNEBrowseParams.
-        self.mne.scroll_sensitivity = 100  # Steps per view (relative to time)
+        self.mne.fig_settings = None
         self.mne.decim_data = None
         self.mne.decim_times = None
         self.mne.selection_ypos_dict = dict()
-        self.mne.ds_cache = dict()
         self.mne.enable_precompute = False
         self.mne.data_precomputed = False
         self.mne.show_overview_bar = True
         self.mne.overview_mode = 'channels'
         self.mne.zscore_rgba = None
+        self.mne.antialiasing = False
+        self.mne.scroll_sensitivity = 100  # Steps per view (relative to time)
+        self.mne.downsampling = 'auto'
+        self.mne.ds_method = 'peak'
+
+        # Load from QSettings if available
+        qsettings_params = ['antialiasing', 'scroll_sensitivity',
+                            'downsampling', 'ds_method']
+        for qparam in qsettings_params:
+            qvalue = QSettings().value(qparam, defaultValue=None)
+            if qvalue in ['true', 'false']:
+                qvalue = bool(qvalue)
+            if qvalue is not None:
+                setattr(self.mne, qvalue)
 
         # Initialize channel-colors for faster indexing later
         self.mne.ch_color_assoc = dict()
@@ -1973,8 +2077,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self._setup_annotation_colors()
         self.mne.regions = list()
         self.mne.selected_region = None
-
-        setConfigOption('antialias', self.mne.antialiasing)
 
         # Create centralWidget and layout
         widget = QWidget()
@@ -2174,7 +2276,12 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         atoggle_fullscreen.triggered.connect(self._toggle_fullscreen)
         toolbar.addAction(atoggle_fullscreen)
 
-        ahelp = QAction(_get_std_icon('SP_MessageBoxQuestion'),
+        asettings = QAction(_get_std_icon('SP_FileDialogDetailedView'),
+                            'Settings', parent=self)
+        asettings.triggered.connect(self._toggle_settings_fig)
+        toolbar.addAction(asettings)
+
+        ahelp = QAction(_get_std_icon('SP_DialogHelpButton'),
                         'Shortcuts', parent=self)
         ahelp.triggered.connect(self._toggle_help_fig)
         toolbar.addAction(ahelp)
@@ -2317,6 +2424,11 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'modifier': [None, 'Shift'],
                 'description': ['Toggle Projection Figure',
                                 'Toggle all projections']
+            },
+            'l': {
+                'qt_key': Qt.Key_L,
+                'slot': [self._toggle_antialiasing],
+                'description': ['Toggle Antialiasing']
             },
             'o': {
                 'qt_key': Qt.Key_O,
@@ -2777,72 +2889,61 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         """
         # Get Downsampling-Factor
         # Auto-Downsampling from pyqtgraph
-        if (self.mne.downsampling == 'auto' and
-                all([hasattr(self.mne, a) for a in ['viewbox', 'times']])):
-            vb = self.mne.viewbox
-            if vb is not None:
-                view_range = vb.viewRect()
-            else:
-                view_range = None
-            if view_range is not None and len(self.mne.times) > 1:
-                dx = float(self.mne.times[-1] - self.mne.times[0]) / (
-                        len(self.mne.times) - 1)
-                if dx != 0.0:
-                    x0 = view_range.left() / dx
-                    x1 = view_range.right() / dx
-                    width = vb.width()
-                    if width != 0.0:
-                        # Auto-Downsampling with 5 samples per pixel
-                        self.mne.downsampling = int(max(1, (x1 - x0) /
-                                                        (width * 5)))
-
-        if not isinstance(self.mne.downsampling, int):
-            self.mne.downsampling = 1
+        if self.mne.downsampling == 'auto':
+            ds = 1
+            if all([hasattr(self.mne, a) for a in ['viewbox', 'times']]):
+                vb = self.mne.viewbox
+                if vb is not None:
+                    view_range = vb.viewRect()
+                else:
+                    view_range = None
+                if view_range is not None and len(self.mne.times) > 1:
+                    dx = float(self.mne.times[-1] - self.mne.times[0]) / (
+                            len(self.mne.times) - 1)
+                    if dx != 0.0:
+                        x0 = view_range.left() / dx
+                        x1 = view_range.right() / dx
+                        width = vb.width()
+                        if width != 0.0:
+                            # Auto-Downsampling with 5 samples per pixel
+                            ds = int(max(1, (x1 - x0) / (width * 5)))
+        else:
+            ds = self.mne.downsampling
 
         # Apply Downsampling
-        if self.mne.downsampling not in [None, 1]:
-            ds = self.mne.downsampling
+        if ds not in [None, 1]:
             times = self.mne.times
             data = self.mne.data
             n_ch = data.shape[0]
 
-            if ds in self.mne.ds_cache:
-                # Caching is only activated if downsampling is applied
-                # on the precomputed data.
-                times, data = self.mne.ds_cache[ds]
-            else:
-                if self.mne.ds_method == 'subsample':
-                    times = times[::ds]
-                    data = data[:, ::ds]
+            if self.mne.ds_method == 'subsample':
+                times = times[::ds]
+                data = data[:, ::ds]
 
-                elif self.mne.ds_method == 'mean':
-                    n = len(times) // ds
-                    # start of x-values
-                    # try to select a somewhat centered point
-                    stx = ds // 2
-                    times = times[stx:stx + n * ds:ds]
-                    rs_data = data[:, n * ds].reshape(n_ch, n, ds)
-                    data = rs_data.mean(axis=2)
+            elif self.mne.ds_method == 'mean':
+                n = len(times) // ds
+                # start of x-values
+                # try to select a somewhat centered point
+                stx = ds // 2
+                times = times[stx:stx + n * ds:ds]
+                rs_data = data[:, :n * ds].reshape(n_ch, n, ds)
+                data = rs_data.mean(axis=2)
 
-                elif self.mne.ds_method == 'peak':
-                    n = len(times) // ds
-                    # start of x-values
-                    # try to select a somewhat centered point
-                    stx = ds // 2
+            elif self.mne.ds_method == 'peak':
+                n = len(times) // ds
+                # start of x-values
+                # try to select a somewhat centered point
+                stx = ds // 2
 
-                    x1 = np.empty((n, 2))
-                    x1[:] = times[stx:stx + n * ds:ds, np.newaxis]
-                    times = x1.reshape(n * 2)
+                x1 = np.empty((n, 2))
+                x1[:] = times[stx:stx + n * ds:ds, np.newaxis]
+                times = x1.reshape(n * 2)
 
-                    y1 = np.empty((n_ch, n, 2))
-                    y2 = data[:n * ds].reshape((n_ch, n, ds))
-                    y1[:, :, 0] = y2.max(axis=2)
-                    y1[:, :, 1] = y2.min(axis=2)
-                    data = y1.reshape((n_ch, n * 2))
-
-                # Only cache downsampled data if precomputing is enabled
-                if self.mne.enable_precompute and self.mne.data_precomputed:
-                    self.mne.ds_cache[ds] = times, data
+                y1 = np.empty((n_ch, n, 2))
+                y2 = data[:, :n * ds].reshape((n_ch, n, ds))
+                y1[:, :, 0] = y2.max(axis=2)
+                y1[:, :, 1] = y2.min(axis=2)
+                data = y1.reshape((n_ch, n * 2))
 
             self.mne.times, self.mne.data = times, data
 
@@ -3178,6 +3279,13 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self._init_precompute()
         self._redraw()
 
+    def _toggle_settings_fig(self):
+        if self.mne.fig_settings is None:
+            SettingsDialog(self, name='fig_settings')
+        else:
+            self.mne.fig_help.close()
+            self.mne.fig_help = None
+
     def _toggle_help_fig(self):
         if self.mne.fig_help is None:
             HelpDialog(self, name='fig_help')
@@ -3273,6 +3381,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         else:
             self.showFullScreen()
 
+    def _toggle_antialiasing(self):
+        self.mne.antialiasing = not self.mne.antialiasing
+        self._redraw()
+
     def _toggle_overview_bar(self):
         self.mne.show_overview_bar = not self.mne.show_overview_bar
         self.mne.overview_bar.setVisible(self.mne.show_overview_bar)
@@ -3316,7 +3428,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             title = canvas.title
         else:
             title = None
-        _BaseDialog(self, widget=canvas, title=title, name=name)
+        dlg = _BaseDialog(self, widget=canvas, title=title, name=name)
+        dlg.show()
 
     def _create_ch_context_fig(self, idx):
         fig = super()._create_ch_context_fig(idx)
