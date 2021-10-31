@@ -64,8 +64,8 @@ jobs:
       - name: Run MNE-Tests
         run: |
           mnePath=$(python -c "import mne; print(mne.__path__[0])")
-          cp $mnePath/viz/tests/test_raw.py ./mne_qt_browser/tests/test_raw.py
-          pytest --cov=mne_qt_browser ./mne_qt_browser/tests
+          cp $mnePath/viz/tests/test_raw.py ./tests/test_raw.py
+          pytest --cov=mne_qt_browser ./tests
       - uses: codecov/codecov-action@v1
         if: always()
         name: 'Upload coverage to CodeCov'
