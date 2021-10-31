@@ -65,7 +65,6 @@ jobs:
         run: |
           pwd
           mnePath=$(python -c "import mne; print(mne.__path__[0])")
-          mkdir ./tests
           cp $mnePath/viz/tests/test_raw.py ./tests/test_raw.py
           pytest --cov=mne_qt_browser tests
       - uses: codecov/codecov-action@v1
