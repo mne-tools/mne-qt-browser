@@ -262,7 +262,10 @@ class ChannelAxis(AxisItem):
             ixs.sort()
             tick_strings = np.array(_DATA_CH_TYPES_ORDER_DEFAULT)[ixs]
         else:
-            tick_strings = self.mne.ch_names[self.mne.picks]
+            # Get channel-names and by substracting 1 from tick-values
+            # since the first channel starts at y=1.
+            tick_strings = self.mne.ch_names[
+                self.mne.ch_order[[v - 1 for v in values]]]
 
         return tick_strings
 
