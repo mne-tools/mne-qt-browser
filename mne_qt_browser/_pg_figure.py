@@ -625,17 +625,28 @@ class OverviewBar(QGraphicsView):
 
     def _set_range_from_pos(self, pos):
         x, y = self._mapToData(pos)
-        if x and y:
+        if x == '-offbounds':
+            xmin, xmax = (0, self.mne.duration)
+        elif x == '+offbounds':
+            xmin, xmax = (self.mne.xmax - self.mne.duration, self.mne.xmax)
+        else:
             # Move middle of view range to click position
-            x = x - self.mne.duration / 2
-            y = y - self.mne.n_channels / 2
-            self.mne.plt.setXRange(x, x + self.mne.duration, padding=0)
+            xmin = x - self.mne.duration / 2
+            xmax = xmin + self.mne.duration
+        self.mne.plt.setXRange(xmin, xmax, padding=0)
 
-            if self.mne.fig_selection:
-                self.mne.fig_selection._scroll_to_idx(int(y))
-            else:
-                self.mne.plt.setYRange(y, y + self.mne.n_channels + 1,
-                                       padding=0)
+        if y == '-offbounds':
+            ymin, ymax = (0, self.mne.n_channels + 1)
+        elif y == '+offbounds':
+            ymin, ymax = (self.mne.ymax - self.mne.n_channels - 1,
+                          self.mne.ymax)
+        else:
+            ymin = y - self.mne.n_channels / 2
+            ymax = ymin + self.mne.n_channels + 1
+        if self.mne.fig_selection:
+            self.mne.fig_selection._scroll_to_idx(int(ymin))
+        else:
+            self.mne.plt.setYRange(ymin, ymax, padding=0)
 
     def mousePressEvent(self, event):
         """Customize mouse press events."""
@@ -743,12 +754,22 @@ class OverviewBar(QGraphicsView):
 
     def _mapToData(self, point):
         # Include padding from black frame
-        time_idx = int(len(self.mne.inst.times) * point.x() / self.width())
-        if time_idx < len(self.mne.inst.times):
-            x = self.mne.inst.times[time_idx]
-            y = len(self.mne.ch_order) * point.y() / self.height()
+        xnorm = point.x() / self.width()
+        if xnorm < 0:
+            x = '-offbounds'
+        elif xnorm > 1:
+            x = '+offbounds'
         else:
-            x, y = None, None
+            time_idx = int((len(self.mne.inst.times) - 1) * xnorm)
+            x = self.mne.inst.times[time_idx]
+
+        ynorm = point.y() / self.height()
+        if ynorm < 0:
+            y = '-offbounds'
+        elif ynorm > 1:
+            y = '+offbounds'
+        else:
+            y = len(self.mne.ch_order) * ynorm
 
         return x, y
 
