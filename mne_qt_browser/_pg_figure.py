@@ -2837,15 +2837,20 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if self.mne.annotations_visible:
             for region in self.mne.regions:
                 if self.mne.visible_annotations[region.description]:
-                    if any([xrange[0] < v < xrange[1]
-                            for v in region.getRegion()]):
-                        if region not in self.mne.plt.items:
-                            self.mne.plt.addItem(region)
-                            self.mne.plt.addItem(region.label_item)
-                    else:
+                    rmin, rmax = region.getRegion()
+                    xmin, xmax = xrange
+                    comparisons = [rmin < xmin,
+                                   rmin < xmax,
+                                   rmax < xmin,
+                                   rmax < xmax]
+                    if all(comparisons) or not any(comparisons):
                         if region in self.mne.plt.items:
                             self.mne.plt.removeItem(region)
                             self.mne.plt.removeItem(region.label_item)
+                    else:
+                        if region not in self.mne.plt.items:
+                            self.mne.plt.addItem(region)
+                            self.mne.plt.addItem(region.label_item)
 
     def _yrange_changed(self, _, yrange):
         if not self.mne.butterfly:
