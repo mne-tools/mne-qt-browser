@@ -1055,17 +1055,18 @@ class _BaseDialog(QDialog):
             layout.addWidget(self.widget)
             self.setLayout(layout)
 
-    def show(self):
+    def show(self, center=True):
         if self.modal:
             self.open()
         else:
             super().show()
 
-        # center dialog
-        qr = self.frameGeometry()
-        cp = QDesktopWidget().availableGeometry().center()
-        qr.moveCenter(cp)
-        self.move(qr.topLeft())
+        if center:
+            # center dialog
+            qr = self.frameGeometry()
+            cp = QDesktopWidget().availableGeometry().center()
+            qr.moveCenter(cp)
+            self.move(qr.topLeft())
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
@@ -1324,7 +1325,7 @@ class SelectionDialog(_BaseDialog):
         layout.addWidget(help_widget)
 
         self.setLayout(layout)
-        self.show()
+        self.show(center=False)
 
     def _chkbx_changed(self, label):
         # Disable butterfly if checkbox is clicked
@@ -1348,21 +1349,16 @@ class SelectionDialog(_BaseDialog):
         # "Vertex" is selected, ch_start should be the *first* match;
         # otherwise it should be the *last* match (since "Vertex" is
         # always the first selection group, if it exists).
-        index = 0
         if label == 'Custom':
             self.mne.ch_start = 0
         else:
-            if label != 'Vertex' and 'Vertex' in self.mne.ch_selections:
-                index = -1
-            ch_order = np.concatenate(list(self.mne.ch_selections.values()))
-            ch_start = np.where(ch_order == self.mne.picks[0])[0][index]
-            self.mne.ch_start = ch_start
-
-        # # Adapt ymax to additional channels from 'Custom'
-        # self.mne.ymax = (len(self.mne.ch_order) +
-        #                  len(self.mne.ch_selections['Custom']) + 1)
-        # self.mne.plt.setLimits(yMax=self.mne.ymax)
-        # self.mne.ax_vscroll._update_nchan()
+            all_values = list()
+            for key, chs in self.mne.ch_selections.items():
+                if np.array_equal(chs, self.mne.picks):
+                    self.mne.ch_start = len(all_values)
+                    break
+                else:
+                    all_values = np.concatenate([all_values, chs])
 
         # Apply changes on view
         self.mne.plt.setYRange(self.mne.ch_start,
@@ -1424,13 +1420,13 @@ class SelectionDialog(_BaseDialog):
         self._chkbx_changed(new_label)
 
     def _scroll_to_idx(self, idx):
-        idx = np.clip(idx, 0, self.mne.ymax)
-        if idx >= self.mne.ymax - len(self.mne.ch_selections['Custom']):
-            label = 'Custom'
-        else:
-            pick = np.concatenate(list(self.mne.ch_selections.values()))[idx]
-            label = [sel for sel, picks in self.mne.ch_selections.items()
-                     if pick in picks][0]
+        all_values = list()
+        label = list(self.mne.ch_selections.keys())[0]
+        for key, values in self.mne.ch_selections.items():
+            all_values = np.concatenate([all_values, values])
+            if idx < len(all_values):
+                label = key
+                break
         self._chkbx_changed(label)
 
     def closeEvent(self, event):
@@ -2653,9 +2649,12 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         """Scroll vertically by step."""
         if self.mne.fig_selection is not None:
             if step == '+full':
-                self.mne.fig_selection._scroll_selection(1)
+                step = 1
+            elif step == '-full':
+                step = -1
             else:
-                self.mne.fig_selection._scroll_selection(-1)
+                step = int(step)
+            self.mne.fig_selection._scroll_selection(step)
         else:
             # Get current range and add step to it
             if step == '+full':
