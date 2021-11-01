@@ -12,16 +12,27 @@ Currently, only `Raw.plot()` is supported. For the future support for Epochs
 and ICA-Sources is planned.
 
 ### Usage
-To use the new backend, set `pyqtgraph` as backend with 
+Import mne-python
 ```python
 import mne
+```
+To use the new backend, set `pyqtgraph` as backend with 
+```python
 mne.viz.set_browser_backend("pyqtgraph")
 ```
 or to set it permanently with
 ```python
-import mne
 mne.set_config('MNE_BROWSE_BACKEND', 'pyqtgraph')
 ```
+
+Then load and plot your Raw-data, e.g. by using:
+```python
+raw = mne.io.read_raw("path to your data")
+raw.plot()
+```
+
+If you want to try the browser nust with the sample-dataset from mne-python, 
+run `mne_qt_browser` from the terminal.
 
 ### Report Bugs & Feature Requests
 Please report bugs and feature requests in the [issues](https://github.com/mne-tools/mne-qt-browser/issues) of this repository.
