@@ -2211,6 +2211,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.overview_mode_chkbx.currentTextChanged.connect(
             self._overview_mode_changed)
         self.overview_mode_chkbx.setCurrentIndex(0)
+        # Avoid taking keyboard-focus
+        self.overview_mode_chkbx.setFocusPolicy(Qt.NoFocus)
         overview_mode_layout = QHBoxLayout()
         overview_mode_layout.addWidget(QLabel('Overview-Mode:'))
         overview_mode_layout.addWidget(self.overview_mode_chkbx)
