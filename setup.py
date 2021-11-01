@@ -1,6 +1,6 @@
 import pathlib
 
-from setuptools import setup, find_packages
+from setuptools import setup
 
 readme = (pathlib.Path(__file__).parent / "README.md").read_text()
 
@@ -19,7 +19,7 @@ setup(name='mne-qt-browser',
       classifiers=['Programming Language :: Python :: 3',
                    'License :: OSI Approved :: BSD License',
                    'Operating System :: OS Independent'],
-      packages=find_packages(),
+      packages=['mne_qt_browser'],
       install_requires=['numpy',
                         'scipy',
                         'matplotlib',
@@ -28,6 +28,6 @@ setup(name='mne-qt-browser',
                         'mne',
                         'pyqtgraph',
                         'pyopengl'],
-      entrypoints={'console_scripts':
+      entry_points={'console_scripts':
                        ['mne_qt_browser = mne_qt_browser.__main__:main']}
       )
