@@ -5,7 +5,7 @@ from setuptools import setup
 readme = (pathlib.Path(__file__).parent / "README.md").read_text()
 
 setup(name='mne-qt-browser',
-      version='0.1.0',
+      version='0.1.1',
       maintainer='Martin Schulz',
       maintainer_email='dev@earthman-music.de',
       description='A new backend based on pyqtgraph for the 2D-Data-Browser '
@@ -15,7 +15,7 @@ setup(name='mne-qt-browser',
       license='License :: OSI Approved :: BSD License',
       url='https://github.com/mne-tools/mne-qt-browser',
       download_url='https://github.com/mne-tools/mne-qt-browser/archive/refs'
-                   '/tags/v0.1.0.tar.gz',
+                   '/tags/v0.1.1.tar.gz',
       project_urls={'Bug Tracker':
                     'https://github.com/mne-tools/mne-qt-browser/issues'},
       classifiers=['Programming Language :: Python :: 3',
