@@ -28,7 +28,7 @@ mne.set_config('MNE_BROWSE_BACKEND', 'pyqtgraph')
 Then load and plot your Raw-data, e.g. by using:
 ```python
 raw = mne.io.read_raw("path to your data")
-raw.plot()
+raw.plot(block=True)
 ```
 
 If you want to try the browser nust with the sample-dataset from mne-python, 
