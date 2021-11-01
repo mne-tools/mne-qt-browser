@@ -13,6 +13,8 @@ h_last_time = None
 v_last_time = None
 
 
+# Skip speed-test for CIs
+@pytest.mark.skip
 @pytest.mark.parametrize('benchmark_param', [{'use_opengl': False},
                                              {'use_opengl': True},
                                              {'precompute': False},
