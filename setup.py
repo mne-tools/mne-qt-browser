@@ -14,6 +14,8 @@ setup(name='mne-qt-browser',
       long_description_content_type='text/markdown',
       license='License :: OSI Approved :: BSD License',
       url='https://github.com/mne-tools/mne-qt-browser',
+      download_url='https://github.com/mne-tools/mne-qt-browser/archive/refs'
+                   '/tags/v0.1.0.tar.gz',
       project_urls={'Bug Tracker':
                     'https://github.com/mne-tools/mne-qt-browser/issues'},
       classifiers=['Programming Language :: Python :: 3',
