@@ -1100,7 +1100,7 @@ class SettingsDialog(_BaseDialog):
                                          ' from the visible range.\n'
                                          ' Setting the factor 1 means no '
                                          'downsampling.\n'
-                                         ' Default is "Auto"')
+                                         ' Default is 1.')
         self.downsampling_box.setMinimum(0)
         self.downsampling_box.setSpecialValueText('Auto')
         self.downsampling_box.valueChanged.connect(partial(
@@ -2051,7 +2051,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.zscore_rgba = None
         self.mne.antialiasing = False
         self.mne.scroll_sensitivity = 100  # Steps per view (relative to time)
-        self.mne.downsampling = 'auto'
+        self.mne.downsampling = 1
         self.mne.ds_method = 'peak'
 
         # Load from QSettings if available
