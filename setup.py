@@ -23,8 +23,8 @@ setup(name='mne-qt-browser',
       long_description_content_type='text/markdown',
       license='License :: OSI Approved :: BSD License',
       url='https://github.com/mne-tools/mne-qt-browser',
-      download_url='https://github.com/mne-tools/mne-qt-browser/archive/refs'
-                   '/tags/v0.1.2.tar.gz',
+      download_url=f'https://github.com/mne-tools/mne-qt-browser/archive/refs'
+                   '/tags/v{version}.tar.gz',
       project_urls={'Bug Tracker':
                     'https://github.com/mne-tools/mne-qt-browser/issues'},
       classifiers=['Programming Language :: Python :: 3',
@@ -40,5 +40,5 @@ setup(name='mne-qt-browser',
                         'pyqtgraph',
                         'pyopengl'],
       entry_points={'console_scripts':
-                       ['mne_qt_browser = mne_qt_browser.__main__:main']}
+                       ['mne-qt-browser = mne_qt_browser.__main__:main']}
       )

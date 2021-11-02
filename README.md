@@ -32,7 +32,7 @@ raw.plot(block=True)
 ```
 
 If you want to try the browser with the sample-dataset from mne-python, 
-run `mne_qt_browser` from the terminal.
+run `mne-qt-browser` from the terminal.
 
 ### Report Bugs & Feature Requests
 Please report bugs and feature requests in the [issues](https://github.com/mne-tools/mne-qt-browser/issues) of this repository.
