@@ -4,8 +4,17 @@ from setuptools import setup
 
 readme = (pathlib.Path(__file__).parent / "README.md").read_text()
 
+version = None
+with open(pathlib.Path('mne_qt_browser') / '_version.py', 'r') as fid:
+    for line in (line.strip() for line in fid):
+        if line.startswith('__version__'):
+            version = line.split('=')[1].strip().strip('\'')
+            break
+if version is None:
+    raise RuntimeError('Could not determine version')
+
 setup(name='mne-qt-browser',
-      version='0.1.2',
+      version=version,
       maintainer='Martin Schulz',
       maintainer_email='dev@earthman-music.de',
       description='A new backend based on pyqtgraph for the 2D-Data-Browser '
