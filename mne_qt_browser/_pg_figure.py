@@ -2255,12 +2255,12 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         adecr_time = QAction(_get_std_icon('SP_ArrowDown'),
                              'Time', parent=self)
-        adecr_time.triggered.connect(partial(self.change_duration, -10))
+        adecr_time.triggered.connect(partial(self.change_duration, -0.2))
         toolbar.addAction(adecr_time)
 
         aincr_time = QAction(_get_std_icon('SP_ArrowUp'),
                              'Time', parent=self)
-        aincr_time.triggered.connect(partial(self.change_duration, 10))
+        aincr_time.triggered.connect(partial(self.change_duration, 0.25))
         toolbar.addAction(aincr_time)
 
         adecr_nchan = QAction(_get_std_icon('SP_ArrowDown'),
@@ -2328,18 +2328,18 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             'left': {
                 'alias': '←',
                 'qt_key': Qt.Key_Left,
-                'modifier': [None, 'Ctrl'],
+                'modifier': [None, 'Shift'],
                 'slot': [self.hscroll],
-                'parameter': [-40, -10],
+                'parameter': [-40, '-full'],
                 'description': ['Move left',
                                 'Move left (tiny step)']
             },
             'right': {
                 'alias': '→',
                 'qt_key': Qt.Key_Right,
-                'modifier': [None, 'Ctrl'],
+                'modifier': [None, 'Shift'],
                 'slot': [self.hscroll],
-                'parameter': [40, 10],
+                'parameter': [40, '+full'],
                 'description': ['Move right',
                                 'Move right (tiny step)']
             },
@@ -2360,36 +2360,32 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             'home': {
                 'alias': dur_keys[0],
                 'qt_key': Qt.Key_Home,
-                'modifier': [None, 'Ctrl'],
                 'slot': [self.change_duration],
-                'parameter': [-10, -1],
-                'description': ['Decrease duration',
-                                'Decrease duration (tiny step)']
+                'parameter': [-0.2],
+                'description': ['Decrease duration']
             },
             'end': {
                 'alias': dur_keys[1],
                 'qt_key': Qt.Key_End,
-                'modifier': [None, 'Ctrl'],
                 'slot': [self.change_duration],
-                'parameter': [10, 1],
-                'description': ['Increase duration',
-                                'Increase duration (tiny step)']
+                'parameter': [0.25],
+                'description': ['Increase duration']
             },
             'pagedown': {
-                'alias': ch_keys[1],
-                'qt_key': Qt.Key_PageUp,
-                'modifier': [None, 'Ctrl'],
+                'alias': ch_keys[0],
+                'qt_key': Qt.Key_PageDown,
+                'modifier': [None, 'Shift'],
                 'slot': [self.change_nchan],
-                'parameter': [-10, -1],
+                'parameter': [-1, -10],
                 'description': ['Decrease shown channels',
                                 'Decrease shown channels (tiny step)']
             },
             'pageup': {
-                'alias': ch_keys[0],
-                'qt_key': Qt.Key_PageDown,
-                'modifier': [None, 'Ctrl'],
+                'alias': ch_keys[1],
+                'qt_key': Qt.Key_PageUp,
+                'modifier': [None, 'Shift'],
                 'slot': [self.change_nchan],
-                'parameter': [10, 1],
+                'parameter': [1, 10],
                 'description': ['Increase shown channels',
                                 'Increase shown channels (tiny step)']
             },
@@ -2679,37 +2675,30 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def change_duration(self, step):
         """Change duration by step."""
-        if not self.mne.butterfly:
-            if step == '+full':
-                rel_step = self.mne.duration
-            elif step == '-full':
-                rel_step = - self.mne.duration
-            else:
-                rel_step = (self.mne.duration * step) / (
-                        self.mne.scroll_sensitivity * 2)
-            xmin, xmax = self.mne.viewbox.viewRange()[0]
+        rel_step = self.mne.duration * step
+        xmin, xmax = self.mne.viewbox.viewRange()[0]
 
-            if self.mne.is_epochs:
-                # use the length of one epoch as duration change
-                min_dur = len(self.mne.inst.times) / self.mne.info['sfreq']
-            else:
-                # never show fewer than 3 samples
-                min_dur = 3 * np.diff(self.mne.inst.times[:2])[0]
+        if self.mne.is_epochs:
+            # use the length of one epoch as duration change
+            min_dur = len(self.mne.inst.times) / self.mne.info['sfreq']
+        else:
+            # never show fewer than 3 samples
+            min_dur = 3 * np.diff(self.mne.inst.times[:2])[0]
 
-            xmax += rel_step
+        xmax += rel_step
 
-            if xmax - xmin < min_dur:
-                xmax = xmin + min_dur
+        if xmax - xmin < min_dur:
+            xmax = xmin + min_dur
 
-            if xmax > self.mne.xmax:
-                diff = xmax - self.mne.xmax
-                xmax = self.mne.xmax
-                xmin -= diff
+        if xmax > self.mne.xmax:
+            diff = xmax - self.mne.xmax
+            xmax = self.mne.xmax
+            xmin -= diff
 
-            if xmin < 0:
-                xmin = 0
+        if xmin < 0:
+            xmin = 0
 
-            self.mne.plt.setXRange(xmin, xmax, padding=0)
+        self.mne.plt.setXRange(xmin, xmax, padding=0)
 
     def change_nchan(self, step):
         """Change number of channels by step."""
