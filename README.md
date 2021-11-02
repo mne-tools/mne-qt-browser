@@ -31,7 +31,7 @@ raw = mne.io.read_raw("path to your data")
 raw.plot(block=True)
 ```
 
-If you want to try the browser nust with the sample-dataset from mne-python, 
+If you want to try the browser with the sample-dataset from mne-python, 
 run `mne_qt_browser` from the terminal.
 
 ### Report Bugs & Feature Requests
