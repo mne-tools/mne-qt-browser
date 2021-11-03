@@ -2159,14 +2159,17 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self._add_scalebars()
 
         # Check for OpenGL
-        try:
-            import OpenGL
-            logger.info(f'Using pyopengl with version {OpenGL.__version__}')
-        except ImportError:
-            logger.warning('pyopengl was not found on this device.\n'
-                           'Defaulting to plot without OpenGL with reduced '
-                           'performance.')
-            self.mne.use_opengl = False
+        if self.mne.use_opengl:
+            try:
+                import OpenGL
+                logger.info(
+                    f'Using pyopengl with version {OpenGL.__version__}')
+            except ImportError:
+                logger.warning(
+                    'PyOpenGL was not found and OpenGL can\'t be used!\n'
+                    'Consider installing pyopengl with "pip install pyopengl"'
+                    '.')
+                self.mne.use_opengl = False
 
         # Initialize BrowserView (inherits QGraphicsView)
         view = BrowserView(plt, background='w',
