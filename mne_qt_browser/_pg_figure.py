@@ -46,7 +46,7 @@ from mne.viz.utils import _simplify_float, _merge_annotations
 from mne.annotations import _sync_onset
 from mne.io.pick import (_DATA_CH_TYPES_ORDER_DEFAULT,
                          channel_indices_by_type, _DATA_CH_TYPES_SPLIT)
-from mne.utils import logger, sizeof_fmt
+from mne.utils import logger, sizeof_fmt, warn
 
 try:
     from pytestqt.exceptions import capture_exceptions
@@ -2165,10 +2165,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 logger.info(
                     f'Using pyopengl with version {OpenGL.__version__}')
             except ImportError:
-                logger.warning(
-                    'PyOpenGL was not found and OpenGL can\'t be used!\n'
-                    'Consider installing pyopengl with "pip install pyopengl"'
-                    '.')
+                warn('PyOpenGL was not found and OpenGL can\'t be used!\n'
+                     'Consider installing pyopengl with "pip install pyopengl"'
+                     '.')
                 self.mne.use_opengl = False
 
         # Initialize BrowserView (inherits QGraphicsView)
