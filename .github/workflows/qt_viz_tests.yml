@@ -15,8 +15,12 @@ jobs:
       matrix:
         include:
         - os: ubuntu-latest
+          variables:
+            INSTALL_VARIANT: "[opengl]"
         - os: windows-latest
         - os: macos-latest
+          variables:
+            INSTALL_VARIANT: "[opengl]"
     defaults:
       run:
         shell: bash
@@ -36,7 +40,7 @@ jobs:
           set -e
           python -m pip install --upgrade pip
           git clone -b pg_test --single-branch --depth=1 https://github.com/marsipu/mne-python.git
-          python -m pip install -e ./mne-python
+          python -m pip install -e ./mne-python .$(INSTALL_VARIANT)
           python -m pip install -r requirements.txt -r requirements_testing.txt
       - shell: bash -el {0}
         run: ./tools/get_testing_version.sh
@@ -49,12 +53,6 @@ jobs:
         name: 'Cache testing data'
       - run: python -c 'import mne; print(mne.datasets.testing.data_path(verbose=True))'
         name: 'Download testing data'
-      - run: |
-          set -e
-          git clone --depth 1 git://github.com/pyvista/gl-ci-helpers.git
-          powershell gl-ci-helpers/appveyor/install_opengl.ps1
-        name: Setup OpenGL on Windows
-        if: runner.os == 'Windows'
       - run: ./tools/setup_xvfb.sh
         name: Setup xvfb on Linux
         working-directory: mne-python
