@@ -2162,14 +2162,14 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if self.mne.use_opengl:
             try:
                 import OpenGL
-                logger.info(
-                    f'Using pyopengl with version {OpenGL.__version__}')
-            except ImportError:
+            except (ModuleNotFoundError, ImportError):
                 warn('PyOpenGL was not found and OpenGL can\'t be used!\n'
                      'Consider installing pyopengl with "pip install pyopengl"'
                      '.')
                 self.mne.use_opengl = False
-
+            else:
+                logger.info(
+                    f'Using pyopengl with version {OpenGL.__version__}')
         # Initialize BrowserView (inherits QGraphicsView)
         view = BrowserView(plt, background='w',
                            useOpenGL=self.mne.use_opengl)

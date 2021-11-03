@@ -40,7 +40,7 @@ jobs:
           set -e
           python -m pip install --upgrade pip
           git clone -b pg_test --single-branch --depth=1 https://github.com/marsipu/mne-python.git
-          python -m pip install -e ./mne-python .${INSTALL_VARIANT}
+          python -m pip install -e ./mne-python .$(INSTALL_VARIANT)
           python -m pip install -r requirements.txt -r requirements_testing.txt
       - shell: bash -el {0}
         run: ./tools/get_testing_version.sh
