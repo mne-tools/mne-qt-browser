@@ -6,4 +6,3 @@ mne
 qtpy
 PyQt5
 pyqtgraph
-pyopengl
