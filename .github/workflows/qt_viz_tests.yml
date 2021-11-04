@@ -86,7 +86,7 @@ jobs:
           git clone --depth 1 git://github.com/pyvista/gl-ci-helpers.git
           powershell gl-ci-helpers/appveyor/install_opengl.ps1
         name: Setup OpenGL on Windows
-        if: ${{ runner.os == 'Windows' && matrix.opengl != '' }}
+        if: runner.os == 'Windows'
       - run: ./tools/setup_xvfb.sh
         name: Setup xvfb on Linux
         working-directory: ../mne-python
