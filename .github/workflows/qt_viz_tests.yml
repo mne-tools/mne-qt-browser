@@ -30,21 +30,24 @@ jobs:
         mne: [main, maint/0.24]
         opengl: ['[opengl]']
         python: ['3.9']
+        name: [matrix]
         include:
-          # old/compat
           - os: ubuntu-latest
             mne: main
             opengl: '[opengl]'
             python: '3.7'
-          # no OpenGL
+            name: old 3.7
           - os: ubuntu-latest
             mne: main
             opengl: ''
             python: '3.9'
+            name: no opengl
           - os: ubuntu-latest
             mne: maint/0.24
             opengl: ''
             python: '3.9'
+            name: no opengl
+    name: pytest ${{ matrix.name }} (${{ matrix.os }} MNE ${{ matrix.mne }})
     runs-on: ${{ matrix.os }}
     env:
       MNE_LOGGING_LEVEL: 'warning'
