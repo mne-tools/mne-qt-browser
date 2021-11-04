@@ -46,7 +46,7 @@ from mne.viz.utils import _simplify_float, _merge_annotations
 from mne.annotations import _sync_onset
 from mne.io.pick import (_DATA_CH_TYPES_ORDER_DEFAULT,
                          channel_indices_by_type, _DATA_CH_TYPES_SPLIT)
-from mne.utils import logger, sizeof_fmt, warn
+from mne.utils import logger, sizeof_fmt, warn, get_config
 
 try:
     from pytestqt.exceptions import capture_exceptions
@@ -2159,6 +2159,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self._add_scalebars()
 
         # Check for OpenGL
+        if self.mne.use_opengl is None:  # default: opt-in
+            self.mne.use_opengl = (
+                get_config('MNE_BROWSE_USE_OPENGL', '').lower() == 'true')
         if self.mne.use_opengl:
             try:
                 import OpenGL
