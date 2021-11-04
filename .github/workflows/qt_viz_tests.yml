@@ -8,6 +8,20 @@ on:
       branches: [main]
 
 jobs:
+  flake:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.9
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install flake8
+      - name: Lint with flake8
+        run: flake8
   pytest:
     strategy:
       fail-fast: false
@@ -76,18 +90,3 @@ jobs:
       - uses: codecov/codecov-action@v1
         if: always()
         name: 'Upload coverage to CodeCov'
-
-  flake:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Set up Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: 3.9
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install flake8
-      - name: Lint with flake8
-        run: flake8
