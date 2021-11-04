@@ -84,7 +84,11 @@ jobs:
       - name: Show system information
         run: mne sys_info
       - name: Run MNE-Tests
-        run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ./mne-python/mne/viz/tests/test_raw.py
+        run: |
+          set -e
+          sed -i '/^    error::/a ignore:.*PyOpenGL was not found.*:RuntimeWarning' ./mne-python/mne/conftest.py
+          pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ./mne-python/mne/viz
+        if: matrix.opengl != ''  # required until it's opt-in rather than opt-out! Until then the warning turns into an error...
       - name: Run benchmarks
         run: pytest mne_qt_browser/tests
       - uses: codecov/codecov-action@v1
