@@ -14,7 +14,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         mne: [maint/0.24, main]
-        option: ['[opengl]', '']
+        opengl: ['[opengl]', '']
         python: ['3.9']
         include:  # old/compat
           - os: ubuntu-latest
@@ -28,7 +28,7 @@ jobs:
       PYTHONUNBUFFERED: '1'
       DISPLAY: ':99.0'
       MNE_BRANCH: ${{ matrix.mne }}
-      PIP_OPTION: ${{ matrix.option }}
+      PIP_OPTION: ${{ matrix.opengl }}
       PYTHON_VERSION: ${{ matrix.python }}
     defaults:
       run:
