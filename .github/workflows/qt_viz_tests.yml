@@ -15,6 +15,12 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
         mne: [maint/0.24, main]
         option: ['[opengl]', '']
+        python: ['3.9']
+        include:  # old/compat
+          - os: ubuntu-latest
+          - mne: main
+          - option: '[opengl]'
+          - python: '3.7'
     runs-on: ${{ matrix.os }}
     env:
       MNE_LOGGING_LEVEL: 'warning'
@@ -23,6 +29,7 @@ jobs:
       DISPLAY: ':99.0'
       MNE_BRANCH: ${{ matrix.mne }}
       PIP_OPTION: ${{ matrix.option }}
+      PYTHON_VERSION: ${{ matrix.python }}
     defaults:
       run:
         shell: bash
@@ -31,7 +38,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
-          python-version: 3.9
+          python-version: ${{ env.PYTHON_VERSION }}
       - name: Install dependencies
         run: |  # use MNE main to ensure test files are available
           set -e
@@ -55,7 +62,7 @@ jobs:
           git clone --depth 1 git://github.com/pyvista/gl-ci-helpers.git
           powershell gl-ci-helpers/appveyor/install_opengl.ps1
         name: Setup OpenGL on Windows
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' and matrix.option == '[opengl]'
       - run: ./tools/setup_xvfb.sh
         name: Setup xvfb on Linux
         working-directory: mne-python
@@ -63,12 +70,9 @@ jobs:
       - name: Show system information
         run: mne sys_info
       - name: Run MNE-Tests
-        run: |
-          set -e
-          mnePath=$(python -c "import mne; print(mne.__path__[0])")
-          echo mnePath
-          cp $mnePath/viz/tests/test_raw.py ./mne_qt_browser/tests/test_raw.py
-          pytest --cov=mne_qt_browser mne_qt_browser/tests
+        run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/viz/tests/test_raw.py
+      - name: Run benchmarks
+        run: pytest -sm benchmark mne_qt_browser/tests
       - uses: codecov/codecov-action@v1
         if: always()
         name: 'Upload coverage to CodeCov'
