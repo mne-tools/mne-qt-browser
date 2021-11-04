@@ -14,9 +14,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-        - os: ubuntu-latest
-        - os: windows-latest
-        - os: macos-latest
+        - os: [ubuntu-latest, windows-latest, macos-latest]
+        - mne: [maint/0.24, main]
+        - option: ['[opengl', false]
     defaults:
       run:
         shell: bash
@@ -25,6 +25,8 @@ jobs:
       MKL_NUM_THREADS: '1'
       PYTHONUNBUFFERED: '1'
       DISPLAY: ':99.0'
+      MNE_BRANCH: ${{ matrix.mne }}
+      PIP_OPTION: ${{ matrix.option }}
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python
@@ -35,9 +37,9 @@ jobs:
         run: |  # use MNE main to ensure test files are available
           set -e
           python -m pip install --upgrade pip
-          git clone -b main --single-branch --depth=1 https://github.com/mne-tools/mne-python.git
-          python -m pip install -e .[opengl]
-          python -m pip install -r requirements.txt -r requirements_testing.txt
+          git clone -b ${MNE_BRANCH} --single-branch --depth=1 https://github.com/mne-tools/mne-python.git
+          python -m pip install -qe ./mne-python
+          python -m pip install -ve .${PIP_OPTION} -r requirements.txt -r requirements_testing.txt
       - shell: bash -el {0}
         run: ./tools/get_testing_version.sh
         name: 'Get testing version'
