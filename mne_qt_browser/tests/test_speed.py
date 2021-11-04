@@ -25,14 +25,13 @@ gl_mark = pytest.mark.skipif(
     not has_gl, reason=f'Requires PyOpengl (got {reason})')
 
 
-@pytest.mark.filterwarnings('ignore:.*PyOpenGL was not found.*:RuntimeWarning')
 @pytest.mark.benchmark
 @pytest.mark.parametrize('benchmark_param', [
     pytest.param({'use_opengl': False}, id='use_opengl=False'),
-    pytest.param({'use_opengl': True}, marks=gl_mark, id='use_opengl=True'),
-    pytest.param({'precompute': False}, marks=gl_mark, id='precompute=False'),
-    pytest.param({'precompute': True}, marks=gl_mark, id='precompute=True'),
-    pytest.param({}, marks=gl_mark, id='defaults'),
+    pytest.param({'use_opengl': True}, id='use_opengl=True', marks=gl_mark),
+    pytest.param({'precompute': False}, id='precompute=False'),
+    pytest.param({'precompute': True}, id='precompute=True'),
+    pytest.param({}, id='defaults'),
 ])
 def test_scroll_speed(raw_orig, benchmark_param, store, pg_backend, request):
     """Test the speed of a parameter."""
