@@ -8,23 +8,8 @@ on:
       branches: [main]
 
 jobs:
-  pytest:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-        - os: ubuntu-latest
-        - os: windows-latest
-        - os: macos-latest
-    defaults:
-      run:
-        shell: bash
-    env:
-      MNE_LOGGING_LEVEL: 'warning'
-      MKL_NUM_THREADS: '1'
-      PYTHONUNBUFFERED: '1'
-      DISPLAY: ':99.0'
+  flake:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python
@@ -32,16 +17,66 @@ jobs:
         with:
           python-version: 3.9
       - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install flake8
+      - name: Lint with flake8
+        run: flake8
+  pytest:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu, windows, macos]
+        mne: [main, maint/0.24]
+        opengl: ['[opengl]']
+        python: ['3.9']
+        name: [matrix]
+        include:
+          - os: ubuntu
+            mne: main
+            opengl: '[opengl]'
+            python: '3.7'
+            name: old 3.7
+          - os: ubuntu
+            mne: main
+            opengl: ''
+            python: '3.9'
+            name: no opengl
+          - os: ubuntu
+            mne: maint/0.24
+            opengl: ''
+            python: '3.9'
+            name: no opengl
+    name: pytest ${{ matrix.name }} / ${{ matrix.os }} / MNE ${{ matrix.mne }}
+    runs-on: ${{ matrix.os }}-latest
+    env:
+      MNE_LOGGING_LEVEL: 'warning'
+      MKL_NUM_THREADS: '1'
+      PYTHONUNBUFFERED: '1'
+      DISPLAY: ':99.0'
+      MNE_BRANCH: ${{ matrix.mne }}
+      PIP_OPTION: ${{ matrix.opengl }}
+      PYTHON_VERSION: ${{ matrix.python }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dependencies
         run: |  # use MNE main to ensure test files are available
           set -e
           python -m pip install --upgrade pip
-          git clone -b pg_test --single-branch --depth=1 https://github.com/marsipu/mne-python.git
-          python -m pip install -e ./mne-python .[opengl]
-          python -m pip install -r requirements.txt -r requirements_testing.txt
+          git clone -b ${MNE_BRANCH} --single-branch --depth=1 https://github.com/mne-tools/mne-python.git ../mne-python
+          python -m pip install -qe ../mne-python
+          python -m pip install -ve .${PIP_OPTION} -r requirements.txt -r requirements_testing.txt
       - shell: bash -el {0}
         run: ./tools/get_testing_version.sh
         name: 'Get testing version'
-        working-directory: mne-python
+        working-directory: ../mne-python
       - uses: actions/cache@v2
         with:
           key: ${{ env.TESTING_VERSION }}
@@ -57,30 +92,19 @@ jobs:
         if: runner.os == 'Windows'
       - run: ./tools/setup_xvfb.sh
         name: Setup xvfb on Linux
-        working-directory: mne-python
+        working-directory: ../mne-python
         if: runner.os == 'Linux'
       - name: Show system information
         run: mne sys_info
-      - name: Run MNE-Tests
-        run: |
-          mnePath=$(python -c "import mne; print(mne.__path__[0])")
-          cp $mnePath/viz/tests/test_raw.py ./mne_qt_browser/tests/test_raw.py
-          pytest --cov=mne_qt_browser mne_qt_browser/tests
+      # This can go away if we make OpenGL opt-in in MNE and backport the change
+      # This line also does not work on macOS
+      - run: sed -i'' '/^    error::/a\    ignore:.*PyOpenGL was not found.*:RuntimeWarning' ../mne-python/mne/conftest.py
+        name: Adjust mne conftest
+        if: matrix.opengl == ''
+      - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/viz
+        name: Run MNE-Tests
+      - run: pytest mne_qt_browser/tests
+        name: Run benchmarks
       - uses: codecov/codecov-action@v1
         if: always()
         name: 'Upload coverage to CodeCov'
-
-  flake:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Set up Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: 3.9
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install flake8
-      - name: Lint with flake8
-        run: flake8
