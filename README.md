@@ -52,3 +52,8 @@ To run tests, clone mne-python, and then run the PyQtGraph tests with e.g.:
 ```console
 $ pytest -m pgtest ../mne-python/mne/viz/tests
 ```
+If you do not have OpenGL installed, this will currently raise errors, and
+you'll need to add this line to `mne/conftest.py` after the `error::` line:
+```
+    ignore:.*PyOpenGL was not found.*:RuntimeWarning
+```

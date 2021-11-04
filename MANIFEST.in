@@ -2,4 +2,3 @@ include *.py
 include *.txt
 include *.yml
 recursive-include mne_qt_browser *.py
-exclude mne_qt_browser/tests/test_raw.py

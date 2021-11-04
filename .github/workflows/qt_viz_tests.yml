@@ -83,13 +83,13 @@ jobs:
         if: runner.os == 'Linux'
       - name: Show system information
         run: mne sys_info
-      - name: Run MNE-Tests
-        run: |
+      - run: |
           set -e
-          sed -i '/^    error::/a ignore:.*PyOpenGL was not found.*:RuntimeWarning' ./mne-python/mne/conftest.py
+          sed -i'' '/^    error::/a\    ignore:.*PyOpenGL was not found.*:RuntimeWarning' ../mne-python/mne/conftest.py
           pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ./mne-python/mne/viz
-      - name: Run benchmarks
-        run: pytest mne_qt_browser/tests
+        name: Run MNE-Tests
+      - run: pytest mne_qt_browser/tests
+        name: Run benchmarks
       - uses: codecov/codecov-action@v1
         if: always()
         name: 'Upload coverage to CodeCov'
