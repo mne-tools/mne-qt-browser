@@ -16,7 +16,7 @@ jobs:
         include:
         - os: [ubuntu-latest, windows-latest, macos-latest]
         - mne: [maint/0.24, main]
-        - option: ['[opengl', false]
+        - option: ['[opengl]', '']
     defaults:
       run:
         shell: bash
