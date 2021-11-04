@@ -19,7 +19,7 @@ jobs:
         include:  # old/compat
           - os: ubuntu-latest
             mne: main
-            option: '[opengl]'
+            opengl: '[opengl]'
             python: '3.7'
     runs-on: ${{ matrix.os }}
     env:
