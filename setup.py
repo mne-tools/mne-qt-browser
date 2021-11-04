@@ -37,7 +37,7 @@ setup(name='mne-qt-browser',
                         'PyQt5',
                         'qtpy',
                         'mne',
-                        'pyqtgraph'],
+                        'pyqtgraph>=0.12.3'],
       extras_require={
           'opengl': ['pyopengl'],
       },
