@@ -57,13 +57,13 @@ jobs:
         run: |  # use MNE main to ensure test files are available
           set -e
           python -m pip install --upgrade pip
-          git clone -b ${MNE_BRANCH} --single-branch --depth=1 https://github.com/mne-tools/mne-python.git
+          git clone -b ${MNE_BRANCH} --single-branch --depth=1 https://github.com/mne-tools/mne-python.git ../mne-python
           python -m pip install -qe ./mne-python
           python -m pip install -ve .${PIP_OPTION} -r requirements.txt -r requirements_testing.txt
       - shell: bash -el {0}
         run: ./tools/get_testing_version.sh
         name: 'Get testing version'
-        working-directory: mne-python
+        working-directory: ../mne-python
       - uses: actions/cache@v2
         with:
           key: ${{ env.TESTING_VERSION }}
@@ -79,7 +79,7 @@ jobs:
         if: ${{ runner.os == 'Windows' && matrix.opengl != '' }}
       - run: ./tools/setup_xvfb.sh
         name: Setup xvfb on Linux
-        working-directory: mne-python
+        working-directory: ../mne-python
         if: runner.os == 'Linux'
       - name: Show system information
         run: mne sys_info
