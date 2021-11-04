@@ -1,6 +1,6 @@
-import sys
 from copy import copy
 from functools import partial
+import sys
 
 import numpy as np
 import pytest
@@ -13,13 +13,28 @@ h_last_time = None
 v_last_time = None
 
 
-# Skip speed-test for CIs
-@pytest.mark.skip
-@pytest.mark.parametrize('benchmark_param', [{'use_opengl': False},
-                                             {'use_opengl': True},
-                                             {'precompute': False},
-                                             {'precompute': True}])
-def test_scroll_speed(raw_orig, benchmark_param, browser_backend):
+try:
+    import OpenGL  # noqa
+except Exception as exc:
+    has_gl = False
+    reason = str(exc)
+else:
+    has_gl = True
+    reason = ''
+gl_mark = pytest.mark.skipif(
+    not has_gl, reason=f'Requires PyOpengl (got {reason})')
+
+
+@pytest.mark.filterwarnings('ignore:.*PyOpenGL was not found.*:RuntimeWarning')
+@pytest.mark.benchmark
+@pytest.mark.parametrize('benchmark_param', [
+    pytest.param({'use_opengl': False}, id='use_opengl=False'),
+    pytest.param({'use_opengl': True}, marks=gl_mark, id='use_opengl=True'),
+    pytest.param({'precompute': False}, marks=gl_mark, id='precompute=False'),
+    pytest.param({'precompute': True}, marks=gl_mark, id='precompute=True'),
+    pytest.param({}, marks=gl_mark, id='defaults'),
+])
+def test_scroll_speed(raw_orig, benchmark_param, store, pg_backend, request):
     """Test the speed of a parameter."""
     # Remove spaces and get params with values
     from time import perf_counter
@@ -30,7 +45,7 @@ def test_scroll_speed(raw_orig, benchmark_param, browser_backend):
     hscroll_diffs = list()
     vscroll_diffs = list()
 
-    def _ininite_hscroll(pg_fig):
+    def _initiate_hscroll(pg_fig):
         global bm_count
         global hscroll_dir
         global vscroll_dir
@@ -77,9 +92,8 @@ def test_scroll_speed(raw_orig, benchmark_param, browser_backend):
 
             h_mean_fps = 1 / np.median(hscroll_diffs)
             v_mean_fps = 1 / np.median(vscroll_diffs)
-            print(f'The median FPS for {benchmark_param} is:\n'
-                  f'Horizontal = {h_mean_fps:.3f} FPS\n'
-                  f'Vertical = {v_mean_fps:.3f} FPS')
+            store[request.node.callspec.id] = dict(
+                h=h_mean_fps, v=v_mean_fps)
             pg_fig.close()
 
     app = QApplication.instance()
@@ -88,7 +102,7 @@ def test_scroll_speed(raw_orig, benchmark_param, browser_backend):
     fig = raw_orig.plot(duration=5, n_channels=40,
                         show=False, block=False, **benchmark_param)
     timer = QTimer()
-    timer.timeout.connect(partial(_ininite_hscroll, fig))
+    timer.timeout.connect(partial(_initiate_hscroll, fig))
     timer.start(0)
 
     fig.show()
