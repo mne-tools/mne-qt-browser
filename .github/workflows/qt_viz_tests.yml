@@ -9,17 +9,13 @@ on:
 
 jobs:
   pytest:
-    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-        - os: [ubuntu-latest, windows-latest, macos-latest]
-        - mne: [maint/0.24, main]
-        - option: ['[opengl]', '']
-    defaults:
-      run:
-        shell: bash
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        mne: [maint/0.24, main]
+        option: ['[opengl]', '']
+    runs-on: ${{ matrix.os }}
     env:
       MNE_LOGGING_LEVEL: 'warning'
       MKL_NUM_THREADS: '1'
@@ -27,6 +23,9 @@ jobs:
       DISPLAY: ':99.0'
       MNE_BRANCH: ${{ matrix.mne }}
       PIP_OPTION: ${{ matrix.option }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python
