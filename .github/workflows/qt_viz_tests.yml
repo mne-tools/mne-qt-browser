@@ -27,14 +27,24 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        mne: [maint/0.24, main]
-        opengl: ['[opengl]', '']
+        mne: [main, maint/0.24]
+        opengl: ['[opengl]']
         python: ['3.9']
-        include:  # old/compat
+        include:
+          # old/compat
           - os: ubuntu-latest
             mne: main
             opengl: '[opengl]'
             python: '3.7'
+          # no OpenGL
+          - os: ubuntu-latest
+            mne: main
+            opengl: ''
+            python: '3.9'
+          - os: ubuntu-latest
+            mne: maint/0.24
+            opengl: ''
+            python: '3.9'
     runs-on: ${{ matrix.os }}
     env:
       MNE_LOGGING_LEVEL: 'warning'
@@ -83,10 +93,12 @@ jobs:
         if: runner.os == 'Linux'
       - name: Show system information
         run: mne sys_info
-      - run: |
-          set -e
-          sed -i'' '/^    error::/a\    ignore:.*PyOpenGL was not found.*:RuntimeWarning' ../mne-python/mne/conftest.py
-          pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/viz
+      # This can go away if we make OpenGL opt-in in MNE and backport the change
+      # This line also does not work on macOS
+      - run: sed -i'' '/^    error::/a\    ignore:.*PyOpenGL was not found.*:RuntimeWarning' ../mne-python/mne/conftest.py
+        name: Adjust mne conftest
+        if: matrix.opengl == ''
+      - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/viz
         name: Run MNE-Tests
       - run: pytest mne_qt_browser/tests
         name: Run benchmarks
