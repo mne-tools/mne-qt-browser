@@ -18,9 +18,9 @@ jobs:
         python: ['3.9']
         include:  # old/compat
           - os: ubuntu-latest
-          - mne: main
-          - option: '[opengl]'
-          - python: '3.7'
+            mne: main
+            option: '[opengl]'
+            python: '3.7'
     runs-on: ${{ matrix.os }}
     env:
       MNE_LOGGING_LEVEL: 'warning'
