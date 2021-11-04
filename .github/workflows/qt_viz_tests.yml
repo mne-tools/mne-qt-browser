@@ -35,8 +35,8 @@ jobs:
         run: |  # use MNE main to ensure test files are available
           set -e
           python -m pip install --upgrade pip
-          git clone -b pg_test --single-branch --depth=1 https://github.com/marsipu/mne-python.git
-          python -m pip install -e ./mne-python .[opengl]
+          git clone -b main --single-branch --depth=1 https://github.com/mne-tools/mne-python.git
+          python -m pip install -e .[opengl]
           python -m pip install -r requirements.txt -r requirements_testing.txt
       - shell: bash -el {0}
         run: ./tools/get_testing_version.sh
@@ -63,7 +63,9 @@ jobs:
         run: mne sys_info
       - name: Run MNE-Tests
         run: |
+          set -e
           mnePath=$(python -c "import mne; print(mne.__path__[0])")
+          echo mnePath
           cp $mnePath/viz/tests/test_raw.py ./mne_qt_browser/tests/test_raw.py
           pytest --cov=mne_qt_browser mne_qt_browser/tests
       - uses: codecov/codecov-action@v1
