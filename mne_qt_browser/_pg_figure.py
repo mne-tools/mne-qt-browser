@@ -2171,7 +2171,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             except (ModuleNotFoundError, ImportError):
                 warn('PyOpenGL was not found and OpenGL can\'t be used!\n'
                      'Consider installing pyopengl with "pip install pyopengl"'
-                     '.')
+                     'or set "use_opengl" to False to avoid this warning.')
                 self.mne.use_opengl = False
             else:
                 logger.info(
