@@ -10,6 +10,7 @@ import gc
 import math
 import platform
 import sys
+from ast import literal_eval
 from collections import OrderedDict
 from contextlib import contextmanager
 from functools import partial
@@ -1151,7 +1152,6 @@ class SettingsDialog(_BaseDialog):
             new_value = 'auto'
 
         setattr(self.mne, value_name, new_value)
-        QSettings().setValue(value_name, new_value)
 
         if value_name == 'scroll_sensitivity':
             self.mne.ax_hscroll._update_scroll_sensitivity()
@@ -2025,6 +2025,22 @@ class _PGMetaClass(type(BrowserBase), type(QMainWindow)):
     pass
 
 
+# Those are the settings which are stored on each device
+# depending on its operating system with QSettings.
+
+qsettings_params = {
+    # Antialiasing (works with/without OpenGL, integer because QSettings
+    # can't handle booleans)
+    'antialiasing': False,
+    # Steps per view (relative to time)
+    'scroll_sensitivity': 100,
+    # Downsampling-Factor (or 'auto', see SettingsDialog for details)
+    'downsampling': 1,
+    # Downsampling-Method (set SettingsDialog for details)
+    'ds_method': 'peak'
+    }
+
+
 class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     """A PyQtGraph-backend for 2D data browsing."""
     gotClosed = pyqtSignal()
@@ -2049,20 +2065,21 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.show_overview_bar = True
         self.mne.overview_mode = 'channels'
         self.mne.zscore_rgba = None
-        self.mne.antialiasing = False
-        self.mne.scroll_sensitivity = 100  # Steps per view (relative to time)
-        self.mne.downsampling = 1
-        self.mne.ds_method = 'peak'
 
         # Load from QSettings if available
-        qsettings_params = ['antialiasing', 'scroll_sensitivity',
-                            'downsampling', 'ds_method']
         for qparam in qsettings_params:
-            qvalue = QSettings().value(qparam, defaultValue=None)
-            if qvalue in ['true', 'false']:
-                qvalue = bool(qvalue)
-            if qvalue is not None:
-                setattr(self.mne, qvalue)
+            default = qsettings_params[qparam]
+            qvalue = QSettings().value(qparam, defaultValue=default)
+            # QSettings may alter types depending on OS
+            if not isinstance(qvalue, type(default)):
+                try:
+                    qvalue = literal_eval(qvalue)
+                except (SyntaxError, ValueError):
+                    if qvalue in ['true', 'false']:
+                        qvalue = bool(qvalue)
+                    else:
+                        qvalue = default
+            setattr(self.mne, qparam, qvalue)
 
         # Initialize channel-colors for faster indexing later
         self.mne.ch_color_assoc = dict()
@@ -2168,7 +2185,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             except (ModuleNotFoundError, ImportError):
                 warn('PyOpenGL was not found and OpenGL can\'t be used!\n'
                      'Consider installing pyopengl with "pip install pyopengl"'
-                     '.')
+                     'or set "use_opengl" to False to avoid this warning.')
                 self.mne.use_opengl = False
             else:
                 logger.info(
@@ -3657,6 +3674,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         """Customize close event."""
         event.accept()
         if hasattr(self, 'mne'):
+            # Save settings going into QSettings.
+            for qsetting in qsettings_params:
+                value = getattr(self.mne, qsetting)
+                QSettings().setValue(qsetting, value)
             self._close(event)
         self.gotClosed.emit()
 
@@ -3721,6 +3742,8 @@ def _init_browser(**kwargs):
     setConfigOption('enableExperimental', True)
 
     app = mkQApp()
+    app.setApplicationName('MNE-Python')
+    app.setOrganizationName('MNE')
     _init_qt_resources()
     kind = 'bigsur-' if platform.mac_ver()[0] >= '10.16' else ''
     app.setWindowIcon(QIcon(f":/mne-{kind}icon.png"))
