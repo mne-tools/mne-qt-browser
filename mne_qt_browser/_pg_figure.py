@@ -10,6 +10,7 @@ import gc
 import math
 import platform
 import sys
+from ast import literal_eval
 from collections import OrderedDict
 from contextlib import contextmanager
 from functools import partial
@@ -2026,8 +2027,18 @@ class _PGMetaClass(type(BrowserBase), type(QMainWindow)):
 
 # Those are the settings which are stored on each device
 # depending on its operating system with QSettings.
-qsettings_params = ['antialiasing', 'scroll_sensitivity',
-                    'downsampling', 'ds_method']
+
+qsettings_params = {
+    # Antialiasing (works with/without OpenGL, integer because QSettings
+    # can't handle booleans)
+    'antialiasing': 0,
+    # Steps per view (relative to time)
+    'scroll_sensitivity': 100,
+    # Downsampling-Factor (or 'auto', see SettingsDialog for details)
+    'downsampling': 1,
+    # Downsampling-Method (set SettingsDialog for details)
+    'ds_method':'peak'
+    }
 
 
 class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
@@ -2054,18 +2065,18 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.show_overview_bar = True
         self.mne.overview_mode = 'channels'
         self.mne.zscore_rgba = None
-        self.mne.antialiasing = False
-        self.mne.scroll_sensitivity = 100  # Steps per view (relative to time)
-        self.mne.downsampling = 1
-        self.mne.ds_method = 'peak'
 
         # Load from QSettings if available
         for qparam in qsettings_params:
-            qvalue = QSettings().value(qparam, defaultValue=None)
-            if qvalue in ['true', 'false']:
-                qvalue = bool(qvalue)
-            if qvalue is not None:
-                setattr(self.mne, qparam, qvalue)
+            default = qsettings_params[qparam]
+            qvalue = QSettings().value(qparam, defaultValue=default)
+            # QSettings may alter types depending on OS
+            if not isinstance(qvalue, type(default)):
+                try:
+                    qvalue = literal_eval(qvalue)
+                except (SyntaxError, ValueError):
+                    qvalue = default
+            setattr(self.mne, qparam, qvalue)
 
         # Initialize channel-colors for faster indexing later
         self.mne.ch_color_assoc = dict()
