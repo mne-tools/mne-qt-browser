@@ -7,7 +7,7 @@
 import pytest
 
 from mne.viz import use_browser_backend
-
+from mne.conftest import raw_orig, pg_backend, garbage_collect  # noqa: F401
 
 _store = dict()
 
