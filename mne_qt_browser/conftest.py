@@ -7,13 +7,13 @@
 import pytest
 
 from mne.viz import use_browser_backend
-from mne.conftest import raw_orig, pg_backend, garbage_collect  # noqa: F401
+from mne.conftest import (raw_orig, pg_backend, garbage_collect)  # noqa: F401
 
 _store = dict()
 
 
 @pytest.fixture
-def browser_backend(garbage_collect):
+def browser_backend(garbage_collect):  # noqa: F811
     """Parametrizes the name of the browser backend."""
     with use_browser_backend('pyqtgraph') as backend:
         yield backend
