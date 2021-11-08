@@ -2079,6 +2079,11 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.overview_mode = 'channels'
         self.mne.zscore_rgba = None
 
+        # Limit Thread-Count to 1 to avoid race-condition e.g. when the same
+        # raw is plotted multiple times and multiple instances access the same
+        # data.
+        QThreadPool().globalInstance().setMaxThreadCount(1)
+
         # Load from QSettings if available
         for qparam in qsettings_params:
             default = qsettings_params[qparam]
