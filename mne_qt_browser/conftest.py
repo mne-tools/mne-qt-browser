@@ -7,7 +7,6 @@
 import pytest
 
 from mne.viz import use_browser_backend
-from mne.conftest import *  # noqa: F401, F403
 
 
 _store = dict()
