@@ -2031,13 +2031,13 @@ class _PGMetaClass(type(BrowserBase), type(QMainWindow)):
 qsettings_params = {
     # Antialiasing (works with/without OpenGL, integer because QSettings
     # can't handle booleans)
-    'antialiasing': 0,
+    'antialiasing': False,
     # Steps per view (relative to time)
     'scroll_sensitivity': 100,
     # Downsampling-Factor (or 'auto', see SettingsDialog for details)
     'downsampling': 1,
     # Downsampling-Method (set SettingsDialog for details)
-    'ds_method':'peak'
+    'ds_method': 'peak'
     }
 
 
@@ -2075,7 +2075,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 try:
                     qvalue = literal_eval(qvalue)
                 except (SyntaxError, ValueError):
-                    qvalue = default
+                    if qvalue in ['true', 'false']:
+                        qvalue = bool(qvalue)
+                    else:
+                        qvalue = default
             setattr(self.mne, qparam, qvalue)
 
         # Initialize channel-colors for faster indexing later
