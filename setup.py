@@ -41,7 +41,4 @@ setup(name='mne-qt-browser',
       extras_require={
           'opengl': ['pyopengl'],
       },
-      entry_points={'console_scripts': [
-          'mne-qt-browser = mne_qt_browser.__main__:main']
-      },
       )
