@@ -1151,7 +1151,6 @@ class SettingsDialog(_BaseDialog):
             new_value = 'auto'
 
         setattr(self.mne, value_name, new_value)
-        QSettings().setValue(value_name, new_value)
 
         if value_name == 'scroll_sensitivity':
             self.mne.ax_hscroll._update_scroll_sensitivity()
@@ -2025,6 +2024,12 @@ class _PGMetaClass(type(BrowserBase), type(QMainWindow)):
     pass
 
 
+# Those are the settings which are stored on each device
+# depending on its operating system with QSettings.
+qsettings_params = ['antialiasing', 'scroll_sensitivity',
+                    'downsampling', 'ds_method']
+
+
 class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     """A PyQtGraph-backend for 2D data browsing."""
     gotClosed = pyqtSignal()
@@ -2055,14 +2060,12 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.ds_method = 'peak'
 
         # Load from QSettings if available
-        qsettings_params = ['antialiasing', 'scroll_sensitivity',
-                            'downsampling', 'ds_method']
         for qparam in qsettings_params:
             qvalue = QSettings().value(qparam, defaultValue=None)
             if qvalue in ['true', 'false']:
                 qvalue = bool(qvalue)
             if qvalue is not None:
-                setattr(self.mne, qvalue)
+                setattr(self.mne, qparam, qvalue)
 
         # Initialize channel-colors for faster indexing later
         self.mne.ch_color_assoc = dict()
@@ -3657,6 +3660,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         """Customize close event."""
         event.accept()
         if hasattr(self, 'mne'):
+            # Save settings going into QSettings.
+            for qsetting in qsettings_params:
+                value = getattr(self.mne, qsetting)
+                QSettings().setValue(qsetting, value)
             self._close(event)
         self.gotClosed.emit()
 
@@ -3721,6 +3728,8 @@ def _init_browser(**kwargs):
     setConfigOption('enableExperimental', True)
 
     app = mkQApp()
+    app.setApplicationName('MNE-Python')
+    app.setOrganizationName('MNE')
     _init_qt_resources()
     kind = 'bigsur-' if platform.mac_ver()[0] >= '10.16' else ''
     app.setWindowIcon(QIcon(f":/mne-{kind}icon.png"))
