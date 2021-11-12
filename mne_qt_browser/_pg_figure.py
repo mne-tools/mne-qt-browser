@@ -2140,11 +2140,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         plt.hideButtons()
         # Configure XY-Range
         self.mne.xmax = self.mne.inst.times[-1]
-        plt.setXRange(0, self.mne.duration, padding=0)
         # Add one empty line as padding at top (y=0).
         # Negative Y-Axis to display channels from top.
         self.mne.ymax = len(self.mne.ch_order) + 1
-        plt.setYRange(0, self.mne.n_channels + 1, padding=0)
         plt.setLimits(xMin=0, xMax=self.mne.xmax,
                       yMin=0, yMax=self.mne.ymax)
         # Connect Signals from PlotItem
@@ -2336,6 +2334,11 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             overview_bar=overview_bar, fig_annotation=fig_annotation,
             toolbar=toolbar
         )
+
+        # Set Start-Range (after all necessary elements are initialized)
+        plt.setXRange(self.mne.t_start, self.mne.t_start + self.mne.duration,
+                      padding=0)
+        plt.setYRange(0, self.mne.n_channels + 1, padding=0)
 
         # Set Size
         width = int(self.mne.figsize[0] * self.logicalDpiX())
