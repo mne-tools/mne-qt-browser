@@ -2207,25 +2207,20 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Add Combobox to select Overview-Mode
         self.overview_mode_chkbx = QComboBox()
         self.overview_mode_chkbx.addItems(['channels'])
-        self.overview_mode_chkbx.setToolTip('<h2>Overview-Modes</h2>'
-                                            '<ul>'
-                                            '<li>channels:<br> '
-                                            'Display each channel with its '
-                                            'channel-type color.</li>'
-                                            '<li>zscore:<br>'
-                                            ' Display the zscore for the '
-                                            'data from each channel across '
-                                            'time. '
-                                            'Red indicates high z - scores,'
-                                            'Blue indicates low z - scores '
-                                            ' whilethe boundaries of the '
-                                            ' color gradientare defined by '
-                                            ' the minimum/maximum z-score. '
-                                            'This only works if precompute '
-                                            'is set to "True" or it is '
-                                            'enabled with "auto" and enough '
-                                            'free RAM.</li>'
-                                            '</ul>')
+        tooltip = (
+            '<h2>Overview-Modes</h2>'
+            '<ul>'
+            '<li>channels:<br> '
+            'Display each channel with its channel-type color.</li>'
+            '<li>zscore:<br>'
+            'Display the zscore for the data from each channel across time. '
+            'Red indicates high zscores, blue indicates low zscores, '
+            'and the boundaries of the color gradient are defined by the '
+            'minimum/maximum zscore. '
+            'This only works if precompute is set to "True", or if it is '
+            'enabled with "auto" and enough free RAM is available.</li>'
+            '</ul>')
+        self.overview_mode_chkbx.setToolTip(tooltip)
         if self.mne.enable_precompute:
             self.overview_mode_chkbx.addItems(['zscore'])
         self.overview_mode_chkbx.currentTextChanged.connect(
