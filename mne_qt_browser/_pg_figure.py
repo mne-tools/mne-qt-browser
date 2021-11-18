@@ -27,7 +27,7 @@ from PyQt5.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
                              QDockWidget, QDoubleSpinBox, QFormLayout,
                              QGridLayout, QHBoxLayout, QInputDialog,
                              QLabel, QMainWindow, QMessageBox,
-                             QPushButton, QScrollBar, QWidget,
+                             QPushButton, QScrollBar, QToolTip, QWidget,
                              QStyleOptionSlider, QStyle,
                              QApplication, QGraphicsView, QProgressBar,
                              QVBoxLayout, QLineEdit, QCheckBox, QScrollArea,
@@ -2015,6 +2015,19 @@ class LoadRunner(QRunnable):
         self.sigs.loadingFinished.emit()
 
 
+class _FastToolTipComboBox(QComboBox):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setMouseTracking(True)
+
+    def setToolTip(self, tooltip):
+        self.tooltip = tooltip
+
+    def enterEvent(self, event):
+        QToolTip.showText(event.globalPos(), self.tooltip)
+        super().enterEvent(event)
+
+
 class _PGMetaClass(type(BrowserBase), type(QMainWindow)):
     """Class is necessary to prevent a metaclass conflict.
 
@@ -2205,7 +2218,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         layout.addWidget(overview_bar, 2, 0, 1, 2)
 
         # Add Combobox to select Overview-Mode
-        self.overview_mode_chkbx = QComboBox()
+        self.overview_mode_chkbx = _FastToolTipComboBox()
         self.overview_mode_chkbx.addItems(['channels'])
         tooltip = (
             '<h2>Overview-Modes</h2>'
