@@ -36,11 +36,11 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
                        LinearRegionItem, PlotCurveItem, PlotItem,
                        Point, TextItem, ViewBox, mkBrush,
-                       mkPen, setConfigOption, mkQApp, mkColor)
+                       mkPen, setConfigOption, mkColor)
 from scipy.stats import zscore
 
 from mne.viz import plot_sensors
-from mne.viz.backends._utils import _init_qt_resources
+from mne.viz.backends._utils import _init_mne_qtapp
 from mne.viz._figure import BrowserBase
 from mne.viz.utils import _simplify_float, _merge_annotations
 from mne.annotations import _sync_onset
@@ -3138,7 +3138,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _get_zscore(self, data):
         # Reshape data to reasonable size for display
-        max_pixel_width = QApplication.desktop().screenGeometry().width()
+        if QApplication.desktop() is None:
+            max_pixel_width = 1920  # defaul=FHD
+        else:
+            max_pixel_width = QApplication.desktop().screenGeometry().width()
         collapse_by = data.shape[1] // max_pixel_width
         data = data[:, :max_pixel_width * collapse_by]
         if collapse_by > 0:
@@ -3765,12 +3768,7 @@ def _mouseDrag(widget, positions, button, modifier=None):
 def _init_browser(**kwargs):
     setConfigOption('enableExperimental', True)
 
-    app = mkQApp()
-    app.setApplicationName('MNE-Python')
-    app.setOrganizationName('MNE')
-    _init_qt_resources()
-    kind = 'bigsur-' if platform.mac_ver()[0] >= '10.16' else ''
-    app.setWindowIcon(QIcon(f":/mne-{kind}icon.png"))
+    _init_mne_qtapp(pg_app=True)
     browser = PyQtGraphBrowser(**kwargs)
 
     return browser
