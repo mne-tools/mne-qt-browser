@@ -3754,18 +3754,10 @@ def _mouseDrag(widget, positions, button, modifier=None):
     _mouseRelease(widget, positions[-1], button, modifier)
 
 
-def _app_cleanup():
-    if QThreadPool().globalInstance().activeThreadCount() > 0:
-        logger.info('Waiting for loading threads to finish...')
-        QThreadPool().globalInstance().waitForDone()
-        logger.info('...done!')
-
-
 def _init_browser(**kwargs):
     setConfigOption('enableExperimental', True)
 
     app = mkQApp()
-    app.aboutToQuit.connect(_app_cleanup)
     app.setApplicationName('MNE-Python')
     app.setOrganizationName('MNE')
     _init_qt_resources()
