@@ -48,6 +48,8 @@ from mne.io.pick import (_DATA_CH_TYPES_ORDER_DEFAULT,
                          channel_indices_by_type, _DATA_CH_TYPES_SPLIT)
 from mne.utils import logger, sizeof_fmt, warn, get_config
 
+from . import _browser_instances
+
 try:
     from pytestqt.exceptions import capture_exceptions
 except ImportError:
@@ -2053,6 +2055,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def __init__(self, **kwargs):
         self.backend_name = 'pyqtgraph'
 
+        # Add to list to keep a reference and avoid premature
+        # garbage-collection.
+        _browser_instances.append(self)
+
         BrowserBase.__init__(self, **kwargs)
         QMainWindow.__init__(self)
 
@@ -3690,6 +3696,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 logger.info('Waiting for Loading-Thread to finish... '
                             f'(max. {wait_time} sec)')
                 self.load_thread.wait(int(wait_time * 1e3))
+
+        # Remove self from browser_instances in globals
+        _browser_instances.remove(self)
 
         self.gotClosed.emit()
         # Make sure PyQtBrowser gets deleted after it was closed.
