@@ -3692,6 +3692,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 self.load_thread.wait(int(wait_time * 1e3))
 
         self.gotClosed.emit()
+        # Make sure PyQtBrowser gets deleted after it was closed.
+        self.deleteLater()
 
 
 def _get_n_figs():
