@@ -3698,7 +3698,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 self.load_thread.wait(int(wait_time * 1e3))
 
         # Remove self from browser_instances in globals
-        _browser_instances.remove(self)
+        if self in _browser_instances:
+            _browser_instances.remove(self)
 
         self.gotClosed.emit()
         # Make sure PyQtBrowser gets deleted after it was closed.
