@@ -3684,7 +3684,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 QSettings().setValue(qsetting, value)
             self._close(event)
 
-        if self.load_thread is not None:
+        if hasattr(self, 'load_thread') and self.load_thread is not None:
             if self.load_thread.isRunning():
                 wait_time = 10  # max. waiting time in seconds
                 logger.info('Waiting for Loading-Thread to finish... '
