@@ -119,7 +119,6 @@ except (ImportError, ModuleNotFoundError):
             kind = 'bigsur-' if platform.mac_ver()[0] >= '10.16' else ''
             app.setWindowIcon(QIcon(f":/mne-{kind}icon.png"))
 
-
         return app
 
 
