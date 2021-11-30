@@ -86,7 +86,7 @@ def _get_color(color_spec):
         color = mkColor(color_spec)
     except ValueError:
         raise ValueError(f'"{color_spec}" is not a valid matplotlib '
-                         f'color-specifier!')
+                         f'color-specifier!') from None
 
     return color
 
