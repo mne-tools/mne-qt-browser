@@ -85,9 +85,8 @@ def _get_color(color_spec):
     try:
         color = mkColor(color_spec)
     except ValueError:
-        logger.critical(f'{color_spec} is not a valid matplotlib '
-                        f'color-specifier!')
-        return mkColor((0, 0, 0, 128))
+        raise ValueError(f'"{color_spec}" is not a valid matplotlib '
+                         f'color-specifier!')
 
     return color
 
