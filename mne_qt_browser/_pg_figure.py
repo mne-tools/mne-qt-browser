@@ -17,9 +17,8 @@ from functools import partial
 from os.path import getsize
 
 import numpy as np
-from PyQt5.QtCore import (QEvent, Qt, pyqtSignal, QRunnable,
-                          QObject, QThreadPool, QRectF, QLineF, QPoint,
-                          QSettings)
+from PyQt5.QtCore import (QEvent, QThread, Qt, pyqtSignal, QRectF, QLineF,
+                          QPoint, QSettings)
 from PyQt5.QtGui import (QFont, QIcon, QPixmap, QTransform,
                          QMouseEvent, QImage, QPainter, QPainterPath)
 from PyQt5.QtTest import QTest
@@ -48,6 +47,8 @@ from mne.annotations import _sync_onset
 from mne.io.pick import (_DATA_CH_TYPES_ORDER_DEFAULT,
                          channel_indices_by_type, _DATA_CH_TYPES_SPLIT)
 from mne.utils import logger, sizeof_fmt, warn, get_config
+
+from . import _browser_instances
 
 try:
     from pytestqt.exceptions import capture_exceptions
@@ -1948,22 +1949,16 @@ class BrowserView(GraphicsView):
         self.sigSceneMouseMoved.emit(ev.pos())
 
 
-class LoadRunnerSignals(QObject):
-    """Signals for the LoadRunner (QRunnables aren't QObjects)."""
-
+class LoadThread(QThread):
+    """A worker object for precomputing in a separate QThread."""
     loadProgress = pyqtSignal(int)
     processText = pyqtSignal(str)
     loadingFinished = pyqtSignal()
-
-
-class LoadRunner(QRunnable):
-    """A QRunnable for precomputing in a separate QThread."""
 
     def __init__(self, browser):
         super().__init__()
         self.browser = browser
         self.mne = browser.mne
-        self.sigs = LoadRunnerSignals()
 
     def run(self):
         """Load and process data in a separate QThread."""
@@ -1992,27 +1987,26 @@ class LoadRunner(QRunnable):
                 else:
                     data = np.concatenate((data, data_chunk), axis=1)
                     times = np.concatenate((times, times_chunk), axis=0)
-                self.sigs.loadProgress.emit(n + 1)
+                self.loadProgress.emit(n + 1)
         else:
             self.browser._load_data()
-            self.sigs.loadProgress.emit(n_chunks)
+            self.loadProgress.emit(n_chunks)
 
         picks = self.browser.mne.ch_order
         # Deactive remove dc because it will be removed for visible range
         stashed_remove_dc = self.mne.remove_dc
         self.mne.remove_dc = False
-        data = self.browser._process_data(data, 0, len(data), picks,
-                                          self.sigs)
+        data = self.browser._process_data(data, 0, len(data), picks, self)
         self.mne.remove_dc = stashed_remove_dc
 
         self.browser.mne.global_data = data
         self.browser.mne.global_times = times
 
         # Calculate Z-Scores
-        self.sigs.processText.emit('Calculating Z-Scores...')
+        self.processText.emit('Calculating Z-Scores...')
         self.browser._get_zscore(data)
 
-        self.sigs.loadingFinished.emit()
+        self.loadingFinished.emit()
 
 
 class _FastToolTipComboBox(QComboBox):
@@ -2061,6 +2055,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def __init__(self, **kwargs):
         self.backend_name = 'pyqtgraph'
 
+        # Add to list to keep a reference and avoid premature
+        # garbage-collection.
+        _browser_instances.append(self)
+
         BrowserBase.__init__(self, **kwargs)
         QMainWindow.__init__(self)
 
@@ -2069,6 +2067,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Initialize attributes which are only used by pyqtgraph, not by
         # matplotlib and add them to MNEBrowseParams.
+        self.load_thread = None
         self.mne.fig_settings = None
         self.mne.decim_data = None
         self.mne.decim_times = None
@@ -3030,12 +3029,12 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # Start precompute thread
             self.mne.load_progressbar.show()
             self.mne.load_prog_label.show()
-            load_runner = LoadRunner(self)
-            load_runner.sigs.loadProgress.connect(self.mne.
+            self.load_thread = LoadThread(self)
+            self.load_thread.loadProgress.connect(self.mne.
                                                   load_progressbar.setValue)
-            load_runner.sigs.processText.connect(self._show_process)
-            load_runner.sigs.loadingFinished.connect(self._precompute_finished)
-            QThreadPool.globalInstance().start(load_runner)
+            self.load_thread.processText.connect(self._show_process)
+            self.load_thread.loadingFinished.connect(self._precompute_finished)
+            self.load_thread.start()
 
     def _check_space_for_precompute(self):
         try:
@@ -3690,7 +3689,21 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 value = getattr(self.mne, qsetting)
                 QSettings().setValue(qsetting, value)
             self._close(event)
+
+        if hasattr(self, 'load_thread') and self.load_thread is not None:
+            if self.load_thread.isRunning():
+                wait_time = 10  # max. waiting time in seconds
+                logger.info('Waiting for Loading-Thread to finish... '
+                            f'(max. {wait_time} sec)')
+                self.load_thread.wait(int(wait_time * 1e3))
+
+        # Remove self from browser_instances in globals
+        if self in _browser_instances:
+            _browser_instances.remove(self)
+
         self.gotClosed.emit()
+        # Make sure PyQtBrowser gets deleted after it was closed.
+        self.deleteLater()
 
 
 def _get_n_figs():
