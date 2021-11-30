@@ -66,7 +66,7 @@ name = 'pyqtgraph'
 # This can be removed when mne==1.0 is released.
 try:
     from mne.viz.backends._utils import _init_mne_qtapp
-except (ImportError, ModuleNotFoundError):
+except ImportError:
     from mne.viz.backends._utils import _init_qt_resources
 
     def _init_mne_qtapp(enable_icon=True, pg_app=False):
