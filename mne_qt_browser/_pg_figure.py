@@ -3198,7 +3198,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def _get_zscore(self, data):
         # Reshape data to reasonable size for display
         if QApplication.desktop() is None:
-            max_pixel_width = 3840  # defaul=UHD
+            max_pixel_width = 3840  # default=UHD
         else:
             max_pixel_width = QApplication.desktop().screenGeometry().width()
         collapse_by = data.shape[1] // max_pixel_width
