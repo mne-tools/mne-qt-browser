@@ -46,7 +46,7 @@ from mne.viz.utils import _simplify_float, _merge_annotations
 from mne.annotations import _sync_onset
 from mne.io.pick import (_DATA_CH_TYPES_ORDER_DEFAULT,
                          channel_indices_by_type, _DATA_CH_TYPES_SPLIT)
-from mne.utils import logger, sizeof_fmt, warn, get_config
+from mne.utils import _to_rgb, logger, sizeof_fmt, warn, get_config
 
 from . import _browser_instances
 
@@ -69,6 +69,29 @@ def _get_std_icon(icon_name):
         getattr(QStyle, icon_name))
 
 
+def _get_color(color_spec):
+    """Wraps mkColor to accept all possible matplotlib color-specifiers."""
+    try:
+        # Convert matplotlib color-names if possible
+        color_spec = _to_rgb(color_spec, alpha=True)
+    except ValueError:
+        pass
+
+    # Convert tuples of floats from 0-1 to 0-255 for pyqtgraph
+    if (isinstance(color_spec, tuple) and
+            all([i <= 1 for i in color_spec])):
+        color_spec = tuple([int(i * 255) for i in color_spec])
+
+    try:
+        color = mkColor(color_spec)
+    except ValueError:
+        logger.critical(f'{color_spec} is not a valid matplotlib '
+                        f'color-specifier!')
+        return mkColor((0, 0, 0, 128))
+
+    return color
+
+
 class RawTraceItem(PlotCurveItem):
     """Graphics-Object for single data trace."""
 
@@ -89,9 +112,9 @@ class RawTraceItem(PlotCurveItem):
     def update_color(self):
         """Update the color of the trace (depending on ch_type and bad)."""
         if self.isbad and not self.mne.butterfly:
-            self.setPen(self.mne.ch_color_bad)
+            self.setPen(_get_color(self.mne.ch_color_bad))
         else:
-            self.setPen(self.color)
+            self.setPen(_get_color(self.color))
 
     def update_range_idx(self):
         """Should be updated when view-range or ch_idx changes."""
@@ -276,13 +299,13 @@ class ChannelAxis(AxisItem):
         super().drawPicture(p, axisSpec, tickSpecs, textSpecs)
         for rect, flags, text in textSpecs:
             if self.mne.butterfly and self.mne.fig_selection is not None:
-                p.setPen(mkPen('black'))
+                p.setPen(_get_color('black'))
             elif self.mne.butterfly:
-                p.setPen(mkPen(self.mne.ch_color_dict[text]))
+                p.setPen(_get_color(self.mne.ch_color_dict[text]))
             elif text in self.mne.info['bads']:
-                p.setPen(mkPen(self.mne.ch_color_bad))
+                p.setPen(_get_color(self.mne.ch_color_bad))
             else:
-                p.setPen(mkPen(self.mne.ch_color_assoc[text]))
+                p.setPen(_get_color(self.mne.ch_color_assoc[text]))
             self.ch_texts[text] = ((rect.left(), rect.left() + rect.width()),
                                    (rect.top(), rect.top() + rect.height()))
             p.drawText(rect, int(flags), text)
@@ -528,7 +551,7 @@ class OverviewBar(QGraphicsView):
             if ch_name in add_chs:
                 start = self._mapFromData(0, line_idx)
                 stop = self._mapFromData(self.mne.inst.times[-1], line_idx)
-                pen = mkColor(self.mne.ch_color_bad)
+                pen = _get_color(self.mne.ch_color_bad)
                 line = self.scene().addLine(QLineF(start, stop), pen)
                 line.setZValue(2)
                 self.bad_line_dict[ch_name] = line
@@ -540,7 +563,7 @@ class OverviewBar(QGraphicsView):
         if self.mne.event_nums is not None and self.mne.events_visible:
             for ev_t, ev_id in zip(self.mne.event_times, self.mne.event_nums):
                 color_name = self.mne.event_color_dict[ev_id]
-                color = mkColor(color_name)
+                color = _get_color(color_name)
                 color.setAlpha(100)
                 pen = mkPen(color)
                 top_left = self._mapFromData(ev_t, 0)
@@ -573,7 +596,7 @@ class OverviewBar(QGraphicsView):
             duration = annotations.duration[annot_idx]
             description = annotations.description[annot_idx]
             color_name = self.mne.annotation_segment_colors[description]
-            color = mkColor(color_name)
+            color = _get_color(color_name)
             color.setAlpha(150)
             pen = mkPen(color)
             brush = mkBrush(color)
@@ -731,7 +754,7 @@ class OverviewBar(QGraphicsView):
                                      2, 4))
             for line_idx, ch_idx in enumerate(self.mne.ch_order):
                 ch_type = self.mne.ch_types[ch_idx]
-                color = mkColor(self.mne.ch_color_dict[ch_type])
+                color = _get_color(self.mne.ch_color_dict[ch_type])
                 channel_rgba[line_idx, :] = color.getRgb()
 
             channel_rgba = np.require(channel_rgba, np.uint8, 'C')
@@ -1471,9 +1494,9 @@ class AnnotRegion(LinearRegionItem):
     def update_color(self):
         """Update color of annotation-region."""
         color_string = self.mne.annotation_segment_colors[self.description]
-        self.base_color = mkColor(color_string)
-        self.hover_color = mkColor(color_string)
-        self.text_color = mkColor(color_string)
+        self.base_color = _get_color(color_string)
+        self.hover_color = _get_color(color_string)
+        self.text_color = _get_color(color_string)
         self.base_color.setAlpha(75)
         self.hover_color.setAlpha(150)
         self.text_color.setAlpha(255)
@@ -1695,7 +1718,7 @@ class AnnotationDock(QDockWidget):
 
     def _add_description_to_cmbx(self, description):
         color_pixmap = QPixmap(25, 25)
-        color = mkColor(self.mne.annotation_segment_colors[description])
+        color = _get_color(self.mne.annotation_segment_colors[description])
         color.setAlpha(75)
         color_pixmap.fill(color)
         color_icon = QIcon(color_pixmap)
@@ -1854,7 +1877,7 @@ class AnnotationDock(QDockWidget):
             curr_col = self.mne.annotation_segment_colors[curr_descr]
         else:
             curr_col = None
-        color = QColorDialog.getColor(mkColor(curr_col), self,
+        color = QColorDialog.getColor(_get_color(curr_col), self,
                                       f'Choose color for {curr_descr}!')
         if color.isValid():
             self.mne.annotation_segment_colors[curr_descr] = color
