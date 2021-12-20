@@ -1528,7 +1528,8 @@ class AnnotRegion(LinearRegionItem):
 
     def __init__(self, mne, description, values):
         super().__init__(values=values, orientation='vertical',
-                         movable=True, swapMode='sort')
+                         movable=True, swapMode='sort',
+                         bounds=(0, mne.xmax))
         # Set default z-value to 0 to be behind other items in scene
         self.setZValue(0)
 
