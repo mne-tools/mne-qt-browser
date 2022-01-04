@@ -33,7 +33,8 @@ from PyQt5.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
                              QGraphicsLineItem, QGraphicsScene, QTextEdit,
                              QSizePolicy, QSpinBox, QDesktopWidget, QSlider)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
-from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
+from pyqtgraph import (AxisItem, GraphicsView, GridItem, InfLineLabel,
+                       InfiniteLine,
                        LinearRegionItem, PlotCurveItem, PlotItem,
                        Point, TextItem, ViewBox, mkBrush,
                        mkPen, setConfigOption, mkColor)
@@ -2289,9 +2290,16 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         for ch_idx in self.mne.picks:
             self._add_trace(ch_idx)
 
-        # Add events (add all once, since their representation is simple
-        # they shouldn't have a big impact on performance when showing them
-        # is handled by QGraphicsView).
+        # Initialize Epochs Grid
+        if self.mne.is_epochs:
+            grid_pen = mkPen(color='k', width=2, style=Qt.DashLine)
+            for x_grid in self.mne.boundary_times[1:-1]:
+                grid_line = InfiniteLine(pos=x_grid,
+                                         pen=grid_pen,
+                                         movable=False)
+                plt.addItem(grid_line)
+
+        # Add events
         if self.mne.event_nums is not None:
             self.mne.events_visible = True
             for ev_time, ev_id in zip(self.mne.event_times,
