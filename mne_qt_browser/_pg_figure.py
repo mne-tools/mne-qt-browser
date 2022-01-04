@@ -33,8 +33,7 @@ from PyQt5.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
                              QGraphicsLineItem, QGraphicsScene, QTextEdit,
                              QSizePolicy, QSpinBox, QDesktopWidget, QSlider)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
-from pyqtgraph import (AxisItem, GraphicsView, GridItem, InfLineLabel,
-                       InfiniteLine,
+from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
                        LinearRegionItem, PlotCurveItem, PlotItem,
                        Point, TextItem, ViewBox, mkBrush,
                        mkPen, setConfigOption, mkColor)
@@ -594,11 +593,16 @@ class OverviewBar(QGraphicsView):
             self.annotations_rect_dict = dict()
             self.update_annotations()
 
+        # VLine
+        self.v_line = None
+        self.update_vline()
+
         # View Range
         self.viewrange_rect = None
         self.update_viewrange()
 
     def update_epoch_lines(self):
+        """Update representation of epoch lines."""
         epoch_line_pen = mkPen(color='k', width=1)
         for t in self.mne.boundary_times[1:-1]:
             top_left = self._mapFromData(t, 0)
@@ -630,6 +634,7 @@ class OverviewBar(QGraphicsView):
                 self.bad_line_dict.pop(ch_name)
 
     def update_events(self):
+        """Update representation of events."""
         if self.mne.event_nums is not None and self.mne.events_visible:
             for ev_t, ev_id in zip(self.mne.event_times, self.mne.event_nums):
                 color_name = self.mne.event_color_dict[ev_id]
@@ -701,7 +706,30 @@ class OverviewBar(QGraphicsView):
                                                  len(self.mne.ch_order))
                 rect.setRect(QRectF(top_left, bottom_right))
 
+    def update_vline(self):
+        """Update representation of vline."""
+        if self.mne.is_epochs:
+            # VLine representation not useful in epochs-mode
+            pass
+        # Add VLine-Representation
+        elif self.mne.vline is not None:
+            value = self.mne.vline.value()
+            top_left = self._mapFromData(value, 0)
+            bottom_right = self._mapFromData(value, len(self.mne.ch_order))
+            line = QLineF(top_left, bottom_right)
+            if self.v_line is None:
+                pen = mkPen('g')
+                self.v_line = self.scene().addLine(line, pen)
+                self.v_line.setZValue(1)
+            else:
+                self.v_line.setLine(line)
+        # Remove VLine-Representation
+        elif self.v_line is not None:
+            self.scene().removeItem(self.v_line)
+            self.v_line = None
+
     def update_viewrange(self):
+        """Update representation of viewrange."""
         if self.mne.butterfly:
             top_left = self._mapFromData(self.mne.t_start, 0)
             bottom_right = self._mapFromData(self.mne.t_start +
@@ -778,12 +806,7 @@ class OverviewBar(QGraphicsView):
         # Resize backgounrd
         self._fit_bg_img()
 
-        # ToDo: This could be improved a lot with view-transforms e.g. with
-        #   QGraphicsView.fitInView. The margin-problem could be approached
-        #   with https://stackoverflow.com/questions/19640642/
-        #   qgraphicsview-fitinview-margins, but came with other problems.
         # Resize Graphics Items (assuming height never changes)
-
         # Resize bad_channels
         for bad_ch_line in self.bad_line_dict.values():
             current_line = bad_ch_line.line()
@@ -815,6 +838,13 @@ class OverviewBar(QGraphicsView):
                 bottom_right = self._mapFromData(plot_onset + duration,
                                                  len(self.mne.ch_order))
                 annot_rect.setRect(QRectF(top_left, bottom_right))
+
+        # Update vline
+        if all([i is not None for i in [self.v_line, self.mne.vline]]):
+            value = self.mne.vline.value()
+            top_left = self._mapFromData(value, 0)
+            bottom_right = self._mapFromData(value, len(self.mne.ch_order))
+            self.v_line.setLine(QLineF(top_left, bottom_right))
 
         # Update viewrange-rect
         top_left = self._mapFromData(self.mne.t_start, self.mne.ch_start)
@@ -988,34 +1018,44 @@ class VLineLabel(InfLineLabel):
     def __init__(self, vline):
         super().__init__(vline, text='{value:.3f} s', position=0.98,
                          fill='g', color='b', movable=True)
-        self.vline = vline
         self.cursorOffset = None
 
     def mouseDragEvent(self, ev):
         """Customize mouse drag events."""
         if self.movable and ev.button() == Qt.LeftButton:
             if ev.isStart():
-                self.vline.moving = True
-                self.cursorOffset = (self.vline.pos() -
+                self.line.moving = True
+                self.cursorOffset = (self.line.pos() -
                                      self.mapToView(ev.buttonDownPos()))
             ev.accept()
 
-            if not self.vline.moving:
+            if not self.line.moving:
                 return
 
-            self.vline.setPos(self.cursorOffset + self.mapToView(ev.pos()))
-            self.vline.sigDragged.emit(self)
+            self.line.setPos(self.cursorOffset + self.mapToView(ev.pos()))
+            self.line.sigDragged.emit(self)
             if ev.isFinish():
-                self.vline.moving = False
-                self.vline.sigPositionChangeFinished.emit(self)
+                self.line.moving = False
+                self.line.sigPositionChangeFinished.emit(self)
+
+    def valueChanged(self):
+        # Alter method to consider epochs
+        if not self.isVisible():
+            return
+        value = self.line.value()
+        if self.line.mne.is_epochs:
+            value = value % self.mne.epoch_dur
+        self.setText(self.format.format(value=value))
+        self.updatePosition()
 
 
 class VLine(InfiniteLine):
     """Marker to be placed inside the Trace-Plot."""
 
-    def __init__(self, pos, bounds):
+    def __init__(self, mne, pos, bounds):
         super().__init__(pos, pen='g', hoverPen='y',
                          movable=True, bounds=bounds)
+        self.mne = mne
         self.label = VLineLabel(self)
 
 
@@ -2225,6 +2265,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.show_overview_bar = True
         self.mne.overview_mode = 'channels'
         self.mne.zscore_rgba = None
+        if self.mne.is_epochs:
+            self.mne.epoch_dur = np.diff(self.mne.boundary_times[:2])[0]
 
         # Load from QSettings if available
         for qparam in qsettings_params:
@@ -2367,6 +2409,16 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         ax_vscroll = ChannelScrollBar(self.mne)
         layout.addWidget(ax_vscroll, 0, 1)
 
+        # Initialize VLine
+        self.mne.vline = None
+        self.mne.vline_visible = False
+
+        # Initialize crosshair (as in pyqtgraph example)
+        self.mne.crosshair_enabled = False
+        self.mne.crosshair_h = None
+        self.mne.crosshair = None
+        view.sigSceneMouseMoved.connect(self._mouse_moved)
+
         # OverviewBar
         overview_bar = OverviewBar(self)
         layout.addWidget(overview_bar, 2, 0, 1, 2)
@@ -2420,16 +2472,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Initialize annotations
         self._change_annot_mode()
-
-        # Initialize VLine
-        self.mne.vline = None
-        self.mne.vline_visible = False
-
-        # Initialize crosshair (as in pyqtgraph example)
-        self.mne.crosshair_enabled = False
-        self.mne.crosshair_h = None
-        self.mne.crosshair = None
-        view.sigSceneMouseMoved.connect(self._mouse_moved)
 
         # Initialize Toolbar
         toolbar = self.addToolBar('Tools')
@@ -2910,7 +2952,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.plt.setYRange(ymin, ymax, padding=0)
 
     def _remove_vline(self):
-        if self.mne.vline:
+        if self.mne.vline is not None:
             if self.mne.is_epochs:
                 for vline in self.mne.vline:
                     self.mne.plt.removeItem(vline)
@@ -2919,14 +2961,51 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         self.mne.vline = None
         self.mne.vline_visible = False
+        self.mne.overview_bar.update_vline()
 
-    def _add_vline(self, pos):
-        # Remove vline if already shown
-        self._remove_vline()
+    def _get_vline_times(self, t):
+        rel_time = t % self.mne.epoch_dur
+        abs_time = self.mne.times[0]
+        ts = np.arange(
+                self.mne.n_epochs) * self.mne.epoch_dur + abs_time + rel_time
 
-        self.mne.vline = VLine(pos, bounds=(0, self.mne.xmax))
-        self.mne.plt.addItem(self.mne.vline)
+        return ts
+
+    def _vline_slot(self, orig_vline):
+        if self.mne.is_epochs:
+            ts = self._get_vline_times(orig_vline.value())
+            for vl, xt in zip(self.mne.vline, ts):
+                if vl != orig_vline:
+                    vl.setPos(xt)
+        self.mne.overview_bar.update_vline()
+
+    def _add_vline(self, t):
+        if self.mne.is_epochs:
+            ts = self._get_vline_times(t)
+
+            # Add vline if None
+            if self.mne.vline is None:
+                self.mne.vline = list()
+                for xt in ts:
+                    vl = VLine(self.mne, xt, bounds=(0, self.mne.xmax))
+                    # Should only be emitted when dragged
+                    vl.sigPositionChangeFinished.connect(self._vline_slot)
+                    self.mne.vline.append(vl)
+                    self.mne.plt.addItem(vl)
+            else:
+                for vl, xt in zip(self.mne.vline, ts):
+                    vl.setPos(xt)
+        else:
+            if self.mne.vline is None:
+                self.mne.vline = VLine(self.mne, t, bounds=(0, self.mne.xmax))
+                self.mne.vline.sigPositionChangeFinished.connect(
+                        self._vline_slot)
+                self.mne.plt.addItem(self.mne.vline)
+            else:
+                self.mne.vline.setPos(t)
+
         self.mne.vline_visible = True
+        self.mne.overview_bar.update_vline()
 
     def _mouse_moved(self, pos):
         """Show Crosshair if enabled at mouse move."""
