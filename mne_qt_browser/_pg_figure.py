@@ -585,13 +585,28 @@ class OverviewBar(QGraphicsView):
         self.event_line_dict = dict()
         self.update_events()
 
-        # Annotations
-        self.annotations_rect_dict = dict()
-        self.update_annotations()
+        if self.mne.is_epochs:
+            # Epochs Lines
+            self.epoch_line_dict = dict()
+            self.update_epoch_lines()
+        else:
+            # Annotations
+            self.annotations_rect_dict = dict()
+            self.update_annotations()
 
         # View Range
         self.viewrange_rect = None
         self.update_viewrange()
+
+    def update_epoch_lines(self):
+        epoch_line_pen = mkPen(color='k', width=1)
+        for t in self.mne.boundary_times[1:-1]:
+            top_left = self._mapFromData(t, 0)
+            bottom_right = self._mapFromData(t, len(self.mne.ch_order))
+            line = self.scene().addLine(QLineF(top_left, bottom_right),
+                                        epoch_line_pen)
+            line.setZValue(1)
+            self.epoch_line_dict[t] = line
 
     def update_bad_channels(self):
         """Update representation of bad channels."""
@@ -768,6 +783,7 @@ class OverviewBar(QGraphicsView):
         #   with https://stackoverflow.com/questions/19640642/
         #   qgraphicsview-fitinview-margins, but came with other problems.
         # Resize Graphics Items (assuming height never changes)
+
         # Resize bad_channels
         for bad_ch_line in self.bad_line_dict.values():
             current_line = bad_ch_line.line()
@@ -781,16 +797,24 @@ class OverviewBar(QGraphicsView):
             bottom_right = self._mapFromData(ev_t, len(self.mne.ch_order))
             event_line.setLine(QLineF(top_left, bottom_right))
 
-        # Resize annotation-rects
-        for annot_dict in self.annotations_rect_dict.values():
-            annot_rect = annot_dict['rect']
-            plot_onset = annot_dict['plot_onset']
-            duration = annot_dict['duration']
+        if self.mne.is_epochs:
+            # Resize epoch lines
+            for epo_t, epoch_line in self.epoch_line_dict.items():
+                top_left = self._mapFromData(epo_t, 0)
+                bottom_right = self._mapFromData(epo_t,
+                                                 len(self.mne.ch_order))
+                epoch_line.setLine(QLineF(top_left, bottom_right))
+        else:
+            # Resize annotation-rects
+            for annot_dict in self.annotations_rect_dict.values():
+                annot_rect = annot_dict['rect']
+                plot_onset = annot_dict['plot_onset']
+                duration = annot_dict['duration']
 
-            top_left = self._mapFromData(plot_onset, 0)
-            bottom_right = self._mapFromData(plot_onset + duration,
-                                             len(self.mne.ch_order))
-            annot_rect.setRect(QRectF(top_left, bottom_right))
+                top_left = self._mapFromData(plot_onset, 0)
+                bottom_right = self._mapFromData(plot_onset + duration,
+                                                 len(self.mne.ch_order))
+                annot_rect.setRect(QRectF(top_left, bottom_right))
 
         # Update viewrange-rect
         top_left = self._mapFromData(self.mne.t_start, self.mne.ch_start)
