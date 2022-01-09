@@ -167,7 +167,10 @@ class RawTraceItem(PlotCurveItem):
 
         self.set_ch_idx(ch_idx)
         self.update_color()
-        self.update_data()
+        self.update_scale()
+        # Avoid calling self.update_data() twice on initialization
+        if self.mne.clipping is None:
+            self.update_data()
 
     def update_color(self):
         """Update the color of the trace (depending on ch_type and bad)."""
@@ -191,6 +194,14 @@ class RawTraceItem(PlotCurveItem):
             self.ypos = self.mne.butterfly_type_order.index(self.ch_type) + 1
         else:
             self.ypos = self.range_idx + self.mne.ch_start + 1
+
+    def update_scale(self):
+        transform = QTransform()
+        transform.scale(1., self.mne.scale_factor)
+        self.setTransform(transform)
+
+        if self.mne.clipping is not None:
+            self.update_data()
 
     def set_ch_idx(self, ch_idx):
         """Sets the channel index and all deriving indices."""
@@ -2735,12 +2746,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             }
         }
 
-    def _get_scale_transform(self):
-        transform = QTransform()
-        transform.scale(1, self.mne.scale_factor)
-
-        return transform
-
     def _update_yaxis_labels(self):
         self.mne.channel_axis.repaint()
 
@@ -2848,13 +2853,14 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def scale_all(self, step):
         """Scale all traces by multiplying with step."""
         self.mne.scale_factor *= step
-        transform = self._get_scale_transform()
+
+        # Reapply clipping if necessary
+        if self.mne.clipping is not None:
+            self._update_data()
 
         # Scale Traces (by scaling the Item, not the data)
         for line in self.mne.traces:
-            line.setTransform(transform)
-            if self.mne.clipping is not None:
-                line.update_data()
+            line.update_scale()
 
         # Update Scalebars
         self._update_scalebar_values()
