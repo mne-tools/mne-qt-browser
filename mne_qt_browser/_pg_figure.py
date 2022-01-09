@@ -153,8 +153,11 @@ class RawTraceItem(PlotCurveItem):
     """Graphics-Object for single data trace."""
 
     def __init__(self, mne, ch_idx, child=False):
-        super().__init__(clickable=True)
+        super().__init__()
         self.mne = mne
+
+        # Set clickable with small area around trace to make clicking easier.
+        self.setClickable(True, 12)
 
         # Set default z-value to 1 to be before other items in scene
         self.setZValue(1)
