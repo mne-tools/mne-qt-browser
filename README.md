@@ -14,11 +14,15 @@ and ICA-Sources is planned.
 
 ## Installation
 Install **full MNE-Python** with the instructions provided [here](https://mne.tools/stable/install/mne_python.html#d-plotting-and-source-analysis) or install **minimal MNE-Python** with
-
+### pip
 ```
 pip install mne matplotlib mne-qt-browser
 ```
-
+or
+### conda
+```
+conda install -c conda-forge mne-base matplotlib mne-qt-browser
+```
 ## Usage
 
 Import mne-python
