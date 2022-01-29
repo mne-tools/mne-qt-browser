@@ -152,9 +152,10 @@ def _get_color(color_spec):
 class RawTraceItem(PlotCurveItem):
     """Graphics-Object for single data trace."""
 
-    def __init__(self, mne, ch_idx, child=False):
+    def __init__(self, main, ch_idx, child_idx=None, parent_trace=None):
         super().__init__()
-        self.mne = mne
+        self.main = main
+        self.mne = main.mne
 
         # Set clickable with small area around trace to make clicking easier.
         self.setClickable(True, 12)
@@ -162,22 +163,98 @@ class RawTraceItem(PlotCurveItem):
         # Set default z-value to 1 to be before other items in scene
         self.setZValue(1)
 
-        if self.mne.is_epochs and not child:
-            self.bad_trace = RawTraceItem(self.mne, ch_idx, child=True)
+        # General attributes
+        # The ch_idx is the index of the channel represented by this trace
+        # in the channel-order from the unchanged instance (which also picks
+        # refer to).
+        self.ch_idx = None
+        # The range_idx is the index of the channel represented by this trace
+        # in the shown range.
+        self.range_idx = None
+        # The order_idx is the index of the channel represented by this trace
+        # in the channel-order (defined e.g. by group_by).
+        self.order_idx = None
+        # Name of the channel the trace represents.
+        self.ch_name = None
+        # Indicates if trace is bad.
+        self.isbad = None
+        # Channel-type of trace.
+        self.ch_type = None
+        # Color-specifier (will be converted into QColor-Object in
+        # update_color).
+        self.color = None
 
+        # Attributes for epochs-mode
+        # Index of child if child.
+        self.child_idx = child_idx
+        # Reference to parent if child.
+        self.parent_trace = parent_trace
+
+        # Only for parent traces
+        if self.parent_trace is None:
+            # References to children
+            self.child_traces = list()
+            # Colors of trace in viewrange
+            self.trace_colors = None
+
+        # set attributes
         self.set_ch_idx(ch_idx)
         self.update_color()
         self.update_scale()
         # Avoid calling self.update_data() twice on initialization
+        # (because of update_scale()).
         if self.mne.clipping is None:
             self.update_data()
 
     def update_color(self):
-        """Update the color of the trace (depending on ch_type and bad)."""
-        if self.isbad and not self.mne.butterfly:
-            self.setPen(_get_color(self.mne.ch_color_bad))
+        """Update the color of the trace."""
+
+        # Epochs
+        if self.mne.is_epochs:
+            # Add child traces if shown trace needs to have multiple colors
+            # (PlotCurveItem only supports one color per object).
+            # There always as many color-specific traces added depending
+            # on the whole time range of the instance regardless of the
+            # currently visible time range (to avoid checking for new colors
+            # while scrolling horizontally).
+
+            # Only for parent trace
+            if self.parent_trace is None:
+                self.trace_colors = np.unique(
+                        self.mne.epoch_color_ref[self.ch_idx], axis=0)
+                n_childs = len(self.child_traces)
+                trace_diff = len(self.trace_colors) - n_childs - 1
+                # Add child traces if necessary
+                if trace_diff > 0:
+                    for cix in range(n_childs, n_childs + trace_diff):
+                        child = RawTraceItem(self.main, self.ch_idx,
+                                             child_idx=cix, parent_trace=self)
+                        self.child_traces.append(child)
+                        self.mne.plt.addItem(child)
+                elif trace_diff < 0:
+                    for _ in range(abs(trace_diff)):
+                        rm_trace = self.child_traces.pop()
+                        self.mne.plt.removeItem(rm_trace)
+                # Set parent color
+                self.color = self.trace_colors[0]
+
+                # Set children colors
+                for child in self.child_traces:
+                    child.update_color()
+
+            # Only for child trace
+            else:
+                self.color = self.parent_trace.trace_colors[
+                    self.child_idx + 1]
+
+        # Raw/ICA
         else:
-            self.setPen(_get_color(self.color))
+            if self.isbad:
+                self.color = self.mne.ch_color_bad
+            else:
+                self.color = self.mne.ch_color_ref[self.ch_name]
+
+        self.setPen(_get_color(self.color))
 
     def update_range_idx(self):
         """Should be updated when view-range or ch_idx changes."""
@@ -218,7 +295,6 @@ class RawTraceItem(PlotCurveItem):
         self.ch_name = self.mne.inst.ch_names[ch_idx]
         self.isbad = self.ch_name in self.mne.info['bads']
         self.ch_type = self.mne.ch_types[ch_idx]
-        self.color = self.mne.ch_color_assoc[self.ch_name]
         self.update_ypos()
 
     def update_data(self):
@@ -243,20 +319,77 @@ class RawTraceItem(PlotCurveItem):
         else:
             times = self.mne.times
 
+        # For multiple color traces with epochs
+        # replace values from other colors with NaN.
+        if self.mne.is_epochs:
+            bool_ixs = self.color != self.mne.epoch_color_ref[
+                self.ch_idx][self.mne.epoch_idx]
+            starts = self.mne.boundary_times[self.mne.epoch_idx][bool_ixs]
+            stops = self.mne.boundary_times[self.mne.epoch_idx + 1][bool_ixs]
+
+            for start, stop in zip(starts, stops):
+                data[np.logical_and(start < times, times <= stop)] = np.nan
+
         self.setData(times, data, connect=connect, skipFiniteCheck=skip,
                      antialias=self.mne.antialiasing)
 
         self.setPos(0, self.ypos)
 
+    def toggle_bad(self, x=None):
+        """Toggle bad status."""
+        # Toggle bad epoch
+        if self.mne.is_epochs and x is not None:
+            epoch_idx, color = self.main._toggle_bad_epoch(x)
+
+            if color == 'none':
+                if self.mne.epoch_colors is None:
+                    self.mne.epoch_color_ref[:, self.epoch_idx] =\
+                        np.asarray(self.mne.ch_color_ref.values())
+                else:
+                    self.mne.epoch_color_ref[:, self.epoch_idx] =\
+                        self.mne.epoch_colors[:, self.epoch_idx]
+            else:
+                self.mne.epoch_color_ref[:, ] = color
+
+            # Update other traces
+            for trace in [tr for tr in self.mne.traces if tr != self]:
+                trace.update_color()
+
+            # Update overview-bar
+            self.mne.overview_bar.update_bad_epochs()
+
+        # Toggle bad channel
+        else:
+            _, pick, marked_bad = self.main._toggle_bad_channel(
+                    self.range_idx)
+
+            # Update line color
+            self.isbad = not self.isbad
+
+            # Update channel-axis
+            self.main._update_yaxis_labels()
+
+            # Update overview-bar
+            self.mne.overview_bar.update_bad_channels()
+
+            # Update sensor color (if in selection mode)
+            if self.mne.fig_selection is not None:
+                self.mne.fig_selection._update_bad_sensors(pick,
+                                                           marked_bad)
+
+        # Update trace color
+        self.update_color()
+
     def mouseClickEvent(self, ev):
         """Customize mouse click events."""
         if (not self.clickable or ev.button() != Qt.MouseButton.LeftButton
                 or self.mne.annotation_mode):
+            # Explicitly ignore events in annotation-mode
             ev.ignore()
             return
         if self.mouseShape().contains(ev.pos()):
             ev.accept()
-            self.sigClicked.emit(self, ev)
+            self.toggle_bad(ev.pos().x())
 
     def get_xdata(self):
         """Get xdata for testing."""
@@ -278,9 +411,10 @@ class TimeAxis(AxisItem):
     def tickValues(self, minVal, maxVal, size):
         """Customize creation of axis values from visible axis range."""
         if self.mne.is_epochs:
-            values = self.mne.midpoints[np.argwhere(
-                minVal <= self.mne.midpoints <= maxVal)]
-            tick_values = [(len(self.mne.inst.times), values)]
+            value_idxs = np.searchsorted(self.mne.midpoints, [minVal, maxVal])
+            values = np.arange(*value_idxs)
+            spacing = len(self.mne.inst.times) / self.mne.info['sfreq']
+            tick_values = [(spacing, values)]
             return tick_values
         else:
             # Save _spacing for later use
@@ -376,7 +510,7 @@ class ChannelAxis(AxisItem):
             elif text in self.mne.info['bads']:
                 p.setPen(_get_color(self.mne.ch_color_bad))
             else:
-                p.setPen(_get_color(self.mne.ch_color_assoc[text]))
+                p.setPen(_get_color(self.mne.ch_color_ref[text]))
             self.ch_texts[text] = ((rect.left(), rect.left() + rect.width()),
                                    (rect.top(), rect.top() + rect.height()))
             p.drawText(rect, int(flags), text)
@@ -394,14 +528,14 @@ class ChannelAxis(AxisItem):
                              if k in [tr.ch_name for tr in self.mne.traces]}
             # Get channel-name from position of channel-description
             ypos = event.scenePos().y()
-            y_values = np.asarray(list(self.ch_texts.values()))[:, 1, :]
+            y_values = np.asarray(list(self.ch_texts.values()))[ :, 1, :]
             y_diff = np.abs(y_values - ypos)
             ch_idx = int(np.argmin(y_diff, axis=0)[0])
             ch_name = list(self.ch_texts.keys())[ch_idx]
-            trace = [tr for tr in self.mne.traces
-                     if tr.ch_name == ch_name][0]
-            if event.button() == Qt.LeftButton:
-                self.main._bad_ch_clicked(trace)
+                trace = [tr for tr in self.mne.traces
+                         if tr.ch_name == ch_name][0]
+                if event.button() == Qt.LeftButton:
+                    self.main._bad_ch_clicked(trace)  # without x always toggles channel
             elif event.button() == Qt.RightButton:
                 self.main._create_ch_context_fig(trace.range_idx)
 
@@ -468,12 +602,10 @@ class TimeScrollBar(BaseScrollBar):
     def __init__(self, mne):
         super().__init__(Qt.Horizontal)
         self.mne = mne
-        self.step_factor = None
-
+        self.step_factor = 1
         self.setMinimum(0)
         self.setSingleStep(1)
-        self.setPageStep(self.mne.scroll_sensitivity)
-        self._update_duration()
+        self.update_duration()
         self.setFocusPolicy(Qt.WheelFocus)
         # Because valueChanged is needed (captures every input to scrollbar,
         # not just sliderMoved), there has to be made a differentiation
@@ -483,7 +615,11 @@ class TimeScrollBar(BaseScrollBar):
 
     def _time_changed(self, value):
         if not self.external_change:
-            value /= self.step_factor
+            if self.mne.is_epochs:
+                # Convert Epoch index to time
+                value = self.mne.boundary_times[int(value)]
+            else:
+                value /= self.step_factor
             self.mne.plt.setXRange(value, value + self.mne.duration,
                                    padding=0)
 
@@ -491,21 +627,23 @@ class TimeScrollBar(BaseScrollBar):
         """Update value of the ScrollBar."""
         # Mark change as external to avoid setting
         # XRange again in _time_changed.
-        self._update_duration()
         self.external_change = True
         self.setValue(int(value * self.step_factor))
         self.external_change = False
 
-    def _update_duration(self):
-        new_step_factor = self.mne.scroll_sensitivity / self.mne.duration
-        if new_step_factor != self.step_factor:
-            self.step_factor = new_step_factor
-            new_maximum = int((self.mne.xmax - self.mne.duration)
-                              * self.step_factor)
-            self.setMaximum(new_maximum)
+    def update_duration(self):
+        """Update bar size."""
+        if self.mne.is_epochs:
+            self.setPageStep(self.mne.n_epochs)
+            self.setMaximum(len(self.mne.inst) - self.mne.n_epochs)
+        else:
+            self.setPageStep(self.mne.duration)
+            self.step_factor = self.mne.scroll_sensitivity / self.mne.duration
+            self.setMaximum(int((self.mne.xmax - self.mne.duration)
+                                * self.step_factor))
 
     def _update_scroll_sensitivity(self):
-        self.setPageStep(self.mne.scroll_sensitivity)
+        self.update_duration()
         self.update_value(self.value() / self.step_factor)
 
     def keyPressEvent(self, event):
@@ -522,8 +660,8 @@ class ChannelScrollBar(BaseScrollBar):
         self.mne = mne
 
         self.setMinimum(0)
-        self._update_nchan()
         self.setSingleStep(1)
+        self.update_nchan()
         self.setFocusPolicy(Qt.WheelFocus)
         # Because valueChanged is needed (captures every input to scrollbar,
         # not just sliderMoved), there has to be made a differentiation
@@ -548,9 +686,9 @@ class ChannelScrollBar(BaseScrollBar):
         self.external_change = True
         self.setValue(value)
         self.external_change = False
-        self._update_nchan()
 
-    def _update_nchan(self):
+    def update_nchan(self):
+        """Update bar size."""
         if self.mne.group_by in ['position', 'selection']:
             self.setPageStep(1)
             self.setMaximum(len(self.mne.ch_selections) - 1)
@@ -602,6 +740,8 @@ class OverviewBar(QGraphicsView):
             # Epochs Lines
             self.epoch_line_dict = dict()
             self.update_epoch_lines()
+            self.bad_epoch_rect_dict = dict()
+            self.update_bad_epochs()
         else:
             # Annotations
             self.annotations_rect_dict = dict()
@@ -646,6 +786,27 @@ class OverviewBar(QGraphicsView):
             elif ch_name in rm_chs:
                 self.scene().removeItem(self.bad_line_dict[ch_name])
                 self.bad_line_dict.pop(ch_name)
+
+    def update_bad_epochs(self):
+        bad_set = set(self.mne.bad_epochs)
+        rect_set = set(self.bad_epoch_rect_dict.keys())
+
+        add_epos = bad_set.difference(rect_set)
+        rm_epos = rect_set.difference(bad_set)
+
+        for epo_idx in self.mne.inst.selection:
+            if epo_idx in add_epos:
+                start, stop = self.mne.boundary_times[epo_idx:epo_idx + 2]
+                top_left = self._mapFromData(start, 0)
+                bottom_right = self._mapFromData(stop, len(self.mne.ch_order))
+                pen = _get_color(self.mne.epoch_color_bad)
+                rect = self.scene().addRect(QRectF(top_left, bottom_right),
+                                            pen)
+                rect.setZValue(2)
+                self.bad_epoch_rect_dict[epo_idx] = rect
+            elif epo_idx in rm_epos:
+                self.scene().removeItem(self.bad_epoch_rect_dict[epo_idx])
+                self.bad_epoch_rect_dict.pop(epo_idx)
 
     def update_events(self):
         """Update representation of events."""
@@ -765,24 +926,34 @@ class OverviewBar(QGraphicsView):
 
     def _set_range_from_pos(self, pos):
         x, y = self._mapToData(pos)
-        if x == '-offbounds':
-            xmin, xmax = (0, self.mne.duration)
-        elif x == '+offbounds':
-            xmin, xmax = (self.mne.xmax - self.mne.duration, self.mne.xmax)
+
+        # Set X
+        # Move click position to middle of view range
+        if self.mne.is_epochs:
+            epo_idx = max(x - self.mne.n_epochs // 2, 0)
+            xmin = self.mne.boundary_times[epo_idx]
         else:
-            # Move middle of view range to click position
             xmin = x - self.mne.duration / 2
-            xmax = xmin + self.mne.duration
+        xmax = xmin + self.mne.duration
+
+        # Check boundaries
+        if x == '-offbounds' or xmin < 0:
+            xmin = 0
+            xmax = self.mne.duration
+        elif x == '+offbounds' or xmax > self.mne.xmax:
+            xmin = self.mne.xmax - self.mne.duration
+            xmax = self.mne.xmax
         self.mne.plt.setXRange(xmin, xmax, padding=0)
 
-        if y == '-offbounds':
+        # Set Y
+        ymin = y - self.mne.n_channels / 2
+        ymax = ymin + self.mne.n_channels + 1
+        # Check boundaries
+        if y == '-offbounds' or ymin < 0:
             ymin, ymax = (0, self.mne.n_channels + 1)
-        elif y == '+offbounds':
+        elif y == '+offbounds' or ymax > self.mne.ymax:
             ymin, ymax = (self.mne.ymax - self.mne.n_channels - 1,
                           self.mne.ymax)
-        else:
-            ymin = y - self.mne.n_channels / 2
-            ymax = ymin + self.mne.n_channels + 1
         if self.mne.fig_selection:
             self.mne.fig_selection._scroll_to_idx(int(ymin))
         else:
@@ -841,6 +1012,12 @@ class OverviewBar(QGraphicsView):
                 bottom_right = self._mapFromData(epo_t,
                                                  len(self.mne.ch_order))
                 epoch_line.setLine(QLineF(top_left, bottom_right))
+            # Resize bad rects
+            for epo_idx, epoch_rect in self.bad_epoch_rect_dict.items():
+                start, stop = self.mne.boundary_times[epo_idx:epo_idx + 2]
+                top_left = self._mapFromData(start, 0)
+                bottom_right = self._mapFromData(stop, len(self.mne.ch_order))
+                epoch_rect.setRect(QRectF(top_left, bottom_right))
         else:
             # Resize annotation-rects
             for annot_dict in self.annotations_rect_dict.values():
@@ -911,8 +1088,12 @@ class OverviewBar(QGraphicsView):
         elif xnorm > 1:
             x = '+offbounds'
         else:
-            time_idx = int((len(self.mne.inst.times) - 1) * xnorm)
-            x = self.mne.inst.times[time_idx]
+            if self.mne.is_epochs:
+                # Return epoch index for epochs
+                x = int(len(self.mne.inst) * xnorm)
+            else:
+                time_idx = int((len(self.mne.inst.times) - 1) * xnorm)
+                x = self.mne.inst.times[time_idx]
 
         ynorm = point.y() / self.height()
         if ynorm < 0:
@@ -2170,39 +2351,49 @@ class LoadThread(QThread):
         # because of the frequent gui-update-calls.
         # Thus n_chunks = 10 should suffice.
         data = None
-        times = None
+        if self.mne.is_epochs:
+            times = np.arange(len(self.mne.inst) * len(self.mne.inst.times))\
+                    / self.mne.info['sfreq']
+        else:
+            times = None
         n_chunks = 10
-        if not self.mne.is_epochs:
-            chunk_size = len(self.browser.mne.inst) // n_chunks
-            for n in range(n_chunks):
-                start = n * chunk_size
-                if n == n_chunks - 1:
-                    # Get last chunk which may be larger due to rounding above
-                    stop = None
-                else:
-                    stop = start + chunk_size
-                # Load data
+        chunk_size = len(self.mne.inst) // n_chunks
+        for n in range(n_chunks):
+            start = n * chunk_size
+            if n == n_chunks - 1:
+                # Get last chunk which may be larger due to rounding above
+                stop = None
+            else:
+                stop = start + chunk_size
+            # Load epochs
+            if self.mne.is_epochs:
+                item = slice(start, stop)
+                data_chunk = np.concatenate(self.mne.inst.get_data(item=item),
+                                      axis=-1)
+            # Load raw
+            else:
                 data_chunk, times_chunk = self.browser._load_data(start, stop)
-                if data is None:
-                    data = data_chunk
+                if times is None:
                     times = times_chunk
                 else:
-                    data = np.concatenate((data, data_chunk), axis=1)
                     times = np.concatenate((times, times_chunk), axis=0)
-                self.loadProgress.emit(n + 1)
-        else:
-            self.browser._load_data()
-            self.loadProgress.emit(n_chunks)
 
-        picks = self.browser.mne.ch_order
+            if data is None:
+                data = data_chunk
+            else:
+                data = np.concatenate((data, data_chunk), axis=1)
+
+            self.loadProgress.emit(n + 1)
+
+        picks = self.mne.ch_order
         # Deactive remove dc because it will be removed for visible range
         stashed_remove_dc = self.mne.remove_dc
         self.mne.remove_dc = False
         data = self.browser._process_data(data, 0, len(data), picks, self)
         self.mne.remove_dc = stashed_remove_dc
 
-        self.browser.mne.global_data = data
-        self.browser.mne.global_times = times
+        self.mne.global_data = data
+        self.mne.global_times = times
 
         # Calculate Z-Scores
         self.processText.emit('Calculating Z-Scores...')
@@ -2281,6 +2472,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.zscore_rgba = None
         if self.mne.is_epochs:
             self.mne.epoch_dur = np.diff(self.mne.boundary_times[:2])[0]
+            epoch_idx = np.searchsorted(self.mne.boundary_times,
+                                        (self.mne.t_start,
+                                         self.mne.t_start + self.mne.duration))
+            self.mne.epoch_idx = np.arange(epoch_idx[0], epoch_idx[1])
 
         # Load from QSettings if available
         for qparam in qsettings_params:
@@ -2298,10 +2493,19 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             setattr(self.mne, qparam, qvalue)
 
         # Initialize channel-colors for faster indexing later
-        self.mne.ch_color_assoc = dict()
+        self.mne.ch_color_ref = dict()
         for idx, ch_name in enumerate(self.mne.ch_names):
             ch_type = self.mne.ch_types[idx]
-            self.mne.ch_color_assoc[ch_name] = self.mne.ch_color_dict[ch_type]
+            self.mne.ch_color_ref[ch_name] = self.mne.ch_color_dict[ch_type]
+
+        # Initialize epoch colors for faster indexing later
+        if self.mne.is_epochs:
+            if self.mne.epoch_colors is None:
+                self.mne.epoch_color_ref = np.transpose(
+                        [list(self.mne.ch_color_ref.values())] *
+                        len(self.mne.inst))
+            else:
+                self.mne.epoch_color_ref = np.copy(self.mne.epoch_colors)
 
         # Add Load-Progressbar for loading in a thread
         self.mne.load_prog_label = QLabel('Loading...')
@@ -2355,7 +2559,11 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Hide AutoRange-Button
         plt.hideButtons()
         # Configure XY-Range
-        self.mne.xmax = self.mne.inst.times[-1]
+        if self.mne.is_epochs:
+            self.mne.xmax = len(self.mne.inst.times) * len(self.mne.inst) \
+                            / self.mne.info['sfreq']
+        else:
+            self.mne.xmax = self.mne.inst.times[-1]
         # Add one empty line as padding at top (y=0).
         # Negative Y-Axis to display channels from top.
         self.mne.ymax = len(self.mne.ch_order) + 1
@@ -2477,15 +2685,16 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         fig_annotation.setVisible(False)
         vars(self.mne).update(fig_annotation=fig_annotation)
 
-        # Add annotations as regions
-        for annot in self.mne.inst.annotations:
-            plot_onset = _sync_onset(self.mne.inst, annot['onset'])
-            duration = annot['duration']
-            description = annot['description']
-            self._add_region(plot_onset, duration, description)
+        if not self.mne.is_epochs:
+            # Add annotations as regions
+            for annot in self.mne.inst.annotations:
+                plot_onset = _sync_onset(self.mne.inst, annot['onset'])
+                duration = annot['duration']
+                description = annot['description']
+                self._add_region(plot_onset, duration, description)
 
-        # Initialize annotations
-        self._change_annot_mode()
+            # Initialize annotations
+            self._change_annot_mode()
 
         # Initialize Toolbar
         toolbar = self.addToolBar('Tools')
@@ -2549,12 +2758,12 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Add GUI-Elements to MNEBrowserParams-Instance
         vars(self.mne).update(
             plt=plt, view=view, ax_hscroll=ax_hscroll, ax_vscroll=ax_vscroll,
-            overview_bar=overview_bar, fig_annotation=fig_annotation,
-            toolbar=toolbar
+            overview_bar=overview_bar, toolbar=toolbar
         )
 
         # Set Start-Range (after all necessary elements are initialized)
-        plt.setXRange(self.mne.t_start, self.mne.t_start + self.mne.duration,
+        plt.setXRange(self.mne.t_start,
+                      self.mne.t_start + self.mne.duration,
                       padding=0)
         plt.setYRange(0, self.mne.n_channels + 1, padding=0)
 
@@ -2749,36 +2958,12 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def _update_yaxis_labels(self):
         self.mne.channel_axis.repaint()
 
-    def _bad_ch_clicked(self, line):
-        """Slot for bad channel click."""
-        _, pick, marked_bad = self._toggle_bad_channel(line.range_idx)
-
-        # Update line color
-        line.isbad = not line.isbad
-        line.update_color()
-
-        # Update Channel-Axis
-        self._update_yaxis_labels()
-
-        # Update Overview-Bar
-        self.mne.overview_bar.update_bad_channels()
-
-        # update sensor color (if in selection mode)
-        if self.mne.fig_selection is not None:
-            self.mne.fig_selection._update_bad_sensors(pick, marked_bad)
-
     def _add_trace(self, ch_idx):
-        trace = RawTraceItem(self.mne, ch_idx)
-
-        # Apply scaling
-        transform = self._get_scale_transform()
-        trace.setTransform(transform)
+        trace = RawTraceItem(self, ch_idx)
 
         # Add Item early to have access to viewBox
         self.mne.plt.addItem(trace)
         self.mne.traces.append(trace)
-
-        trace.sigClicked.connect(lambda tr, _: self._bad_ch_clicked(tr))
 
     def _remove_trace(self, trace):
         self.mne.plt.removeItem(trace)
@@ -2871,6 +3056,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             rel_step = self.mne.duration
         elif step == '-full':
             rel_step = - self.mne.duration
+        elif self.mne.is_epochs:
+            direction = 1 if step > 0 else -1
+            rel_step = direction * self.mne.duration / self.mne.n_epochs
         else:
             rel_step = step * self.mne.duration / self.mne.scroll_sensitivity
         # Get current range and add step to it
@@ -2914,15 +3102,16 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def change_duration(self, step):
         """Change duration by step."""
-        rel_step = self.mne.duration * step
         xmin, xmax = self.mne.viewbox.viewRange()[0]
 
         if self.mne.is_epochs:
             # use the length of one epoch as duration change
             min_dur = len(self.mne.inst.times) / self.mne.info['sfreq']
+            rel_step = min_dur * (1 if step > 0 else -1)
         else:
             # never show fewer than 3 samples
             min_dur = 3 * np.diff(self.mne.inst.times[:2])[0]
+            rel_step = self.mne.duration * step
 
         xmax += rel_step
 
@@ -2937,6 +3126,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if xmin < 0:
             xmin = 0
 
+        self.mne.ax_hscroll.update_duration()
         self.mne.plt.setXRange(xmin, xmax, padding=0)
 
     def change_nchan(self, step):
@@ -2958,6 +3148,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             if ymax - ymin <= 2:
                 ymax = ymin + 2
 
+            self.mne.ax_vscroll.update_nchan()
             self.mne.plt.setYRange(ymin, ymax, padding=0)
 
     def _remove_vline(self):
@@ -3059,8 +3250,15 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _xrange_changed(self, _, xrange):
         # Update data
+        if self.mne.is_epochs:
+            # Only allow xrange showing full epochs
+            boundary_idxs = np.searchsorted(self.mne.boundary_times,
+                                                  xrange)
+            self.mne.epoch_idx = np.arange(*boundary_idxs)
+
         self.mne.t_start = xrange[0]
         self.mne.duration = xrange[1] - xrange[0]
+
         self._redraw(update_data=True)
 
         # Update annotations
@@ -3289,10 +3487,14 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                         'Setting precompute to False.')
             return False
         else:
-            if self.mne.inst.filenames[0]:
+            if self.mne.is_epochs:
+                files = [self.mne.inst.filename]
+            else:
+                files = self.mne.inst.filenames
+            if files[0] is not None:
                 # Get disk-space of raw-file(s)
                 disk_space = 0
-                for fn in self.mne.inst.filenames:
+                for fn in files:
                     disk_space += getsize(fn)
 
                 # Determine expected RAM space based on orig_format
@@ -3517,8 +3719,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.selected_region.select(self.mne.annotation_mode)
 
     def _toggle_annotation_fig(self):
-        self.mne.annotation_mode = not self.mne.annotation_mode
-        self._change_annot_mode()
+        if not self.mne.is_epochs:
+            self.mne.annotation_mode = not self.mne.annotation_mode
+            self._change_annot_mode()
 
     def _update_regions_visible(self):
         for region in self.mne.regions:
