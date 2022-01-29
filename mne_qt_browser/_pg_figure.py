@@ -1248,7 +1248,12 @@ class HelpDialog(_BaseDialog):
 
         # Show all keyboard-shortcuts in a Scroll-Area
         layout = QVBoxLayout()
+        keyboard_label = QLabel('Keyboard Shortcuts')
+        keyboard_label.setFont(QFont('AnyStyle', 16, QFont.Bold))
+        layout.addWidget(keyboard_label)
+
         scroll_area = QScrollArea()
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll_area.setSizePolicy(QSizePolicy.MinimumExpanding,
                                   QSizePolicy.MinimumExpanding)
         scroll_widget = QWidget()
@@ -1268,8 +1273,48 @@ class HelpDialog(_BaseDialog):
         scroll_widget.setLayout(form_layout)
         scroll_area.setWidget(scroll_widget)
         layout.addWidget(scroll_area)
+
+        # Additional help for mouse interaction
+        inst = self.main.mne.instance_type
+        is_raw = inst == 'raw'
+        is_epo = inst == 'epochs'
+        is_ica = inst == 'ica'
+        ch_cmp = 'component' if is_ica else 'channel'
+        ch_epo = 'epoch' if is_epo else 'channel'
+        ica_bad = 'Mark/unmark component for exclusion'
+        lclick_data = ica_bad if is_ica else f'Mark/unmark bad {ch_epo}'
+        lclick_name = (ica_bad if is_ica else 'Mark/unmark bad channel')
+        ldrag = 'add annotation (in annotation mode)' if is_raw else None
+        rclick_name = dict(ica='Show diagnostics for component',
+                           epochs='Show imageplot for channel',
+                           raw='Show channel location')[inst]
+        mouse_help = [(f'Left-click {ch_cmp} name', lclick_name),
+                      (f'Left-click {ch_cmp} data', lclick_data),
+                      ('Left-click-and-drag on plot', ldrag),
+                      ('Left-click on plot background',
+                       'Place vertical guide'),
+                      ('Right-click on plot background',
+                       'Clear vertical guide'),
+                      ('Right-click on channel name', rclick_name)]
+
+        mouse_label = QLabel('Mouse Interaction')
+        mouse_label.setFont(QFont('AnyStyle', 16, QFont.Bold))
+        layout.addWidget(mouse_label)
+        mouse_widget = QWidget()
+        mouse_layout = QFormLayout()
+        for interaction, description in mouse_help:
+            if description is not None:
+                mouse_layout.addRow(f'{interaction}:', QLabel(description))
+        mouse_widget.setLayout(mouse_layout)
+        layout.addWidget(mouse_widget)
+
         self.setLayout(layout)
         self.show()
+
+        # Set minimum width to avoid horizontal scrolling
+        scroll_area.setMinimumWidth(scroll_widget.minimumSizeHint().width() +
+                                    scroll_area.verticalScrollBar().width())
+        self.update()
 
 
 class ProjDialog(_BaseDialog):
@@ -2412,7 +2457,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         toolbar.addAction(asettings)
 
         ahelp = QAction(_get_std_icon('SP_DialogHelpButton'),
-                        'Shortcuts', parent=self)
+                        'Help', parent=self)
         ahelp.triggered.connect(self._toggle_help_fig)
         toolbar.addAction(ahelp)
 
@@ -2437,6 +2482,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         is_mac = platform.system() == 'Darwin'
         dur_keys = ('fn + ←', 'fn + →') if is_mac else ('Home', 'End')
         ch_keys = ('fn + ↑', 'fn + ↓') if is_mac else ('Page up', 'Page down')
+        hscroll_type = '1 epoch' if self.mne.is_epochs else '¼ page'
         self.mne.keyboard_shortcuts = {
             'left': {
                 'alias': '←',
@@ -2444,8 +2490,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'modifier': [None, 'Shift'],
                 'slot': [self.hscroll],
                 'parameter': [-40, '-full'],
-                'description': ['Move left',
-                                'Move left (tiny step)']
+                'description': [f'Move left ({hscroll_type})',
+                                'Move left (full page)']
             },
             'right': {
                 'alias': '→',
@@ -2453,36 +2499,36 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'modifier': [None, 'Shift'],
                 'slot': [self.hscroll],
                 'parameter': [40, '+full'],
-                'description': ['Move right',
-                                'Move right (tiny step)']
+                'description': [f'Move right ({hscroll_type})',
+                                'Move right (full page)']
             },
             'up': {
                 'alias': '↑',
                 'qt_key': Qt.Key_Up,
                 'slot': [self.vscroll],
                 'parameter': ['-full'],
-                'description': ['Move up (page)']
+                'description': ['Move up (full page)']
             },
             'down': {
                 'alias': '↓',
                 'qt_key': Qt.Key_Down,
                 'slot': [self.vscroll],
                 'parameter': ['+full'],
-                'description': ['Move down (page)']
+                'description': ['Move down (full page)']
             },
             'home': {
                 'alias': dur_keys[0],
                 'qt_key': Qt.Key_Home,
                 'slot': [self.change_duration],
                 'parameter': [-0.2],
-                'description': ['Decrease duration']
+                'description': [f'Decrease duration ({hscroll_type})']
             },
             'end': {
                 'alias': dur_keys[1],
                 'qt_key': Qt.Key_End,
                 'slot': [self.change_duration],
                 'parameter': [0.25],
-                'description': ['Increase duration']
+                'description': [f'Increase duration ({hscroll_type})']
             },
             'pagedown': {
                 'alias': ch_keys[0],
@@ -2490,8 +2536,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'modifier': [None, 'Shift'],
                 'slot': [self.change_nchan],
                 'parameter': [-1, -10],
-                'description': ['Decrease shown channels',
-                                'Decrease shown channels (tiny step)']
+                'description': ['Decrease shown channels (1)',
+                                'Decrease shown channels (10)']
             },
             'pageup': {
                 'alias': ch_keys[1],
@@ -2499,8 +2545,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'modifier': [None, 'Shift'],
                 'slot': [self.change_nchan],
                 'parameter': [1, 10],
-                'description': ['Increase shown channels',
-                                'Increase shown channels (tiny step)']
+                'description': ['Increase shown channels (1)',
+                                'Increase shown channels (10)']
             },
             '-': {
                 'qt_key': Qt.Key_Minus,
