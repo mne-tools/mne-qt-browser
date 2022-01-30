@@ -162,7 +162,7 @@ class RawTraceItem(PlotCurveItem):
         self.setClickable(True, 12)
 
         # Set default z-value to 1 to be before other items in scene
-        # self.setZValue(1)
+        self.setZValue(1)
 
         # General attributes
         # The ch_idx is the index of the channel represented by this trace
@@ -1234,15 +1234,20 @@ class VLineLabel(InfLineLabel):
             self.line.sigDragged.emit(self)
             if ev.isFinish():
                 self.line.moving = False
-                self.line.sigPositionChangeFinished.emit(self)
+                self.line.sigPositionChangeFinished.emit(self.line)
 
     def valueChanged(self):
-        # Alter method to consider epochs
+        """Customize what happens on value change."""
         if not self.isVisible():
             return
         value = self.line.value()
         if self.line.mne.is_epochs:
-            value = value % self.line.mne.epoch_dur
+            # Show epoch-time
+            t_vals_abs = np.linspace(0, self.line.mne.epoch_dur,
+                                     len(self.line.mne.inst.times))
+            search_val = value % self.line.mne.epoch_dur
+            t_idx = np.searchsorted(t_vals_abs, search_val)
+            value = self.line.mne.inst.times[t_idx]
         self.setText(self.format.format(value=value))
         self.updatePosition()
 
@@ -3196,7 +3201,11 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             if self.mne.vline is None:
                 self.mne.vline = list()
                 for xt in ts:
-                    vl = VLine(self.mne, xt, bounds=(0, self.mne.xmax))
+                    epo_idx = np.searchsorted(self.mne.boundary_times, xt) - 1
+                    bmin, bmax = self.mne.boundary_times[epo_idx:epo_idx + 2]
+                    # Avoid off-by-one-error at bmax for VlineLabel
+                    bmax -= 1 / self.mne.info['sfreq']
+                    vl = VLine(self.mne, xt, bounds=(bmin, bmax))
                     # Should only be emitted when dragged
                     vl.sigPositionChangeFinished.connect(self._vline_slot)
                     self.mne.vline.append(vl)
@@ -3260,13 +3269,29 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def _xrange_changed(self, _, xrange):
         # Update data
         if self.mne.is_epochs:
-            # Only allow xrange showing full epochs
+            if self.mne.vline is not None:
+                rel_vl_t = self.mne.vline[0].value() \
+                           - self.mne.boundary_times[self.mne.epoch_idx][0]
+
+            # Depends on only allowing xrange showing full epochs
             boundary_idxs = np.searchsorted(self.mne.midpoints, xrange)
             self.mne.epoch_idx = np.arange(*boundary_idxs)
 
             # Update colors
             for trace in self.mne.traces:
                 trace.update_color()
+
+            # Update vlines
+            if self.mne.vline is not None:
+                for bmin, bmax, vl in zip(self.mne.boundary_times[
+                                              self.mne.epoch_idx],
+                                          self.mne.boundary_times[
+                                              self.mne.epoch_idx + 1],
+                                          self.mne.vline):
+                    # Avoid off-by-one-error at bmax for VlineLabel
+                    bmax -= 1 / self.mne.info['sfreq']
+                    vl.setBounds((bmin, bmax))
+                    vl.setValue(bmin + rel_vl_t)
 
         self.mne.t_start = xrange[0]
         self.mne.duration = xrange[1] - xrange[0]
