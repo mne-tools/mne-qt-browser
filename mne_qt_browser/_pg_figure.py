@@ -33,6 +33,7 @@ from PyQt5.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
                              QGraphicsLineItem, QGraphicsScene, QTextEdit,
                              QSizePolicy, QSpinBox, QDesktopWidget, QSlider)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+from matplotlib.colors import to_rgba_array
 from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
                        LinearRegionItem, PlotCurveItem, PlotItem,
                        Point, TextItem, ViewBox, mkBrush,
@@ -161,7 +162,7 @@ class RawTraceItem(PlotCurveItem):
         self.setClickable(True, 12)
 
         # Set default z-value to 1 to be before other items in scene
-        self.setZValue(1)
+        # self.setZValue(1)
 
         # General attributes
         # The ch_idx is the index of the channel represented by this trace
@@ -237,10 +238,6 @@ class RawTraceItem(PlotCurveItem):
                         self.mne.plt.removeItem(rm_trace)
                 # Set parent color
                 self.color = self.trace_colors[0]
-
-                # Set children colors
-                for child in self.child_traces:
-                    child.update_color()
 
             # Only for child trace
             else:
@@ -322,13 +319,14 @@ class RawTraceItem(PlotCurveItem):
         # For multiple color traces with epochs
         # replace values from other colors with NaN.
         if self.mne.is_epochs:
-            bool_ixs = self.color != self.mne.epoch_color_ref[
-                self.ch_idx][self.mne.epoch_idx]
+            check_color = self.mne.epoch_color_ref[self.ch_idx,
+                                                   self.mne.epoch_idx]
+            bool_ixs = np.invert(np.equal(self.color, check_color).all(axis=1))
             starts = self.mne.boundary_times[self.mne.epoch_idx][bool_ixs]
             stops = self.mne.boundary_times[self.mne.epoch_idx + 1][bool_ixs]
 
             for start, stop in zip(starts, stops):
-                data[np.logical_and(start < times, times <= stop)] = np.nan
+                data[np.logical_and(start <= times, times <= stop)] = np.nan
 
         self.setData(times, data, connect=connect, skipFiniteCheck=skip,
                      antialias=self.mne.antialiasing)
@@ -343,13 +341,14 @@ class RawTraceItem(PlotCurveItem):
 
             if color == 'none':
                 if self.mne.epoch_colors is None:
-                    self.mne.epoch_color_ref[:, self.epoch_idx] =\
-                        np.asarray(self.mne.ch_color_ref.values())
+                    self.mne.epoch_color_ref[:, epoch_idx] =\
+                        np.asarray([to_rgba_array(c) for c in self.mne.ch_color_ref.values()])
                 else:
-                    self.mne.epoch_color_ref[:, self.epoch_idx] =\
-                        self.mne.epoch_colors[:, self.epoch_idx]
+                    self.mne.epoch_color_ref[:, epoch_idx] =\
+                        np.asarray([to_rgba_array(c) for c in
+                                    self.mne.epoch_colors[epoch_idx]])
             else:
-                self.mne.epoch_color_ref[:, ] = color
+                self.mne.epoch_color_ref[:, epoch_idx] = to_rgba_array(color)
 
             # Update other traces
             for trace in [tr for tr in self.mne.traces if tr != self]:
@@ -412,7 +411,7 @@ class TimeAxis(AxisItem):
         """Customize creation of axis values from visible axis range."""
         if self.mne.is_epochs:
             value_idxs = np.searchsorted(self.mne.midpoints, [minVal, maxVal])
-            values = np.arange(*value_idxs)
+            values = self.mne.midpoints[slice(*value_idxs)]
             spacing = len(self.mne.inst.times) / self.mne.info['sfreq']
             tick_values = [(spacing, values)]
             return tick_values
@@ -628,7 +627,11 @@ class TimeScrollBar(BaseScrollBar):
         # Mark change as external to avoid setting
         # XRange again in _time_changed.
         self.external_change = True
-        self.setValue(int(value * self.step_factor))
+        if self.mne.is_epochs:
+            set_value = np.searchsorted(self.mne.midpoints, value)
+        else:
+            set_value = int(value * self.step_factor)
+        self.setValue(set_value)
         self.external_change = False
 
     def update_duration(self):
@@ -1239,7 +1242,7 @@ class VLineLabel(InfLineLabel):
             return
         value = self.line.value()
         if self.line.mne.is_epochs:
-            value = value % self.mne.epoch_dur
+            value = value % self.line.mne.epoch_dur
         self.setText(self.format.format(value=value))
         self.updatePosition()
 
@@ -2472,7 +2475,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.zscore_rgba = None
         if self.mne.is_epochs:
             self.mne.epoch_dur = np.diff(self.mne.boundary_times[:2])[0]
-            epoch_idx = np.searchsorted(self.mne.boundary_times,
+            epoch_idx = np.searchsorted(self.mne.midpoints,
                                         (self.mne.t_start,
                                          self.mne.t_start + self.mne.duration))
             self.mne.epoch_idx = np.arange(epoch_idx[0], epoch_idx[1])
@@ -2501,11 +2504,17 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Initialize epoch colors for faster indexing later
         if self.mne.is_epochs:
             if self.mne.epoch_colors is None:
-                self.mne.epoch_color_ref = np.transpose(
-                        [list(self.mne.ch_color_ref.values())] *
-                        len(self.mne.inst))
+                self.mne.epoch_color_ref = \
+                    np.repeat([to_rgba_array(c) for c
+                               in self.mne.ch_color_ref.values()],
+                              len(self.mne.inst), axis=1)
             else:
-                self.mne.epoch_color_ref = np.copy(self.mne.epoch_colors)
+                self.mne.epoch_color_ref = np.empty((len(self.mne.ch_names),
+                                                     len(self.mne.inst), 4))
+                for epo_idx, epo in enumerate(self.mne.epoch_colors):
+                    for ch_idx, color in enumerate(epo):
+                        self.mne.epoch_color_ref[ch_idx, epo_idx] = \
+                            to_rgba_array(color)
 
         # Add Load-Progressbar for loading in a thread
         self.mne.load_prog_label = QLabel('Loading...')
@@ -3252,9 +3261,12 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Update data
         if self.mne.is_epochs:
             # Only allow xrange showing full epochs
-            boundary_idxs = np.searchsorted(self.mne.boundary_times,
-                                                  xrange)
+            boundary_idxs = np.searchsorted(self.mne.midpoints, xrange)
             self.mne.epoch_idx = np.arange(*boundary_idxs)
+
+            # Update colors
+            for trace in self.mne.traces:
+                trace.update_color()
 
         self.mne.t_start = xrange[0]
         self.mne.duration = xrange[1] - xrange[0]
