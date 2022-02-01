@@ -181,8 +181,7 @@ class RawTraceItem(PlotCurveItem):
         self.isbad = None
         # Channel-type of trace.
         self.ch_type = None
-        # Color-specifier (will be converted into QColor-Object in
-        # update_color).
+        # Color-specifier (all possible matplotlib color formats)
         self.color = None
 
         # Attributes for epochs-mode
@@ -236,6 +235,12 @@ class RawTraceItem(PlotCurveItem):
                     for _ in range(abs(trace_diff)):
                         rm_trace = self.child_traces.pop()
                         self.mne.plt.removeItem(rm_trace)
+
+                # Only update color for not-new childs
+                limit_idx = len(self.child_traces) - trace_diff
+                for child_trace in self.child_traces[:limit_idx]:
+                    child_trace.update_color()
+
                 # Set parent color
                 self.color = self.trace_colors[0]
 
@@ -319,6 +324,10 @@ class RawTraceItem(PlotCurveItem):
         # For multiple color traces with epochs
         # replace values from other colors with NaN.
         if self.mne.is_epochs:
+            if self.parent_trace is None:
+                for child_trace in self.child_traces:
+                    child_trace.update_data()
+            data = np.copy(data)
             check_color = self.mne.epoch_color_ref[self.ch_idx,
                                                    self.mne.epoch_idx]
             bool_ixs = np.invert(np.equal(self.color, check_color).all(axis=1))
@@ -342,7 +351,8 @@ class RawTraceItem(PlotCurveItem):
             if color == 'none':
                 if self.mne.epoch_colors is None:
                     self.mne.epoch_color_ref[:, epoch_idx] =\
-                        np.asarray([to_rgba_array(c) for c in self.mne.ch_color_ref.values()])
+                        np.asarray([to_rgba_array(c) for c
+                                    in self.mne.ch_color_ref.values()])
                 else:
                     self.mne.epoch_color_ref[:, epoch_idx] =\
                         np.asarray([to_rgba_array(c) for c in
@@ -2377,7 +2387,7 @@ class LoadThread(QThread):
             if self.mne.is_epochs:
                 item = slice(start, stop)
                 data_chunk = np.concatenate(self.mne.inst.get_data(item=item),
-                                      axis=-1)
+                                            axis=-1)
             # Load raw
             else:
                 data_chunk, times_chunk = self.browser._load_data(start, stop)
