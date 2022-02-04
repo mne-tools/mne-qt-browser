@@ -2570,7 +2570,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                             to_rgba_array(color)
 
             # Mark bad epochs
-            self.mne.bad_epochs.append(2)
             self.mne.epoch_color_ref[:, self.mne.bad_epochs] = \
                 to_rgba_array(self.mne.epoch_color_bad)
 
