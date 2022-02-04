@@ -6,6 +6,7 @@
 # License: Simplified BSD
 
 import datetime
+import functools
 import gc
 import math
 import platform
@@ -150,6 +151,20 @@ def _get_color(color_spec):
     return color
 
 
+def propagate_to_children(method):
+    @functools.wraps(method)
+    def wrapper(*args, **kwargs):
+        propagate = kwargs.pop('propagate', True)
+        result = method(*args, **kwargs)
+        if args[0].mne.is_epochs and propagate:
+            # parent always goes first
+            if hasattr(args[0], 'child_traces'):
+                for child_trace in args[0].child_traces:
+                    getattr(child_trace, method.__name__)(*args[1:], **kwargs)
+        return result
+    return wrapper
+
+
 class RawTraceItem(PlotCurveItem):
     """Graphics-Object for single data trace."""
 
@@ -206,6 +221,7 @@ class RawTraceItem(PlotCurveItem):
         if self.mne.clipping is None:
             self.update_data()
 
+    @propagate_to_children
     def update_color(self):
         """Update the color of the trace."""
 
@@ -219,7 +235,7 @@ class RawTraceItem(PlotCurveItem):
             # while scrolling horizontally).
 
             # Only for parent trace
-            if self.parent_trace is None:
+            if hasattr(self, 'child_traces'):
                 self.trace_colors = np.unique(
                         self.mne.epoch_color_ref[self.ch_idx], axis=0)
                 n_childs = len(self.child_traces)
@@ -235,11 +251,6 @@ class RawTraceItem(PlotCurveItem):
                     for _ in range(abs(trace_diff)):
                         rm_trace = self.child_traces.pop()
                         self.mne.plt.removeItem(rm_trace)
-
-                # Only update color for not-new childs
-                limit_idx = len(self.child_traces) - trace_diff
-                for child_trace in self.child_traces[:limit_idx]:
-                    child_trace.update_color()
 
                 # Set parent color
                 self.color = self.trace_colors[0]
@@ -258,10 +269,12 @@ class RawTraceItem(PlotCurveItem):
 
         self.setPen(_get_color(self.color))
 
+    @propagate_to_children
     def update_range_idx(self):
         """Should be updated when view-range or ch_idx changes."""
         self.range_idx = np.argwhere(self.mne.picks == self.ch_idx)[0][0]
 
+    @propagate_to_children
     def update_ypos(self):
         """Should be updated when butterfly is toggled or ch_idx changes."""
         if self.mne.butterfly and self.mne.fig_selection is not None:
@@ -274,14 +287,16 @@ class RawTraceItem(PlotCurveItem):
         else:
             self.ypos = self.range_idx + self.mne.ch_start + 1
 
+    @propagate_to_children
     def update_scale(self):
         transform = QTransform()
         transform.scale(1., self.mne.scale_factor)
         self.setTransform(transform)
 
         if self.mne.clipping is not None:
-            self.update_data()
+            self.update_data(propagate=False)
 
+    @propagate_to_children
     def set_ch_idx(self, ch_idx):
         """Sets the channel index and all deriving indices."""
         # The ch_idx is the index of the channel represented by this trace
@@ -290,15 +305,16 @@ class RawTraceItem(PlotCurveItem):
         self.ch_idx = ch_idx
         # The range_idx is the index of the channel represented by this trace
         # in the shown range.
-        self.update_range_idx()
+        self.update_range_idx(propagate=False)
         # The order_idx is the index of the channel represented by this trace
         # in the channel-order (defined e.g. by group_by).
         self.order_idx = np.argwhere(self.mne.ch_order == self.ch_idx)[0][0]
         self.ch_name = self.mne.inst.ch_names[ch_idx]
         self.isbad = self.ch_name in self.mne.info['bads']
         self.ch_type = self.mne.ch_types[ch_idx]
-        self.update_ypos()
+        self.update_ypos(propagate=False)
 
+    @propagate_to_children
     def update_data(self):
         """Update data (fetch data from self.mne according to self.ch_idx)."""
         if self.mne.is_epochs or (self.mne.clipping is not None and
@@ -324,9 +340,6 @@ class RawTraceItem(PlotCurveItem):
         # For multiple color traces with epochs
         # replace values from other colors with NaN.
         if self.mne.is_epochs:
-            if self.parent_trace is None:
-                for child_trace in self.child_traces:
-                    child_trace.update_data()
             data = np.copy(data)
             check_color = self.mne.epoch_color_ref[self.ch_idx,
                                                    self.mne.epoch_idx]
@@ -348,32 +361,54 @@ class RawTraceItem(PlotCurveItem):
         if self.mne.is_epochs and x is not None:
             epoch_idx, color = self.main._toggle_bad_epoch(x)
 
-            if color == 'none':
-                if self.mne.epoch_colors is None:
-                    self.mne.epoch_color_ref[:, epoch_idx] =\
-                        np.asarray([to_rgba_array(c) for c
-                                    in self.mne.ch_color_ref.values()])
-                else:
-                    self.mne.epoch_color_ref[:, epoch_idx] =\
-                        np.asarray([to_rgba_array(c) for c in
-                                    self.mne.epoch_colors[epoch_idx]])
-            else:
+            if color != 'none':
                 self.mne.epoch_color_ref[:, epoch_idx] = to_rgba_array(color)
-
-            # Update other traces
-            for trace in [tr for tr in self.mne.traces if tr != self]:
-                trace.update_color()
+            elif self.mne.epoch_colors is None:
+                    self.mne.epoch_color_ref[:, epoch_idx] =\
+                        np.concatenate([to_rgba_array(c) for c
+                                        in self.mne.ch_color_ref.values()])
+            else:
+                self.mne.epoch_color_ref[:, epoch_idx] =\
+                    np.concatenate([to_rgba_array(c) for c in
+                                    self.mne.epoch_colors[epoch_idx]])
 
             # Update overview-bar
             self.mne.overview_bar.update_bad_epochs()
 
+            # Update other traces inlcuding self
+            for trace in self.mne.traces:
+                trace.update_color()
+                # Update data is necessary because colored segments will vary
+                trace.update_data()
+
         # Toggle bad channel
         else:
-            _, pick, marked_bad = self.main._toggle_bad_channel(
+            bad_color, pick, marked_bad = self.main._toggle_bad_channel(
                     self.range_idx)
 
-            # Update line color
+            # Update line color status
             self.isbad = not self.isbad
+
+            # Update colors for epochs
+            if self.mne.is_epochs:
+                if marked_bad:
+                    self.mne.epoch_color_ref[pick, :] = \
+                        np.repeat(to_rgba_array(bad_color),
+                                  len(self.mne.inst), axis=0)
+                elif self.mne.epoch_colors is None:
+                    ch_color = self.mne.ch_color_ref[self.ch_name]
+                    self.mne.epoch_color_ref[pick, :] = \
+                        np.repeat(to_rgba_array(ch_color),
+                                  len(self.mne.inst), axis=0)
+                else:
+                    self.mne.epoch_color_ref[pick, :] = \
+                        np.concatenate([to_rgba_array(c[pick]) for c in
+                                        self.mne.epoch_colors])
+
+            # Update trace color
+            self.update_color()
+            if self.mne.is_epochs:
+                self.update_data()
 
             # Update channel-axis
             self.main._update_yaxis_labels()
@@ -383,11 +418,7 @@ class RawTraceItem(PlotCurveItem):
 
             # Update sensor color (if in selection mode)
             if self.mne.fig_selection is not None:
-                self.mne.fig_selection._update_bad_sensors(pick,
-                                                           marked_bad)
-
-        # Update trace color
-        self.update_color()
+                self.mne.fig_selection._update_bad_sensors(pick, marked_bad)
 
     def mouseClickEvent(self, ev):
         """Customize mouse click events."""
@@ -814,8 +845,8 @@ class OverviewBar(QGraphicsView):
                 bottom_right = self._mapFromData(stop, len(self.mne.ch_order))
                 pen = _get_color(self.mne.epoch_color_bad)
                 rect = self.scene().addRect(QRectF(top_left, bottom_right),
-                                            pen)
-                rect.setZValue(2)
+                                            pen=pen, brush=pen)
+                rect.setZValue(3)
                 self.bad_epoch_rect_dict[epo_idx] = rect
             elif epo_idx in rm_epos:
                 self.scene().removeItem(self.bad_epoch_rect_dict[epo_idx])
@@ -2530,6 +2561,15 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                     for ch_idx, color in enumerate(epo):
                         self.mne.epoch_color_ref[ch_idx, epo_idx] = \
                             to_rgba_array(color)
+            # Mark bad channels
+            bad_idxs = np.in1d(self.mne.ch_names, self.mne.info['bads'])
+            self.mne.epoch_color_ref[bad_idxs, :] =\
+                to_rgba_array(self.mne.ch_color_bad)
+
+            # Mark bad epochs
+            self.mne.bad_epochs.append(2)
+            self.mne.epoch_color_ref[:, self.mne.bad_epochs] = \
+                to_rgba_array(self.mne.epoch_color_bad)
 
         # Add Load-Progressbar for loading in a thread
         self.mne.load_prog_label = QLabel('Loading...')
