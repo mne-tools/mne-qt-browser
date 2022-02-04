@@ -361,16 +361,24 @@ class RawTraceItem(PlotCurveItem):
         if self.mne.is_epochs and x is not None:
             epoch_idx, color = self.main._toggle_bad_epoch(x)
 
+            # Update epoch color
             if color != 'none':
-                self.mne.epoch_color_ref[:, epoch_idx] = to_rgba_array(color)
+                new_epo_color = np.repeat(to_rgba_array(color),
+                                          len(self.mne.inst.ch_names), axis=0)
             elif self.mne.epoch_colors is None:
-                    self.mne.epoch_color_ref[:, epoch_idx] =\
-                        np.concatenate([to_rgba_array(c) for c
-                                        in self.mne.ch_color_ref.values()])
+                new_epo_color = np.concatenate(
+                        [to_rgba_array(c) for c
+                         in self.mne.ch_color_ref.values()])
             else:
-                self.mne.epoch_color_ref[:, epoch_idx] =\
+                new_epo_color =\
                     np.concatenate([to_rgba_array(c) for c in
                                     self.mne.epoch_colors[epoch_idx]])
+
+            # Update bad channel colors
+            bad_idxs = np.in1d(self.mne.ch_names, self.mne.info['bads'])
+            new_epo_color[bad_idxs] = to_rgba_array(self.mne.ch_color_bad)
+
+            self.mne.epoch_color_ref[:, epoch_idx] = new_epo_color
 
             # Update overview-bar
             self.mne.overview_bar.update_bad_epochs()
@@ -392,18 +400,17 @@ class RawTraceItem(PlotCurveItem):
             # Update colors for epochs
             if self.mne.is_epochs:
                 if marked_bad:
-                    self.mne.epoch_color_ref[pick, :] = \
-                        np.repeat(to_rgba_array(bad_color),
-                                  len(self.mne.inst), axis=0)
+                    new_ch_color = np.repeat(to_rgba_array(bad_color),
+                                             len(self.mne.inst), axis=0)
                 elif self.mne.epoch_colors is None:
                     ch_color = self.mne.ch_color_ref[self.ch_name]
-                    self.mne.epoch_color_ref[pick, :] = \
-                        np.repeat(to_rgba_array(ch_color),
-                                  len(self.mne.inst), axis=0)
+                    new_ch_color = np.repeat(to_rgba_array(ch_color),
+                                             len(self.mne.inst), axis=0)
                 else:
-                    self.mne.epoch_color_ref[pick, :] = \
-                        np.concatenate([to_rgba_array(c[pick]) for c in
-                                        self.mne.epoch_colors])
+                    new_ch_color = np.concatenate([to_rgba_array(c[pick]) for
+                                                   c in self.mne.epoch_colors])
+
+                self.mne.epoch_color_ref[pick, :] = new_ch_color
 
             # Update trace color
             self.update_color()
@@ -2561,15 +2568,16 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                     for ch_idx, color in enumerate(epo):
                         self.mne.epoch_color_ref[ch_idx, epo_idx] = \
                             to_rgba_array(color)
-            # Mark bad channels
-            bad_idxs = np.in1d(self.mne.ch_names, self.mne.info['bads'])
-            self.mne.epoch_color_ref[bad_idxs, :] =\
-                to_rgba_array(self.mne.ch_color_bad)
 
             # Mark bad epochs
             self.mne.bad_epochs.append(2)
             self.mne.epoch_color_ref[:, self.mne.bad_epochs] = \
                 to_rgba_array(self.mne.epoch_color_bad)
+
+            # Mark bad channels
+            bad_idxs = np.in1d(self.mne.ch_names, self.mne.info['bads'])
+            self.mne.epoch_color_ref[bad_idxs, :] =\
+                to_rgba_array(self.mne.ch_color_bad)
 
         # Add Load-Progressbar for loading in a thread
         self.mne.load_prog_label = QLabel('Loading...')
