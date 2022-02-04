@@ -2412,7 +2412,7 @@ class LoadThread(QThread):
                     / self.mne.info['sfreq']
         else:
             times = None
-        n_chunks = 10
+        n_chunks = min(10, len(self.mne.inst))
         chunk_size = len(self.mne.inst) // n_chunks
         for n in range(n_chunks):
             start = n * chunk_size
