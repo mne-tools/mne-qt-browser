@@ -688,7 +688,7 @@ class TimeScrollBar(BaseScrollBar):
             self.setPageStep(self.mne.n_epochs)
             self.setMaximum(len(self.mne.inst) - self.mne.n_epochs)
         else:
-            self.setPageStep(self.mne.duration)
+            self.setPageStep(int(self.mne.duration))
             self.step_factor = self.mne.scroll_sensitivity / self.mne.duration
             self.setMaximum(int((self.mne.xmax - self.mne.duration)
                                 * self.step_factor))
@@ -845,8 +845,9 @@ class OverviewBar(QGraphicsView):
         add_epos = bad_set.difference(rect_set)
         rm_epos = rect_set.difference(bad_set)
 
-        for epo_idx in self.mne.inst.selection:
-            if epo_idx in add_epos:
+        for epo_num in self.mne.inst.selection:
+            if epo_num in add_epos:
+                epo_idx = self.mne.inst.selection.tolist().index(epo_num)
                 start, stop = self.mne.boundary_times[epo_idx:epo_idx + 2]
                 top_left = self._mapFromData(start, 0)
                 bottom_right = self._mapFromData(stop, len(self.mne.ch_order))
@@ -854,10 +855,10 @@ class OverviewBar(QGraphicsView):
                 rect = self.scene().addRect(QRectF(top_left, bottom_right),
                                             pen=pen, brush=pen)
                 rect.setZValue(3)
-                self.bad_epoch_rect_dict[epo_idx] = rect
-            elif epo_idx in rm_epos:
-                self.scene().removeItem(self.bad_epoch_rect_dict[epo_idx])
-                self.bad_epoch_rect_dict.pop(epo_idx)
+                self.bad_epoch_rect_dict[epo_num] = rect
+            elif epo_num in rm_epos:
+                self.scene().removeItem(self.bad_epoch_rect_dict[epo_num])
+                self.bad_epoch_rect_dict.pop(epo_num)
 
     def update_events(self):
         """Update representation of events."""
@@ -2594,18 +2595,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                                          _DATA_CH_TYPES_ORDER_DEFAULT
                                          if tp in self.mne.ch_types]
 
-        # Initialize annotations (ToDo: Adjust to MPL)
-        self.mne.annotation_mode = False
-        self.mne.annotations_visible = True
-        self.mne.new_annotation_labels = self._get_annotation_labels()
-        if len(self.mne.new_annotation_labels) > 0:
-            self.mne.current_description = self.mne.new_annotation_labels[0]
-        else:
-            self.mne.current_description = None
-        self._setup_annotation_colors()
-        self.mne.regions = list()
-        self.mne.selected_region = None
-
         # Create centralWidget and layout
         widget = QWidget()
         layout = QGridLayout()
@@ -2712,6 +2701,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.crosshair = None
         view.sigSceneMouseMoved.connect(self._mouse_moved)
 
+        # Initialize Annotation-Widgets
+        if not self.mne.is_epochs:
+            self._init_annot_mode()
+
         # OverviewBar
         overview_bar = OverviewBar(self)
         layout.addWidget(overview_bar, 2, 0, 1, 2)
@@ -2749,23 +2742,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         widget.setLayout(layout)
         self.setCentralWidget(widget)
-
-        # Initialize Annotation-Dock
-        fig_annotation = AnnotationDock(self)
-        self.addDockWidget(Qt.TopDockWidgetArea, fig_annotation)
-        fig_annotation.setVisible(False)
-        vars(self.mne).update(fig_annotation=fig_annotation)
-
-        if not self.mne.is_epochs:
-            # Add annotations as regions
-            for annot in self.mne.inst.annotations:
-                plot_onset = _sync_onset(self.mne.inst, annot['onset'])
-                duration = annot['duration']
-                description = annot['description']
-                self._add_region(plot_onset, duration, description)
-
-            # Initialize annotations
-            self._change_annot_mode()
 
         # Initialize Toolbar
         toolbar = self.addToolBar('Tools')
@@ -3792,6 +3768,36 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # which is faster than handling adding/removing in Python.
         pass
 
+    def _init_annot_mode(self):
+        self.mne.annotation_mode = False
+        self.mne.annotations_visible = True
+        self.mne.new_annotation_labels = self._get_annotation_labels()
+        if len(self.mne.new_annotation_labels) > 0:
+            self.mne.current_description = self.mne.new_annotation_labels[0]
+        else:
+            self.mne.current_description = None
+        self._setup_annotation_colors()
+        self.mne.regions = list()
+        self.mne.selected_region = None
+
+        # Initialize Annotation-Dock
+        existing_dock = getattr(self.mne, 'fig_annotation', None)
+        if existing_dock is None:
+            fig_annotation = AnnotationDock(self)
+            self.addDockWidget(Qt.TopDockWidgetArea, fig_annotation)
+            fig_annotation.setVisible(False)
+            vars(self.mne).update(fig_annotation=fig_annotation)
+
+        # Add annotations as regions
+        for annot in self.mne.inst.annotations:
+            plot_onset = _sync_onset(self.mne.inst, annot['onset'])
+            duration = annot['duration']
+            description = annot['description']
+            self._add_region(plot_onset, duration, description)
+
+        # Initialize showing annotation widgets
+        self._change_annot_mode()
+
     def _change_annot_mode(self):
         if not self.mne.annotation_mode:
             # Reset Widgets in Annotation-Figure
@@ -4032,6 +4038,12 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if fig is not None:
             self._get_dlg_from_mpl(fig)
 
+    def _toggle_epoch_histogramm(self):
+        if self.mne.is_epochs:
+            fig = self._create_epoch_histogram()
+            if fig is not None:
+                self._get_dlg_from_mpl(fig)
+
     def _update_trace_offsets(self):
         pass
 
@@ -4093,6 +4105,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         if key.isupper():
             key = key.lower()
+            modifier = Qt.ShiftModifier
+        elif key.startswith('shift+'):
+            key = key[6:]
             modifier = Qt.ShiftModifier
         else:
             modifier = Qt.NoModifier
@@ -4190,6 +4205,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.vscroll(step)
 
     def _click_ch_name(self, ch_index, button):
+        self.mne.channel_axis.repaint()
+        # Wait because channel-axis may need time
+        # (came up with test_epochs::test_plot_epochs_clicks)
+        QTest.qWait(100)
         if not self.mne.butterfly:
             ch_name = self.mne.ch_names[self.mne.picks[ch_index]]
             xrange, yrange = self.mne.channel_axis.ch_texts[ch_name]
