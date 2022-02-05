@@ -2177,10 +2177,6 @@ class AnnotationDock(QDockWidget):
                                        f'"{rm_description}".\n'
                                        f'Do you really want to remove them?')
             if ans == QMessageBox.Yes:
-                rm_idxs = np.where(
-                    self.mne.inst.annotations.description == rm_description)
-                for idx in rm_idxs:
-                    self.mne.inst.annotations.delete(idx)
                 for rm_region in [r for r in self.mne.regions
                                   if r.description == rm_description]:
                     rm_region.remove()
