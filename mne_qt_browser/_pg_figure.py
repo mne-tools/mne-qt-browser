@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """Base classes and functions for 2D browser backends."""
 
-# Authors: Martin Schulz <dev@earthman-music.de>
+# Author: Martin Schulz <dev@earthman-music.de>
 #
-# License: Simplified BSD
+# License: BSD-3-Clause
 
 import datetime
 import functools
