@@ -65,7 +65,6 @@ except ImportError:
 
 name = 'pyqtgraph'
 
-
 # This can be removed when mne==1.0 is released.
 try:
     from mne.viz.backends._utils import _init_mne_qtapp
@@ -127,7 +126,7 @@ except ImportError:
 
 def _get_std_icon(icon_name):
     return QApplication.instance().style().standardIcon(
-        getattr(QStyle, icon_name))
+            getattr(QStyle, icon_name))
 
 
 def _get_color(color_spec):
@@ -163,6 +162,7 @@ def propagate_to_children(method):
                 for child_trace in args[0].child_traces:
                     getattr(child_trace, method.__name__)(*args[1:], **kwargs)
         return result
+
     return wrapper
 
 
@@ -371,7 +371,7 @@ class RawTraceItem(PlotCurveItem):
                         [to_rgba_array(c) for c
                          in self.mne.ch_color_ref.values()])
             else:
-                new_epo_color =\
+                new_epo_color = \
                     np.concatenate([to_rgba_array(c) for c in
                                     self.mne.epoch_colors[epoch_idx]])
 
@@ -611,8 +611,8 @@ class BaseScrollBar(QScrollBar):
             opt = QStyleOptionSlider()
             self.initStyleOption(opt)
             control = self.style().hitTestComplexControl(
-                QStyle.CC_ScrollBar, opt,
-                event.pos(), self)
+                    QStyle.CC_ScrollBar, opt,
+                    event.pos(), self)
             if (control == QStyle.SC_ScrollBarAddPage or
                     control == QStyle.SC_ScrollBarSubPage):
                 # scroll here
@@ -637,8 +637,9 @@ class BaseScrollBar(QScrollBar):
                     sliderMin = gr.y()
                     sliderMax = gr.bottom() - sliderLength + 1
                 self.setValue(QStyle.sliderValueFromPosition(
-                    self.minimum(), self.maximum(),
-                    pos - sliderMin, sliderMax - sliderMin, opt.upsideDown))
+                        self.minimum(), self.maximum(),
+                        pos - sliderMin, sliderMax - sliderMin,
+                        opt.upsideDown))
                 return
 
         return super().mousePressEvent(event)
@@ -1183,7 +1184,7 @@ class RawViewBox(ViewBox):
                 description = self.mne.current_description
                 if event.isStart():
                     self._drag_start = self.mapSceneToView(
-                        event.lastScenePos()).x()
+                            event.lastScenePos()).x()
                     drag_stop = self.mapSceneToView(event.scenePos()).x()
                     self._drag_region = AnnotRegion(self.mne,
                                                     description=description,
@@ -1229,13 +1230,13 @@ class RawViewBox(ViewBox):
                     # Update Overview-Bar
                     self.mne.overview_bar.update_annotations()
                 else:
-                    self._drag_region.setRegion((self._drag_start,
-                                                 self.mapSceneToView(
-                                                     event.scenePos()).x()))
+                    x_to = self.mapSceneToView(event.scenePos()).x()
+                    self._drag_region.setRegion((self._drag_start, x_to))
+
             elif event.isFinish():
                 self.main.message_box(text='No description!',
-                                      info_text=
-                                       'No description is given, add one!',
+                                      info_text='No description is given, '
+                                                'add one!',
                                       icon=QMessageBox.Warning)
 
     def mouseClickEvent(self, event):
@@ -1245,7 +1246,7 @@ class RawViewBox(ViewBox):
         if not self.mne.annotation_mode:
             if event.button() == Qt.LeftButton:
                 self.main._add_vline(self.mapSceneToView(
-                    event.scenePos()).x())
+                        event.scenePos()).x())
             elif event.button() == Qt.RightButton:
                 self.main._remove_vline()
 
@@ -1503,31 +1504,31 @@ class SettingsDialog(_BaseDialog):
         self.downsampling_box.setMinimum(0)
         self.downsampling_box.setSpecialValueText('Auto')
         self.downsampling_box.valueChanged.connect(partial(
-            self._value_changed, value_name='downsampling'))
+                self._value_changed, value_name='downsampling'))
         self.downsampling_box.setValue(0 if self.mne.downsampling == 'auto'
                                        else self.mne.downsampling)
         layout.addRow('downsampling', self.downsampling_box)
 
         self.ds_method_cmbx = QComboBox()
         self.ds_method_cmbx.setToolTip(
-            '<h2>Downsampling Method</h2>'
-            '<ul>'
-            '<li>subsample:<br>'
-            'Only take every n-th sample.</li>'
-            '<li>mean:<br>'
-            'Take the mean of n samples.</li>'
-            '<li>peak:<br>'
-            'Draws a saw wave from the minimum to the maximum from a '
-            'collection of n samples.</li>'
-            '</ul>'
-            '<i>(Those methods are adapted from '
-            'pyqtgraph)</i><br>'
-            'Default is "peak".')
+                '<h2>Downsampling Method</h2>'
+                '<ul>'
+                '<li>subsample:<br>'
+                'Only take every n-th sample.</li>'
+                '<li>mean:<br>'
+                'Take the mean of n samples.</li>'
+                '<li>peak:<br>'
+                'Draws a saw wave from the minimum to the maximum from a '
+                'collection of n samples.</li>'
+                '</ul>'
+                '<i>(Those methods are adapted from '
+                'pyqtgraph)</i><br>'
+                'Default is "peak".')
         self.ds_method_cmbx.addItems(['subsample', 'mean', 'peak'])
         self.ds_method_cmbx.currentTextChanged.connect(partial(
-            self._value_changed, value_name='ds_method'))
+                self._value_changed, value_name='ds_method'))
         self.ds_method_cmbx.setCurrentText(
-            self.mne.ds_method)
+                self.mne.ds_method)
         layout.addRow('ds_method', self.ds_method_cmbx)
 
         self.scroll_sensitivity_slider = QSlider(Qt.Horizontal)
@@ -1537,7 +1538,7 @@ class SettingsDialog(_BaseDialog):
                                                   'the scrolling in '
                                                   'horizontal direction.')
         self.scroll_sensitivity_slider.valueChanged.connect(partial(
-            self._value_changed, value_name='scroll_sensitivity'))
+                self._value_changed, value_name='scroll_sensitivity'))
         # Set default
         self.scroll_sensitivity_slider.setValue(self.mne.scroll_sensitivity)
         layout.addRow('horizontal scroll sensitivity',
@@ -1859,7 +1860,7 @@ class SelectionDialog(_BaseDialog):
 
     def _scroll_selection(self, step):
         name_idx = list(self.mne.ch_selections.keys()).index(
-            self.mne.old_selection)
+                self.mne.old_selection)
         new_idx = np.clip(name_idx + step,
                           0, len(self.mne.ch_selections) - 1)
         new_label = list(self.mne.ch_selections.keys())[new_idx]
@@ -2156,12 +2157,12 @@ class AnnotationDock(QDockWidget):
         # Update containers with annotation-attributes
         if new_des not in self.mne.new_annotation_labels:
             self.mne.new_annotation_labels.append(new_des)
-        self.mne.visible_annotations[new_des] =\
+        self.mne.visible_annotations[new_des] = \
             copy(self.mne.visible_annotations[old_des])
         if old_des not in self.mne.inst.annotations.description:
             self.mne.new_annotation_labels.remove(old_des)
             self.mne.visible_annotations.pop(old_des)
-            self.mne.annotation_segment_colors[new_des] =\
+            self.mne.annotation_segment_colors[new_des] = \
                 self.mne.annotation_segment_colors.pop(old_des)
 
         # Update related widgets
@@ -2174,8 +2175,8 @@ class AnnotationDock(QDockWidget):
             _AnnotEditDialog(self)
         else:
             self.main.message_box(text='No Annotations!',
-                                  info_text=
-                                  'There are no annotations yet to edit!',
+                                  info_text='There are no annotations '
+                                            'yet to edit!',
                                   icon=QMessageBox.Information)
 
     def _remove_description(self, rm_description):
@@ -2204,17 +2205,15 @@ class AnnotationDock(QDockWidget):
     def _remove_description_dlg(self):
         rm_description = self.description_cmbx.currentText()
         existing_annot = list(self.mne.inst.annotations.description).count(
-            rm_description)
+                rm_description)
         if existing_annot > 0:
-            ans = self.main.message_box(text=f'Remove annotations '
-                                             f'with {rm_description}?',
-                                        info_text=
-                                        f'There exist {existing_annot} '
-                                        f'annotations with '
-                                        f'"{rm_description}".\n'
-                                        f'Do you really want to remove them?',
-                                        buttons=
-                                        QMessageBox.Yes | QMessageBox.No,
+            text = f'Remove annotations with {rm_description}?'
+            info_text = f'There exist {existing_annot} annotations with ' \
+                        f'"{rm_description}".\n' \
+                        f'Do you really want to remove them?'
+            buttons = QMessageBox.Yes | QMessageBox.No
+            ans = self.main.message_box(text=text, info_text=info_text,
+                                        buttons=buttons,
                                         default_button=QMessageBox.Yes,
                                         icon=QMessageBox.Question)
         else:
@@ -2291,9 +2290,8 @@ class AnnotationDock(QDockWidget):
                 sel_region.setRegion((start, stop))
             else:
                 self.main.message_box(text='Invalid value!',
-                                      info_text=
-                                      'Start can\'t be bigger or '
-                                      'equal to Stop!',
+                                      info_text='Start can\'t be bigger or '
+                                                'equal to Stop!',
                                       icon=QMessageBox.Critical)
                 self.start_bx.setValue(sel_region.getRegion()[0])
 
@@ -2306,9 +2304,8 @@ class AnnotationDock(QDockWidget):
                 sel_region.setRegion((start, stop))
             else:
                 self.main.message_box(text='Invalid value!',
-                                      info_text=
-                                      'Stop can\'t be smaller '
-                                      'or equal to Start!',
+                                      info_text='Stop can\'t be smaller or '
+                                                'equal to Start!',
                                       icon=QMessageBox.Critical)
                 self.stop_bx.setValue(sel_region.getRegion()[1])
 
@@ -2352,37 +2349,34 @@ class AnnotationDock(QDockWidget):
         self.stop_bx.setValue(0)
 
     def _show_help(self):
+        info_text = '<h1>Help</h1>' \
+                    '<h2>Annotations</h2>' \
+                    '<h3>Add Annotations</h3>' \
+                    'Drag inside the data-view to create annotations with '\
+                    'the description currently selected (leftmost item of '\
+                    'the toolbar).If there is no description yet, add one ' \
+                    'with the button "Add description".' \
+                    '<h3>Remove Annotations</h3>' \
+                    'You can remove single annotations by right-clicking on '\
+                    'them.' \
+                    '<h3>Edit Annotations</h3>' \
+                    'You can edit annotations by dragging them or their '\
+                    'boundaries. Or you can use the dials in the toolbar to '\
+                    'adjust the boundaries for the current selected '\
+                    'annotation.' \
+                    '<h2>Descriptions</h2>' \
+                    '<h3>Add Description</h3>' \
+                    'Add a new description with ' \
+                    'the button "Add description".' \
+                    '<h3>Edit Description</h3>' \
+                    'You can edit the description of one single annotation '\
+                    'or all annotations of the currently selected kind with '\
+                    'the button "Edit description".' \
+                    '<h3>Remove Description</h3>' \
+                    'You can remove all annotations of the currently '\
+                    'selected kind with the button "Remove description".'
         self.main.message_box(text='Annotations-Help',
-                              info_text=
-                              '<h1>Help</h1>'
-                              '<h2>Annotations</h2>'
-                              '<h3>Add Annotations</h3>'
-                              'Drag inside the data-view to create '
-                              'annotations with the description currently '
-                              'selected (leftmost item of the toolbar).'
-                              'If there is no description yet, add one '
-                              'with the button "Add description".'
-                              '<h3>Remove Annotations</h3>'
-                              'You can remove single annotations by '
-                              'right-clicking on them.'
-                              '<h3>Edit Annotations</h3>'
-                              'You can edit annotations by dragging them or '
-                              'their boundaries. Or you can use the dials '
-                              'in the toolbar to adjust the boundaries for '
-                              'the current selected annotation.'
-                              '<h2>Descriptions</h2>'
-                              '<h3>Add Description</h3>'
-                              'Add a new description with the button'
-                              '"Add description".'
-                              '<h3>Edit Description</h3>'
-                              'You can edit the description of one single '
-                              'annotation or all annotations of the '
-                              'currently selected kind with the button '
-                              '"Edit description".'
-                              '<h3>Remove Description</h3>'
-                              'You can remove all annotations of the '
-                              'currently selected kind with the button '
-                              '"Remove description".',
+                              info_text=info_text,
                               icon=QMessageBox.Information)
 
 
@@ -2435,7 +2429,7 @@ class LoadThread(QThread):
         # Thus n_chunks = 10 should suffice.
         data = None
         if self.mne.is_epochs:
-            times = np.arange(len(self.mne.inst) * len(self.mne.inst.times))\
+            times = np.arange(len(self.mne.inst) * len(self.mne.inst.times)) \
                     / self.mne.info['sfreq']
         else:
             times = None
@@ -2521,7 +2515,7 @@ qsettings_params = {
     'downsampling': 1,
     # Downsampling-Method (set SettingsDialog for details)
     'ds_method': 'peak'
-    }
+}
 
 
 class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
@@ -2607,7 +2601,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
             # Mark bad channels
             bad_idxs = np.in1d(self.mne.ch_names, self.mne.info['bads'])
-            self.mne.epoch_color_ref[bad_idxs, :] =\
+            self.mne.epoch_color_ref[bad_idxs, :] = \
                 to_rgba_array(self.mne.ch_color_bad)
 
         # Add Load-Progressbar for loading in a thread
@@ -2698,7 +2692,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Check for OpenGL
         if self.mne.use_opengl is None:  # default: opt-in
             self.mne.use_opengl = (
-                get_config('MNE_BROWSE_USE_OPENGL', '').lower() == 'true')
+                    get_config('MNE_BROWSE_USE_OPENGL', '').lower() == 'true')
         if self.mne.use_opengl:
             try:
                 import OpenGL
@@ -2709,7 +2703,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 self.mne.use_opengl = False
             else:
                 logger.info(
-                    f'Using pyopengl with version {OpenGL.__version__}')
+                        f'Using pyopengl with version {OpenGL.__version__}')
         # Initialize BrowserView (inherits QGraphicsView)
         view = BrowserView(plt, background='w',
                            useOpenGL=self.mne.use_opengl)
@@ -2760,7 +2754,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if self.mne.enable_precompute:
             self.overview_mode_chkbx.addItems(['zscore'])
         self.overview_mode_chkbx.currentTextChanged.connect(
-            self._overview_mode_changed)
+                self._overview_mode_changed)
         self.overview_mode_chkbx.setCurrentIndex(0)
         # Avoid taking keyboard-focus
         self.overview_mode_chkbx.setFocusPolicy(Qt.NoFocus)
@@ -2835,8 +2829,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Add GUI-Elements to MNEBrowserParams-Instance
         vars(self.mne).update(
-            plt=plt, view=view, ax_hscroll=ax_hscroll, ax_vscroll=ax_vscroll,
-            overview_bar=overview_bar, toolbar=toolbar
+                plt=plt, view=view, ax_hscroll=ax_hscroll,
+                ax_vscroll=ax_vscroll,
+                overview_bar=overview_bar, toolbar=toolbar
         )
 
         # Set Start-Range (after all necessary elements are initialized)
@@ -3064,7 +3059,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                         ct in self.mne.scalings and
                         ct in getattr(self.mne, 'units', {}) and
                         ct in getattr(self.mne, 'unit_scalings', {})]:
-
             scale_bar = ScaleBar(self.mne, ch_type)
             self.mne.scalebars[ch_type] = scale_bar
             self.mne.plt.addItem(scale_bar)
@@ -3670,8 +3664,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # decim can vary by channel type,
             # so compute different `times` vectors.
             self.mne.decim_times = {decim_value: self.mne.times[::decim_value]
-                                    + self.mne.first_time for
-                                    decim_value in set(self.mne.decim_data)}
+                                    + self.mne.first_time for decim_value
+                                    in set(self.mne.decim_data)}
 
         # Apply clipping
         if self.mne.clipping == 'clamp':
@@ -3729,7 +3723,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             region = AnnotRegion(self.mne, description=description,
                                  values=(plot_onset, plot_onset + duration))
         if (any([self.mne.t_start < v < self.mne.t_start + self.mne.duration
-                for v in [plot_onset, plot_onset + duration]]) and
+                 for v in [plot_onset, plot_onset + duration]]) and
                 region not in self.mne.plt.items):
             self.mne.plt.addItem(region)
             self.mne.plt.addItem(region.label_item)
@@ -3737,7 +3731,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         region.gotSelected.connect(self._region_selected)
         region.removeRequested.connect(self._remove_region)
         self.mne.viewbox.sigYRangeChanged.connect(
-            region.update_label_pos)
+                region.update_label_pos)
         self.mne.regions.append(region)
 
         region.update_label_pos()
@@ -3858,7 +3852,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def _update_regions_visible(self):
         for region in self.mne.regions:
             region.update_visible(
-                self.mne.visible_annotations[region.description])
+                    self.mne.visible_annotations[region.description])
         self.mne.overview_bar.update_annotations()
 
     def _set_annotations_visible(self, visible):
@@ -4081,7 +4075,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _create_selection_fig(self):
         SelectionDialog(self)
-    
+
     def message_box(self, text, info_text=None, buttons=None,
                     default_button=None, icon=None):
         self.msg_box.setText(f'<font size="+2"><b>{text}</b></font>')
@@ -4094,7 +4088,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if icon is not None:
             self.msg_box.setIcon(icon)
         return self.msg_box.exec()
-    
+
     def keyPressEvent(self, event):
         """Customize key press events."""
         # On MacOs additionally KeypadModifier is set when arrow-keys
@@ -4209,7 +4203,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             point = self.mne.viewbox.mapViewToScene(Point(*point))
             for idx, apoint in enumerate(add_points):
                 add_points[idx] = self.mne.viewbox.mapViewToScene(
-                    Point(*apoint))
+                        Point(*apoint))
 
         elif xform == 'none' or xform is None:
             if isinstance(point, (tuple, list)):
