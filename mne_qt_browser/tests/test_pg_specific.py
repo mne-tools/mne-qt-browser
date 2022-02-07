@@ -69,10 +69,10 @@ def test_annotations_interactions(raw_orig, browser_backend):
     assert raw_orig.annotations.onset[0] == 1.5 + raw_orig.first_time
     assert raw_orig.annotations.duration[0] == 2.
 
-    # Test SpinBox Warning
-    annot_dock.start_bx.setValue(6)
-    annot_dock.start_bx.editingFinished.emit()
-    assert fig.msg_box.isVisible()
-    assert fig.msg_box.informativeText() == 'Start can\'t be bigger or ' \
-                                            'equal to Stop!'
-    fig.msg_box.close()
+    # # Test SpinBox Warning
+    # annot_dock.start_bx.setValue(6)
+    # annot_dock.start_bx.editingFinished.emit()
+    # assert fig.msg_box.isVisible()
+    # assert fig.msg_box.informativeText() == 'Start can\'t be bigger or ' \
+    #                                         'equal to Stop!'
+    # fig.msg_box.close()
