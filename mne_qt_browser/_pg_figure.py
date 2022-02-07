@@ -2292,7 +2292,8 @@ class AnnotationDock(QDockWidget):
                 self.main.message_box(text='Invalid value!',
                                       info_text='Start can\'t be bigger or '
                                                 'equal to Stop!',
-                                      icon=QMessageBox.Critical)
+                                      icon=QMessageBox.Critical,
+                                      modal=False)
                 self.start_bx.setValue(sel_region.getRegion()[0])
 
     def _stop_changed(self):
@@ -2540,6 +2541,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Exactly one MessageBox for messages to facilitate testing/debugging
         self.msg_box = QMessageBox(self)
+        self.test_mode = False
         # A QThread for preloading
         self.load_thread = None
         # A Settings-Dialog
@@ -4077,7 +4079,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         SelectionDialog(self)
 
     def message_box(self, text, info_text=None, buttons=None,
-                    default_button=None, icon=None):
+                    default_button=None, icon=None, modal=True):
         self.msg_box.setText(f'<font size="+2"><b>{text}</b></font>')
         if info_text is not None:
             self.msg_box.setInformativeText(info_text)
@@ -4087,7 +4089,14 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.msg_box.setDefaultButton(default_button)
         if icon is not None:
             self.msg_box.setIcon(icon)
-        return self.msg_box.exec()
+
+        # Allow interacting with message_box in test-mode.
+        # Set modal=False only if no return value is expected.
+        self.msg_box.setModal(False if self.test_mode else modal)
+        if self.test_mode or not modal:
+            self.msg_box.show()
+        else:
+            return self.msg_box.exec()
 
     def keyPressEvent(self, event):
         """Customize key press events."""

@@ -102,7 +102,7 @@ jobs:
       - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/viz
         name: Run MNE-Tests
       - run: pytest mne_qt_browser/tests
-        name: Run benchmarks
+        name: Run benchmarks and pg-specific tests
       - uses: codecov/codecov-action@v1
         if: always()
         name: 'Upload coverage to CodeCov'

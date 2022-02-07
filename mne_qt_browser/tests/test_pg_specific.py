@@ -11,6 +11,7 @@ def test_annotations_interactions(raw_orig, browser_backend):
         raw_orig.annotations.append(onset, duration, description)
     n_anns = len(raw_orig.annotations)
     fig = raw_orig.plot()
+    fig.test_mode = True
     annot_dock = fig.mne.fig_annotation
 
     # Activate annotation_mode
@@ -53,3 +54,25 @@ def test_annotations_interactions(raw_orig, browser_backend):
     assert fig.mne.selected_region.description == 'D'
     annot_dock._edit_description_selected('E')
     assert raw_orig.annotations.description[1] == 'E'
+
+    # Test Spinbox behaviour
+    # Update of Spinboxes
+    fig._fake_click((2.5, 1.), xform='data')
+    assert annot_dock.start_bx.value() == 2.
+    assert annot_dock.stop_bx.value() == 3.
+
+    # Setting values with Spinboxex
+    annot_dock.start_bx.setValue(1.5)
+    annot_dock.start_bx.editingFinished.emit()
+    annot_dock.stop_bx.setValue(3.5)
+    annot_dock.stop_bx.editingFinished.emit()
+    assert raw_orig.annotations.onset[0] == 1.5 + raw_orig.first_time
+    assert raw_orig.annotations.duration[0] == 2.
+
+    # Test SpinBox Warning
+    annot_dock.start_bx.setValue(6)
+    annot_dock.start_bx.editingFinished.emit()
+    assert fig.msg_box.isVisible()
+    assert fig.msg_box.informativeText() == 'Start can\'t be bigger or ' \
+                                            'equal to Stop!'
+    fig.msg_box.close()
