@@ -2729,6 +2729,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         view.sigSceneMouseMoved.connect(self._mouse_moved)
 
         # Initialize Annotation-Widgets
+        self.mne.annotation_mode = False
         if not self.mne.is_epochs:
             self._init_annot_mode()
 
@@ -3797,7 +3798,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         pass
 
     def _init_annot_mode(self):
-        self.mne.annotation_mode = False
         self.mne.annotations_visible = True
         self.mne.new_annotation_labels = self._get_annotation_labels()
         if len(self.mne.new_annotation_labels) > 0:
