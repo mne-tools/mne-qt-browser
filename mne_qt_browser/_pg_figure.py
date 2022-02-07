@@ -1233,8 +1233,10 @@ class RawViewBox(ViewBox):
                                                  self.mapSceneToView(
                                                      event.scenePos()).x()))
             elif event.isFinish():
-                QMessageBox.warning(self.main, 'No description!',
-                                    'No description is given, add one!')
+                self.main.message_box(text='No description!',
+                                      info_text=
+                                       'No description is given, add one!',
+                                      icon=QMessageBox.Warning)
 
     def mouseClickEvent(self, event):
         """Customize mouse click events."""
@@ -2171,8 +2173,10 @@ class AnnotationDock(QDockWidget):
         if len(self.mne.inst.annotations.description) > 0:
             _AnnotEditDialog(self)
         else:
-            QMessageBox.information(self, 'No Annotations!',
-                                    'There are no annotations yet to edit!')
+            self.main.message_box(text='No Annotations!',
+                                  info_text=
+                                  'There are no annotations yet to edit!',
+                                  icon=QMessageBox.Information)
 
     def _remove_description(self, rm_description):
         # Remove regions
@@ -2202,13 +2206,17 @@ class AnnotationDock(QDockWidget):
         existing_annot = list(self.mne.inst.annotations.description).count(
             rm_description)
         if existing_annot > 0:
-            ans = QMessageBox.question(self,
-                                       f'Remove annotations '
-                                       f'with {rm_description}?',
-                                       f'There exist {existing_annot} '
-                                       f'annotations with '
-                                       f'"{rm_description}".\n'
-                                       f'Do you really want to remove them?')
+            ans = self.main.message_box(text=f'Remove annotations '
+                                             f'with {rm_description}?',
+                                        info_text=
+                                        f'There exist {existing_annot} '
+                                        f'annotations with '
+                                        f'"{rm_description}".\n'
+                                        f'Do you really want to remove them?',
+                                        buttons=
+                                        QMessageBox.Yes | QMessageBox.No,
+                                        default_button=QMessageBox.Yes,
+                                        icon=QMessageBox.Question)
         else:
             ans = QMessageBox.Yes
 
@@ -2282,8 +2290,11 @@ class AnnotationDock(QDockWidget):
             if start < stop:
                 sel_region.setRegion((start, stop))
             else:
-                QMessageBox.warning(self, 'Invalid value!',
-                                    'Start can\'t be bigger or equal to Stop!')
+                self.main.message_box(text='Invalid value!',
+                                      info_text=
+                                      'Start can\'t be bigger or '
+                                      'equal to Stop!',
+                                      icon=QMessageBox.Critical)
                 self.start_bx.setValue(sel_region.getRegion()[0])
 
     def _stop_changed(self):
@@ -2294,9 +2305,11 @@ class AnnotationDock(QDockWidget):
             if start < stop:
                 sel_region.setRegion((start, stop))
             else:
-                QMessageBox.warning(self, 'Invalid value!',
-                                    'Stop can\'t be smaller '
-                                    'or equal to Start!')
+                self.main.message_box(text='Invalid value!',
+                                      info_text=
+                                      'Stop can\'t be smaller '
+                                      'or equal to Start!',
+                                      icon=QMessageBox.Critical)
                 self.stop_bx.setValue(sel_region.getRegion()[1])
 
     def _set_color(self):
@@ -2339,36 +2352,38 @@ class AnnotationDock(QDockWidget):
         self.stop_bx.setValue(0)
 
     def _show_help(self):
-        QMessageBox.information(self, 'Annotations-Help',
-                                '<h1>Help</h1>'
-                                '<h2>Annotations</h2>'
-                                '<h3>Add Annotations</h3>'
-                                'Drag inside the data-view to create '
-                                'annotations with the description currently '
-                                'selected (leftmost item of the toolbar).'
-                                'If there is no description yet, add one '
-                                'with the button "Add description".'
-                                '<h3>Remove Annotations</h3>'
-                                'You can remove single annotations by '
-                                'right-clicking on them.'
-                                '<h3>Edit Annotations</h3>'
-                                'You can edit annotations by dragging them or '
-                                'their boundaries. Or you can use the dials '
-                                'in the toolbar to adjust the boundaries for '
-                                'the current selected annotation.'
-                                '<h2>Descriptions</h2>'
-                                '<h3>Add Description</h3>'
-                                'Add a new description with the button'
-                                '"Add description".'
-                                '<h3>Edit Description</h3>'
-                                'You can edit the description of one single '
-                                'annotation or all annotations of the '
-                                'currently selected kind with the button '
-                                '"Edit description".'
-                                '<h3>Remove Description</h3>'
-                                'You can remove all annotations of the '
-                                'currently selected kind with the button '
-                                '"Remove description".')
+        self.main.message_box(text='Annotations-Help',
+                              info_text=
+                              '<h1>Help</h1>'
+                              '<h2>Annotations</h2>'
+                              '<h3>Add Annotations</h3>'
+                              'Drag inside the data-view to create '
+                              'annotations with the description currently '
+                              'selected (leftmost item of the toolbar).'
+                              'If there is no description yet, add one '
+                              'with the button "Add description".'
+                              '<h3>Remove Annotations</h3>'
+                              'You can remove single annotations by '
+                              'right-clicking on them.'
+                              '<h3>Edit Annotations</h3>'
+                              'You can edit annotations by dragging them or '
+                              'their boundaries. Or you can use the dials '
+                              'in the toolbar to adjust the boundaries for '
+                              'the current selected annotation.'
+                              '<h2>Descriptions</h2>'
+                              '<h3>Add Description</h3>'
+                              'Add a new description with the button'
+                              '"Add description".'
+                              '<h3>Edit Description</h3>'
+                              'You can edit the description of one single '
+                              'annotation or all annotations of the '
+                              'currently selected kind with the button '
+                              '"Edit description".'
+                              '<h3>Remove Description</h3>'
+                              'You can remove all annotations of the '
+                              'currently selected kind with the button '
+                              '"Remove description".',
+                              icon=QMessageBox.Information)
 
 
 class BrowserView(GraphicsView):
@@ -2528,7 +2543,12 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Initialize attributes which are only used by pyqtgraph, not by
         # matplotlib and add them to MNEBrowseParams.
+
+        # Exactly one MessageBox for messages to facilitate testing/debugging
+        self.msg_box = QMessageBox(self)
+        # A QThread for preloading
         self.load_thread = None
+        # A Settings-Dialog
         self.mne.fig_settings = None
         self.mne.decim_data = None
         self.mne.decim_times = None
@@ -4061,7 +4081,20 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _create_selection_fig(self):
         SelectionDialog(self)
-
+    
+    def message_box(self, text, info_text=None, buttons=None,
+                    default_button=None, icon=None):
+        self.msg_box.setText(f'<font size="+2"><b>{text}</b></font>')
+        if info_text is not None:
+            self.msg_box.setInformativeText(info_text)
+        if buttons is not None:
+            self.msg_box.setStandardButtons(buttons)
+        if default_button is not None:
+            self.msg_box.setDefaultButton(default_button)
+        if icon is not None:
+            self.msg_box.setIcon(icon)
+        return self.msg_box.exec()
+    
     def keyPressEvent(self, event):
         """Customize key press events."""
         # On MacOs additionally KeypadModifier is set when arrow-keys
