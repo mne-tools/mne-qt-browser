@@ -14,6 +14,7 @@ import sys
 from ast import literal_eval
 from collections import OrderedDict
 from contextlib import contextmanager
+from copy import copy
 from functools import partial
 from os.path import getsize
 
@@ -1985,18 +1986,17 @@ class _AnnotEditDialog(_BaseDialog):
         self.ad = annot_dock
 
         self.current_mode = None
-        self.curr_des = None
 
         layout = QVBoxLayout()
         self.descr_label = QLabel()
         if self.mne.selected_region:
             self.mode_cmbx = QComboBox()
-            self.mode_cmbx.addItems(['group', 'current'])
+            self.mode_cmbx.addItems(['all', 'selected'])
             self.mode_cmbx.currentTextChanged.connect(self._mode_changed)
             layout.addWidget(QLabel('Edit Scope:'))
             layout.addWidget(self.mode_cmbx)
         # Set group as default
-        self._mode_changed('group')
+        self._mode_changed('all')
 
         layout.addWidget(self.descr_label)
         self.input_w = QLineEdit()
@@ -2014,55 +2014,19 @@ class _AnnotEditDialog(_BaseDialog):
 
     def _mode_changed(self, mode):
         self.current_mode = mode
-        if mode == 'group':
+        if mode == 'all':
             curr_des = self.ad.description_cmbx.currentText()
         else:
             curr_des = self.mne.selected_region.description
         self.descr_label.setText(f'Change "{curr_des}" to:')
-        self.curr_des = curr_des
 
     def _edit(self):
         new_des = self.input_w.text()
         if new_des:
-            if self.current_mode == 'group' or self.mne.selected_region is \
-                    None:
-                edit_regions = [r for r in self.mne.regions
-                                if r.description == self.curr_des]
-                for ed_region in edit_regions:
-                    idx = self.main._get_onset_idx(
-                        ed_region.getRegion()[0])
-                    self.mne.inst.annotations.description[idx] = new_des
-                    ed_region.update_description(new_des)
-                self.mne.new_annotation_labels.remove(self.curr_des)
-                self.mne.new_annotation_labels = \
-                    self.main._get_annotation_labels()
-                self.mne.visible_annotations[new_des] = \
-                    self.mne.visible_annotations.pop(self.curr_des)
-                self.mne.annotation_segment_colors[new_des] = \
-                    self.mne.annotation_segment_colors.pop(
-                        self.curr_des)
+            if self.current_mode == 'all' or self.mne.selected_region is None:
+                self.ad._edit_description_all(new_des)
             else:
-                idx = self.main._get_onset_idx(
-                    self.mne.selected_region.getRegion()[0])
-                self.mne.inst.annotations.description[idx] = new_des
-                self.mne.selected_region.update_description(new_des)
-                if new_des not in self.mne.new_annotation_labels:
-                    self.mne.new_annotation_labels.append(new_des)
-                self.mne.visible_annotations[new_des] = \
-                    self.mne.visible_annotations[self.curr_des]
-                self.mne.annotation_segment_colors[new_des] = \
-                    self.mne.annotation_segment_colors[self.curr_des]
-                if self.curr_des not in \
-                        self.mne.inst.annotations.description:
-                    self.mne.new_annotation_labels.remove(
-                        self.curr_des)
-                    self.mne.visible_annotations.pop(self.curr_des)
-                    self.mne.annotation_segment_colors.pop(
-                        self.curr_des)
-            self.mne.current_description = new_des
-            self.main._setup_annotation_colors()
-            self.ad._update_description_cmbx()
-            self.ad._update_regions_colors()
+                self.ad._edit_description_selected(new_des)
             self.close()
 
 
@@ -2094,11 +2058,11 @@ class AnnotationDock(QDockWidget):
         layout.addWidget(add_bt)
 
         rm_bt = QPushButton('Remove Description')
-        rm_bt.clicked.connect(self._remove_description)
+        rm_bt.clicked.connect(self._remove_description_dlg)
         layout.addWidget(rm_bt)
 
         edit_bt = QPushButton('Edit Description')
-        edit_bt.clicked.connect(self._edit_description)
+        edit_bt.clicked.connect(self._edit_description_dlg)
         layout.addWidget(edit_bt)
 
         # Uncomment when custom colors for annotations are implemented in
@@ -2157,31 +2121,64 @@ class AnnotationDock(QDockWidget):
                 and new_description not in self.mne.new_annotation_labels:
             self._add_description(new_description)
 
-    def _edit_description(self):
+    def _edit_description_all(self, new_des):
+        """Update descriptions of all annotations with the same description."""
+        old_des = self.description_cmbx.currentText()
+        edit_regions = [r for r in self.mne.regions
+                        if r.description == old_des]
+        # Update regions & annotations
+        for ed_region in edit_regions:
+            idx = self.main._get_onset_idx(ed_region.getRegion()[0])
+            self.mne.inst.annotations.description[idx] = new_des
+            ed_region.update_description(new_des)
+        # Update containers with annotation-attributes
+        self.mne.new_annotation_labels.remove(old_des)
+        self.mne.new_annotation_labels = self.main._get_annotation_labels()
+        self.mne.visible_annotations[new_des] = \
+            self.mne.visible_annotations.pop(old_des)
+        self.mne.annotation_segment_colors[new_des] = \
+            self.mne.annotation_segment_colors.pop(old_des)
+
+        # Update related widgets
+        self.main._setup_annotation_colors()
+        self._update_regions_colors()
+        self._update_description_cmbx()
+
+    def _edit_description_selected(self, new_des):
+        """Update description only of selected region."""
+        old_des = self.mne.selected_region.description
+        idx = self.main._get_onset_idx(self.mne.selected_region.getRegion()[0])
+        # Update regions & annotations
+        self.mne.inst.annotations.description[idx] = new_des
+        self.mne.selected_region.update_description(new_des)
+        # Update containers with annotation-attributes
+        if new_des not in self.mne.new_annotation_labels:
+            self.mne.new_annotation_labels.append(new_des)
+        self.mne.visible_annotations[new_des] =\
+            copy(self.mne.visible_annotations[old_des])
+        if old_des not in self.mne.inst.annotations.description:
+            self.mne.new_annotation_labels.remove(old_des)
+            self.mne.visible_annotations.pop(old_des)
+            self.mne.annotation_segment_colors[new_des] =\
+                self.mne.annotation_segment_colors.pop(old_des)
+
+        # Update related widgets
+        self.main._setup_annotation_colors()
+        self._update_regions_colors()
+        self._update_description_cmbx()
+
+    def _edit_description_dlg(self):
         if len(self.mne.inst.annotations.description) > 0:
             _AnnotEditDialog(self)
         else:
             QMessageBox.information(self, 'No Annotations!',
                                     'There are no annotations yet to edit!')
 
-    def _remove_description(self):
-        rm_description = self.description_cmbx.currentText()
-        existing_annot = list(self.mne.inst.annotations.description).count(
-            rm_description)
-        if existing_annot > 0:
-            ans = QMessageBox.question(self,
-                                       f'Remove annotations '
-                                       f'with {rm_description}?',
-                                       f'There exist {existing_annot} '
-                                       f'annotations with '
-                                       f'"{rm_description}".\n'
-                                       f'Do you really want to remove them?')
-            if ans == QMessageBox.Yes:
-                for rm_region in [r for r in self.mne.regions
-                                  if r.description == rm_description]:
-                    rm_region.remove()
-            else:
-                return
+    def _remove_description(self, rm_description):
+        # Remove regions
+        for rm_region in [r for r in self.mne.regions
+                          if r.description == rm_description]:
+            rm_region.remove()
 
         # Remove from descriptions
         self.mne.new_annotation_labels.remove(rm_description)
@@ -2199,6 +2196,24 @@ class AnnotationDock(QDockWidget):
             self.description_cmbx.setCurrentIndex(0)
             self.mne.current_description = \
                 self.description_cmbx.currentText()
+
+    def _remove_description_dlg(self):
+        rm_description = self.description_cmbx.currentText()
+        existing_annot = list(self.mne.inst.annotations.description).count(
+            rm_description)
+        if existing_annot > 0:
+            ans = QMessageBox.question(self,
+                                       f'Remove annotations '
+                                       f'with {rm_description}?',
+                                       f'There exist {existing_annot} '
+                                       f'annotations with '
+                                       f'"{rm_description}".\n'
+                                       f'Do you really want to remove them?')
+        else:
+            ans = QMessageBox.Yes
+
+        if ans == QMessageBox.Yes:
+            self._remove_description(rm_description)
 
     def _select_annotations(self):
         def _set_visible_region(state, description):
@@ -3328,7 +3343,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self._redraw(update_data=True)
 
         # Update annotations
-        self._update_annotations_xrange(xrange)
+        if not self.mne.is_epochs:
+            self._update_annotations_xrange(xrange)
 
         # Update Events
         self._update_events_xrange(xrange)
