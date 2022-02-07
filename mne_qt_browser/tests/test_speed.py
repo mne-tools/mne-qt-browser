@@ -1,9 +1,16 @@
+# -*- coding: utf-8 -*-
+# Authors: Eric Larson <larson.eric.d@gmail.com>
+#          Martin Schulz <dev@earthman-music.de>
+#
+# License: BSD-3-Clause
+
 from copy import copy
 from functools import partial
 import sys
 
 import numpy as np
 import pytest
+from PyQt5.QtTest import QTest
 
 bm_limit = 50
 bm_count = copy(bm_limit)
@@ -27,10 +34,14 @@ gl_mark = pytest.mark.skipif(
 
 @pytest.mark.benchmark
 @pytest.mark.parametrize('benchmark_param', [
-    pytest.param({'use_opengl': False}, id='use_opengl=False'),
-    pytest.param({'use_opengl': True}, id='use_opengl=True', marks=gl_mark),
-    pytest.param({'precompute': False}, id='precompute=False'),
-    pytest.param({'precompute': True}, id='precompute=True'),
+    pytest.param({'use_opengl': False, 'precompute': False},
+                 id='use_opengl=False'),
+    pytest.param({'use_opengl': True, 'precompute': False},
+                 id='use_opengl=True', marks=gl_mark),
+    pytest.param({'precompute': False, 'use_opengl': False},
+                 id='precompute=False'),
+    pytest.param({'precompute': True, 'use_opengl': False},
+                 id='precompute=True'),
     pytest.param({}, id='defaults'),
 ])
 def test_scroll_speed(raw_orig, benchmark_param, store, pg_backend, request):
@@ -100,6 +111,12 @@ def test_scroll_speed(raw_orig, benchmark_param, store, pg_backend, request):
         app = QApplication(sys.argv)
     fig = raw_orig.plot(duration=5, n_channels=40,
                         show=False, block=False, **benchmark_param)
+
+    # Wait for precomputed data to load
+    if fig.mne.precompute:
+        while not fig.mne.data_precomputed:
+            QTest.qWait(100)
+
     timer = QTimer()
     timer.timeout.connect(partial(_initiate_hscroll, fig))
     timer.start(0)
