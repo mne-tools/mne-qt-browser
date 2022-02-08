@@ -100,11 +100,6 @@ def _initiate_hscroll(pg_fig, store, request, timer):
         v_last_time = now
     else:
         timer.stop()
-        bm_count = copy(bm_limit)
-        hscroll_dir = True
-        vscroll_dir = True
-        h_last_time = None
-        v_last_time = None
 
         h_mean_fps = 1 / np.median(hscroll_diffs)
         v_mean_fps = 1 / np.median(vscroll_diffs)
@@ -139,10 +134,10 @@ def test_scroll_speed_raw(raw_orig, benchmark_param, store,
     fig = raw_orig.plot(duration=5, n_channels=40,
                         show=False, block=False, **benchmark_param)
 
-    # Wait for precomputed data to load
-    if fig.mne.precompute:
-        while not fig.mne.data_precomputed:
-            QTest.qWait(100)
+    # # Wait for precomputed data to load
+    # if fig.mne.precompute:
+    #     while not fig.mne.data_precomputed:
+    #         QTest.qWait(100)
 
     timer = QTimer()
     timer.timeout.connect(partial(_initiate_hscroll, fig, store,
@@ -183,10 +178,10 @@ def test_scroll_speed_epochs(raw_orig, benchmark_param, store,
     epochs = mne.Epochs(raw_orig, events)
     fig = epochs.plot(show=False, block=False, **benchmark_param)
 
-    # Wait for precomputed data to load
-    if fig.mne.precompute:
-        while not fig.mne.data_precomputed:
-            QTest.qWait(100)
+    # # Wait for precomputed data to load
+    # if fig.mne.precompute:
+    #     while not fig.mne.data_precomputed:
+    #         QTest.qWait(100)
 
     timer = QTimer()
     timer.timeout.connect(partial(_initiate_hscroll, fig, store,
