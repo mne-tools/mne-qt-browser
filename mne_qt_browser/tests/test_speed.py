@@ -12,7 +12,6 @@ from time import perf_counter
 import numpy as np
 import pytest
 from PyQt5.QtCore import QTimer
-from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import QApplication
 
 import mne
@@ -134,10 +133,9 @@ def test_scroll_speed_raw(raw_orig, benchmark_param, store,
     fig = raw_orig.plot(duration=5, n_channels=40,
                         show=False, block=False, **benchmark_param)
 
-    # # Wait for precomputed data to load
-    # if fig.mne.precompute:
-    #     while not fig.mne.data_precomputed:
-    #         QTest.qWait(100)
+    # # Wait max. 10 s for precomputed data to load
+    if fig.mne.precompute:
+        fig.load_thread.wait(10000)
 
     timer = QTimer()
     timer.timeout.connect(partial(_initiate_hscroll, fig, store,
@@ -178,10 +176,9 @@ def test_scroll_speed_epochs(raw_orig, benchmark_param, store,
     epochs = mne.Epochs(raw_orig, events)
     fig = epochs.plot(show=False, block=False, **benchmark_param)
 
-    # # Wait for precomputed data to load
-    # if fig.mne.precompute:
-    #     while not fig.mne.data_precomputed:
-    #         QTest.qWait(100)
+    # # Wait max. 10 s for precomputed data to load
+    if fig.mne.precompute:
+        fig.load_thread.wait(10000)
 
     timer = QTimer()
     timer.timeout.connect(partial(_initiate_hscroll, fig, store,
