@@ -134,7 +134,7 @@ def test_scroll_speed_raw(raw_orig, benchmark_param, store,
                         show=False, block=False, **benchmark_param)
 
     # # Wait max. 10 s for precomputed data to load
-    if fig.mne.precompute:
+    if fig.load_thread is not None:
         fig.load_thread.wait(10000)
 
     timer = QTimer()
@@ -177,7 +177,7 @@ def test_scroll_speed_epochs(raw_orig, benchmark_param, store,
     fig = epochs.plot(show=False, block=False, **benchmark_param)
 
     # # Wait max. 10 s for precomputed data to load
-    if fig.mne.precompute:
+    if fig.load_thread is not None:
         fig.load_thread.wait(10000)
 
     timer = QTimer()
