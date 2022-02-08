@@ -108,7 +108,9 @@ def _initiate_hscroll(pg_fig, store, request, timer):
 
         h_mean_fps = 1 / np.median(hscroll_diffs)
         v_mean_fps = 1 / np.median(vscroll_diffs)
-        store[request.node.callspec.id] = dict(h=h_mean_fps, v=v_mean_fps)
+        type_key = 'Epochs' if pg_fig.mne.is_epochs else 'Raw'
+        store[type_key][request.node.callspec.id] = dict(h=h_mean_fps,
+                                                         v=v_mean_fps)
         pg_fig.close()
 
 
