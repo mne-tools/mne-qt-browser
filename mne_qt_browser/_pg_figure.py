@@ -2543,7 +2543,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.msg_box = QMessageBox(self)
         self.test_mode = False
         # A QThread for preloading
-        self.load_thread = None
+        self.load_thread = LoadThread(self)
         # A Settings-Dialog
         self.mne.fig_settings = None
         self.mne.decim_data = None
@@ -3573,7 +3573,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # Start precompute thread
             self.mne.load_progressbar.show()
             self.mne.load_prog_label.show()
-            self.load_thread = LoadThread(self)
             self.load_thread.loadProgress.connect(self.mne.
                                                   load_progressbar.setValue)
             self.load_thread.processText.connect(self._show_process)
