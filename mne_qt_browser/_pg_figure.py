@@ -485,7 +485,7 @@ class TimeAxis(AxisItem):
         """Customize strings of axis values."""
         if self.mne.is_epochs:
             epoch_nums = self.mne.inst.selection
-            ts = epoch_nums[np.in1d(self.mne.midpoints, values).nonzero()[0]]
+            ts = epoch_nums[np.searchsorted(self.mne.midpoints, values)]
             tick_strings = [str(v) for v in ts]
 
         elif self.mne.time_format == 'clock':
