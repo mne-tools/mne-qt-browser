@@ -166,7 +166,7 @@ def propagate_to_children(method):
     return wrapper
 
 
-class RawTraceItem(PlotCurveItem):
+class DataTrace(PlotCurveItem):
     """Graphics-Object for single data trace."""
 
     def __init__(self, main, ch_idx, child_idx=None, parent_trace=None):
@@ -208,6 +208,8 @@ class RawTraceItem(PlotCurveItem):
 
         # Only for parent traces
         if self.parent_trace is None:
+            # Add to main trace list
+            self.mne.traces.append(self)
             # References to children
             self.child_traces = list()
             # Colors of trace in viewrange
@@ -221,6 +223,17 @@ class RawTraceItem(PlotCurveItem):
         # (because of update_scale()).
         if self.mne.clipping is None:
             self.update_data()
+
+        # Add to main plot
+        self.mne.plt.addItem(self)
+
+    @propagate_to_children
+    def remove(self):
+        self.mne.plt.removeItem(self)
+        # Only for parent trace
+        if self.parent_trace is None:
+            self.mne.traces.remove(self)
+        self.deleteLater()
 
     @propagate_to_children
     def update_color(self):
@@ -244,14 +257,13 @@ class RawTraceItem(PlotCurveItem):
                 # Add child traces if necessary
                 if trace_diff > 0:
                     for cix in range(n_childs, n_childs + trace_diff):
-                        child = RawTraceItem(self.main, self.ch_idx,
-                                             child_idx=cix, parent_trace=self)
+                        child = DataTrace(self.main, self.ch_idx,
+                                          child_idx=cix, parent_trace=self)
                         self.child_traces.append(child)
-                        self.mne.plt.addItem(child)
                 elif trace_diff < 0:
                     for _ in range(abs(trace_diff)):
                         rm_trace = self.child_traces.pop()
-                        self.mne.plt.removeItem(rm_trace)
+                        rm_trace.remove()
 
                 # Set parent color
                 self.color = self.trace_colors[0]
@@ -2637,7 +2649,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Start precomputing if enabled
         self._init_precompute()
 
-        # Initialize data (needed in RawTraceItem.update_data).
+        # Initialize data (needed in DataTrace.update_data).
         self._update_data()
 
         # Initialize Trace-Plot
@@ -2663,7 +2675,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Add traces
         for ch_idx in self.mne.picks:
-            self._add_trace(ch_idx)
+            DataTrace(self, ch_idx)
 
         # Initialize Epochs Grid
         if self.mne.is_epochs:
@@ -3033,17 +3045,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _update_yaxis_labels(self):
         self.mne.channel_axis.repaint()
-
-    def _add_trace(self, ch_idx):
-        trace = RawTraceItem(self, ch_idx)
-
-        # Add Item early to have access to viewBox
-        self.mne.plt.addItem(trace)
-        self.mne.traces.append(trace)
-
-    def _remove_trace(self, trace):
-        self.mne.plt.removeItem(trace)
-        self.mne.traces.remove(trace)
 
     def _add_scalebars(self):
         """Add scalebars for all channel-types.
@@ -3455,7 +3456,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # Only remove from traces not in picks.
             remove_traces = off_traces[:abs(trace_diff)]
             for trace in remove_traces:
-                self._remove_trace(trace)
+                trace.remove()
                 off_traces.remove(trace)
 
         # Add new traces if necessary.
@@ -3463,7 +3464,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # Make copy to avoid skipping iteration.
             idxs_copy = add_idxs.copy()
             for aidx in idxs_copy[:trace_diff]:
-                self._add_trace(aidx)
+                DataTrace(self, aidx)
                 add_idxs.remove(aidx)
 
         # Update data of traces outside of yrange (reuse remaining trace-items)
@@ -3962,8 +3963,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # update ypos and color for butterfly-mode
         for trace in self.mne.traces:
-            trace.update_ypos()
             trace.update_color()
+            trace.update_ypos()
 
         self._draw_traces()
 
