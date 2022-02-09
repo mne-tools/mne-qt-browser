@@ -3182,7 +3182,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if self.mne.is_epochs:
             # use the length of one epoch as duration change
             min_dur = len(self.mne.inst.times) / self.mne.info['sfreq']
-            rel_step = min_dur * (1 if step > 0 else -1)
+            step_dir = (1 if step > 0 else -1)
+            rel_step = min_dur * step_dir
+            self.mne.n_epochs = np.clip(self.mne.n_epochs + step_dir,
+                                        1, len(self.mne.inst))
         else:
             # never show fewer than 3 samples
             min_dur = 3 * np.diff(self.mne.inst.times[:2])[0]
