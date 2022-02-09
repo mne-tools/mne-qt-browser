@@ -2554,8 +2554,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Exactly one MessageBox for messages to facilitate testing/debugging
         self.msg_box = QMessageBox(self)
         self.test_mode = False
-        # A QThread for preloading
-        self.load_thread = LoadThread(self)
         # A Settings-Dialog
         self.mne.fig_settings = None
         self.mne.decim_data = None
@@ -2563,9 +2561,15 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.selection_ypos_dict = dict()
         self.mne.enable_precompute = False
         self.mne.data_precomputed = False
+        self._rerun_load_thread = False
         self.mne.show_overview_bar = True
         self.mne.overview_mode = 'channels'
         self.mne.zscore_rgba = None
+        self.mne.traces = list()
+        self.mne.scale_factor = 1
+        self.mne.butterfly_type_order = [tp for tp in
+                                         _DATA_CH_TYPES_ORDER_DEFAULT
+                                         if tp in self.mne.ch_types]
         if self.mne.is_epochs:
             self.mne.epoch_dur = np.diff(self.mne.boundary_times[:2])[0]
             epoch_idx = np.searchsorted(self.mne.midpoints,
@@ -2628,11 +2632,12 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.statusBar().addWidget(self.mne.load_progressbar, stretch=1)
         self.mne.load_progressbar.hide()
 
-        self.mne.traces = list()
-        self.mne.scale_factor = 1
-        self.mne.butterfly_type_order = [tp for tp in
-                                         _DATA_CH_TYPES_ORDER_DEFAULT
-                                         if tp in self.mne.ch_types]
+        # A QThread for preloading
+        self.load_thread = LoadThread(self)
+        self.load_thread.loadProgress.connect(self.mne.
+                                              load_progressbar.setValue)
+        self.load_thread.processText.connect(self._show_process)
+        self.load_thread.loadingFinished.connect(self._precompute_finished)
 
         # Create centralWidget and layout
         widget = QWidget()
@@ -3557,6 +3562,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # Show loaded overview image
             self.mne.overview_bar.set_background()
 
+        if self._rerun_load_thread:
+            self._rerun_load_thread = False
+            self._init_precompute()
+
     def _init_precompute(self):
         # Remove previously loaded data
         self.mne.data_precomputed = False
@@ -3574,11 +3583,13 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # Start precompute thread
             self.mne.load_progressbar.show()
             self.mne.load_prog_label.show()
-            self.load_thread.loadProgress.connect(self.mne.
-                                                  load_progressbar.setValue)
-            self.load_thread.processText.connect(self._show_process)
-            self.load_thread.loadingFinished.connect(self._precompute_finished)
             self.load_thread.start()
+
+    def _rerun_precompute(self):
+        if self.load_thread.isRunning():
+            self._rerun_load_thread = True
+        else:
+            self._init_precompute()
 
     def _check_space_for_precompute(self):
         try:
@@ -3891,7 +3902,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.projs_on = new_state
         self._update_projector()
         # If data was precomputed it needs to be precomputed again.
-        self._init_precompute()
+        self._rerun_precompute()
         self._redraw()
 
     def _toggle_proj_fig(self):
@@ -3909,7 +3920,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def _toggle_whitening(self):
         super()._toggle_whitening()
         # If data was precomputed it needs to be precomputed again.
-        self._init_precompute()
+        self._rerun_precompute()
         self._redraw()
 
     def _toggle_settings_fig(self):
