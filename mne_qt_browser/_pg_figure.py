@@ -387,7 +387,7 @@ class ChannelAxis(AxisItem):
             trace = [tr for tr in self.mne.traces
                      if tr.ch_name == ch_name][0]
             if event.button() == Qt.LeftButton:
-                trace.toggle_bad()
+                self.main._bad_ch_clicked(trace)
             elif event.button() == Qt.RightButton:
                 self.main._create_ch_context_fig(trace.range_idx)
 
