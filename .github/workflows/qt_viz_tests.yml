@@ -73,6 +73,9 @@ jobs:
           git clone -b ${MNE_BRANCH} --single-branch --depth=1 https://github.com/mne-tools/mne-python.git ../mne-python
           python -m pip install -qe ../mne-python
           python -m pip install -ve .${PIP_OPTION} -r requirements.txt -r requirements_testing.txt
+      - name: Downgrade pytest for mne==0.24
+        run: python -m pip install pytest==6.2.5
+        if: ${MNE_BRANCH} == 'maint/0.24'
       - shell: bash -el {0}
         run: ./tools/get_testing_version.sh
         name: 'Get testing version'
