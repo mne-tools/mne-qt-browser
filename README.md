@@ -52,7 +52,7 @@ want to make this change permanent so you don't have to use the
 configuration file:
 
 ```python
-mne.set_config('MNE_BROWSE_BACKEND', 'pyqtgraph')
+mne.set_config('MNE_BROWSER_BACKEND', 'pyqtgraph')
 ```
 
 ## Troubleshooting
