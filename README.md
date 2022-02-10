@@ -48,8 +48,8 @@ If the plot is not showing, search for solutions in the
 
 This will use the `mne-qt-browser` for the current Python session. If you
 want to make this change permanent so you don't have to use the
-`set_browser_backend()` anymore, run the following line to modify your MNE
-configuration file:
+`set_browser_backend()` each time after restarting Python, run the following
+line to modify your MNE configuration file:
 
 ```python
 mne.set_config('MNE_BROWSER_BACKEND', 'pyqtgraph')
