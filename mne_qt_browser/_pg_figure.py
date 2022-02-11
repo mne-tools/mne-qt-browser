@@ -592,10 +592,10 @@ class ChannelAxis(AxisItem):
             y_diff = np.abs(y_values - ypos)
             ch_idx = int(np.argmin(y_diff, axis=0)[0])
             ch_name = list(self.ch_texts.keys())[ch_idx]
-                trace = [tr for tr in self.mne.traces
-                         if tr.ch_name == ch_name][0]
-                if event.button() == Qt.LeftButton:
-                    self.main._bad_ch_clicked(trace)  # without x always toggles channel
+            trace = [tr for tr in self.mne.traces
+                     if tr.ch_name == ch_name][0]
+            if event.button() == Qt.LeftButton:
+                trace.toggle_bad()
             elif event.button() == Qt.RightButton:
                 self.main._create_ch_context_fig(trace.range_idx)
 
