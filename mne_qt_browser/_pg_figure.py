@@ -322,7 +322,7 @@ class ChannelAxis(AxisItem):
     def __init__(self, main):
         self.main = main
         self.mne = main.mne
-        self.ch_texts = dict()
+        self.ch_texts = OrderedDict()
         super().__init__(orientation='left')
         self.style['autoReduceTextSpace'] = False
 
@@ -380,19 +380,16 @@ class ChannelAxis(AxisItem):
                              if k in [tr.ch_name for tr in self.mne.traces]}
             # Get channel-name from position of channel-description
             ypos = event.scenePos().y()
-            ch_name = None
-            for ch_name in self.ch_texts:
-                ymin, ymax = self.ch_texts[ch_name][1]
-                if ymin < ypos < ymax:
-                    break
-
-            if ch_name is not None:
-                trace = [tr for tr in self.mne.traces
-                         if tr.ch_name == ch_name][0]
-                if event.button() == Qt.LeftButton:
-                    self.main._bad_ch_clicked(trace)
-                elif event.button() == Qt.RightButton:
-                    self.main._create_ch_context_fig(trace.range_idx)
+            y_values = np.asarray(list(self.ch_texts.values()))[:, 1, :]
+            y_diff = np.abs(y_values - ypos)
+            ch_idx = int(np.argmin(y_diff, axis=0)[0])
+            ch_name = list(self.ch_texts.keys())[ch_idx]
+            trace = [tr for tr in self.mne.traces
+                     if tr.ch_name == ch_name][0]
+            if event.button() == Qt.LeftButton:
+                self.main._bad_ch_clicked(trace)
+            elif event.button() == Qt.RightButton:
+                self.main._create_ch_context_fig(trace.range_idx)
 
     def get_labels(self):
         """Get labels for testing."""
