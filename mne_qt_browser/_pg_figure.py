@@ -51,7 +51,7 @@ from mne.io.pick import (_DATA_CH_TYPES_ORDER_DEFAULT,
 from mne.utils import _to_rgb, logger, sizeof_fmt, warn, get_config
 
 from . import _browser_instances
-from .icons import resources
+from .icons import resources  # noqa: F401
 
 try:
     from pytestqt.exceptions import capture_exceptions
