@@ -588,7 +588,7 @@ class ChannelAxis(AxisItem):
                              if k in [tr.ch_name for tr in self.mne.traces]}
             # Get channel-name from position of channel-description
             ypos = event.scenePos().y()
-            y_values = np.asarray(list(self.ch_texts.values()))[ :, 1, :]
+            y_values = np.asarray(list(self.ch_texts.values()))[:, 1, :]
             y_diff = np.abs(y_values - ypos)
             ch_idx = int(np.argmin(y_diff, axis=0)[0])
             ch_name = list(self.ch_texts.keys())[ch_idx]
