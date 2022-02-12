@@ -2822,10 +2822,11 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         aincr_nchan.triggered.connect(partial(self.scale_all, 5 / 4))
         toolbar.addAction(aincr_nchan)
 
-        atoggle_annot = QAction(_get_std_icon('SP_DialogResetButton'),
-                                'Annotations', parent=self)
-        atoggle_annot.triggered.connect(self._toggle_annotation_fig)
-        toolbar.addAction(atoggle_annot)
+        if not self.mne.is_epochs:
+            atoggle_annot = QAction(_get_std_icon('SP_DialogResetButton'),
+                                    'Annotations', parent=self)
+            atoggle_annot.triggered.connect(self._toggle_annotation_fig)
+            toolbar.addAction(atoggle_annot)
 
         atoggle_proj = QAction(_get_std_icon('SP_DialogOkButton'),
                                'SSP', parent=self)
