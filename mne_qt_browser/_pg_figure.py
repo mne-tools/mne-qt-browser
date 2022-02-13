@@ -2741,9 +2741,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                      'or set "use_opengl" to False to avoid this warning.')
                 if mac_epochs:
                     warn('Plotting epochs on MacOS without OpenGL'
-                         'is currently highly unstable due to '
-                         'https://github.com/mne-tools/mne-qt-browser/'
-                         'issues/53!')
+                         'may be unstable!')
                 self.mne.use_opengl = False
             else:
                 logger.info(
