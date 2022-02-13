@@ -2324,8 +2324,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 logger.info(
                     f'Using pyopengl with version {OpenGL.__version__}')
         # Initialize BrowserView (inherits QGraphicsView)
-        view = BrowserView(plt, background='w',
-                           useOpenGL=self.mne.use_opengl)
+        view = BrowserView(plt, useOpenGL=self.mne.use_opengl)
+        if hasattr(self.mne, 'bgcolor'):
+            view.setBackground(_get_color(self.mne.bgcolor))
         layout.addWidget(view, 0, 0)
 
         # Initialize Scroll-Bars
