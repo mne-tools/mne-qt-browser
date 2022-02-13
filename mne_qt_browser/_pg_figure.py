@@ -2458,8 +2458,9 @@ class LoadThread(QThread):
             # Load epochs
             if self.mne.is_epochs:
                 item = slice(start, stop)
-                data_chunk = np.concatenate(self.mne.inst.get_data(item=item),
-                                            axis=-1)
+                with self.mne.inst.info._unlock():
+                    data_chunk = np.concatenate(
+                            self.mne.inst.get_data(item=item), axis=-1)
             # Load raw
             else:
                 data_chunk, times_chunk = self.browser._load_data(start, stop)
@@ -3600,9 +3601,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self._rerun_load_thread = False
             self._init_precompute()
 
-        # Revert info lock-state
-        self.mne.info._unlocked = False
-
     def _init_precompute(self):
         # Remove previously loaded data
         self.mne.data_precomputed = False
@@ -3610,10 +3608,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 for st in ['global_data', 'global_times']]):
             del self.mne.global_data, self.mne.global_times
         gc.collect()
-
-        # Set lock-state of info to True to avoid
-        # clashes with loading in main thread
-        self.mne.info._unlocked = True
 
         if self.mne.precompute == 'auto':
             self.mne.enable_precompute = self._check_space_for_precompute()
@@ -3710,8 +3704,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         else:
             # While data is not precomputed get data only from shown range and
             # process only those.
-            with self.mne.info._unlock():
-                super()._update_data()
+            super()._update_data()
 
         # Initialize decim
         self.mne.decim_data = np.ones_like(self.mne.picks)
