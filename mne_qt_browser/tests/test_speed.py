@@ -173,8 +173,25 @@ def test_scroll_speed_epochs(raw_orig, benchmark_param, store,
     events = np.full((50, 3), [0, 0, 1])
     events[:, 0] = np.arange(0, len(raw_orig), len(raw_orig) / 50) \
         + raw_orig.first_samp
-    epochs = mne.Epochs(raw_orig, events)
-    fig = epochs.plot(show=False, block=False, **benchmark_param)
+    epochs = mne.Epochs(raw_orig, events, preload=True)
+    # Prevent problems with info's locked-stated
+    epochs.info._unlocked = True
+    # Make colored segments (simulating bad epochs,
+    # bad segments from autoreject)
+    epoch_col1 = np.asarray(['b'] * len(epochs.ch_names))
+    epoch_col1[::2] = 'r'
+    epoch_col2 = np.asarray(['r'] * len(epochs.ch_names))
+    epoch_col2[::2] = 'b'
+    epoch_col3 = np.asarray(['g'] * len(epochs.ch_names))
+    epoch_col3[::2] = 'b'
+    epoch_colors = np.asarray([['b'] * len(epochs.ch_names) for _ in
+                               range(len(epochs))])
+    epoch_colors[::3] = epoch_col1
+    epoch_colors[1::3] = epoch_col2
+    epoch_colors[2::3] = epoch_col3
+    epoch_colors = epoch_colors.tolist()
+    fig = epochs.plot(show=False, block=False, epoch_colors=epoch_colors,
+                      **benchmark_param)
 
     # # Wait max. 10 s for precomputed data to load
     if fig.load_thread.isRunning():
