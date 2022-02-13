@@ -2725,13 +2725,25 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if self.mne.use_opengl is None:  # default: opt-in
             self.mne.use_opengl = (
                     get_config('MNE_BROWSE_USE_OPENGL', '').lower() == 'true')
+
+        # Epochs currently only work with OpenGL enabled
+        # (https://github.com/mne-tools/mne-qt-browser/issues/53)
+        mac_epochs = self.mne.is_epochs and sys.platform == 'darwin'
+        if mac_epochs:
+            self.mne.use_opengl = True
+
         if self.mne.use_opengl:
             try:
                 import OpenGL
             except (ModuleNotFoundError, ImportError):
                 warn('PyOpenGL was not found and OpenGL can\'t be used!\n'
-                     'Consider installing pyopengl with "pip install pyopengl"'
+                     'Consider installing pyopengl with pip or conda'
                      'or set "use_opengl" to False to avoid this warning.')
+                if mac_epochs:
+                    warn('Plotting epochs on MacOS without OpenGL'
+                         'is currently highly unstable due to '
+                         'https://github.com/mne-tools/mne-qt-browser/'
+                         'issues/53!')
                 self.mne.use_opengl = False
             else:
                 logger.info(
