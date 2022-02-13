@@ -2859,7 +2859,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         plt.setXRange(self.mne.t_start,
                       self.mne.t_start + self.mne.duration,
                       padding=0)
-        plt.setYRange(0, self.mne.n_channels + 1, padding=0)
+        if self.mne.butterfly:
+            self._set_butterfly(True)
+        else:
+            plt.setYRange(0, self.mne.n_channels + 1, padding=0)
 
         # Set Size
         width = int(self.mne.figsize[0] * self.logicalDpiX())
@@ -3165,6 +3168,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             else:
                 step = int(step)
             self.mne.fig_selection._scroll_selection(step)
+        elif self.mne.butterfly:
+            return
         else:
             # Get current range and add step to it
             if step == '+full':
@@ -3950,13 +3955,16 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 for pick in picks:
                     self.mne.selection_ypos_dict[pick] = idx + 1
             ymax = len(selections_dict) + 1
+            self.mne.ymax = ymax
             self.mne.plt.setLimits(yMax=ymax)
             self.mne.plt.setYRange(0, ymax, padding=0)
         elif butterfly:
             ymax = len(self.mne.butterfly_type_order) + 1
+            self.mne.ymax = ymax
             self.mne.plt.setLimits(yMax=ymax)
             self.mne.plt.setYRange(0, ymax, padding=0)
         else:
+            self.mne.ymax = len(self.mne.ch_order) + 1
             self.mne.plt.setLimits(yMax=self.mne.ymax)
             self.mne.plt.setYRange(self.mne.ch_start,
                                    self.mne.ch_start + self.mne.n_channels + 1,
