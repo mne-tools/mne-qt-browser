@@ -2551,26 +2551,38 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Initialize attributes which are only used by pyqtgraph, not by
         # matplotlib and add them to MNEBrowseParams.
 
+        # Blocks concurrent scolling to avoid segmentation faults
+        self.is_scrolling = False
         # Exactly one MessageBox for messages to facilitate testing/debugging
         self.msg_box = QMessageBox(self)
+        # MessageBox modality needs to be adapted for tests
+        # (otherwise test execution blocks)
         self.test_mode = False
         # A Settings-Dialog
         self.mne.fig_settings = None
+        # Stores decimated data
         self.mne.decim_data = None
         self.mne.decim_times = None
+        # Stores ypos for selection-mode
         self.mne.selection_ypos_dict = dict()
+        # Parameters for precomputing
         self.mne.enable_precompute = False
         self.mne.data_precomputed = False
         self._rerun_load_thread = False
+        # Parameters for overviewbar
         self.mne.show_overview_bar = True
         self.mne.overview_mode = 'channels'
         self.mne.zscore_rgba = None
+        # Container for traces
         self.mne.traces = list()
+        # Scale-Factor
         self.mne.scale_factor = 1
+        # Stores channel-types for butterfly-mode
         self.mne.butterfly_type_order = [tp for tp in
                                          _DATA_CH_TYPES_ORDER_DEFAULT
                                          if tp in self.mne.ch_types]
         if self.mne.is_epochs:
+            # Stores parameters for epochs
             self.mne.epoch_dur = np.diff(self.mne.boundary_times[:2])[0]
             epoch_idx = np.searchsorted(self.mne.midpoints,
                                         (self.mne.t_start,
@@ -3137,6 +3149,11 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def hscroll(self, step):
         """Scroll horizontally by step."""
+        if self.is_scrolling:
+            return
+
+        self.is_scrolling = True
+
         if step == '+full':
             rel_step = self.mne.duration
         elif step == '-full':
@@ -3160,6 +3177,11 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def vscroll(self, step):
         """Scroll vertically by step."""
+        if self.is_scrolling:
+            return
+
+        self.is_scrolling = True
+
         if self.mne.fig_selection is not None:
             if step == '+full':
                 step = 1
@@ -3390,6 +3412,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Update Scalebars
         self._update_scalebar_x_positions()
 
+        # Relieve Scrolling-Block
+        self.is_scrolling = False
+
     def _update_events_xrange(self, xrange):
         """Add or remove event-lines depending on view-range.
 
@@ -3483,6 +3508,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             trace.set_ch_idx(ch_idx)
             trace.update_color()
             trace.update_data()
+
+        # Relieve Scrolling-Block
+        self.is_scrolling = False
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     # DATA HANDLING
