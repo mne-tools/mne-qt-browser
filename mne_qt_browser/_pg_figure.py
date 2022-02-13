@@ -3753,6 +3753,18 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def _get_scale_bar_texts(self):
         return tuple(t.toPlainText() for t in self.mne.scalebar_texts.values())
 
+    def show(self):
+        # Set raise_window like matplotlib if possible
+        super().show()
+        try:
+            from matplotlib import rcParams
+            raise_window = rcParams['figure.raise_window']
+        except ImportError:
+            raise_window = True
+        if raise_window:
+            self.activateWindow()
+            self.raise_()
+
     def _close_event(self, fig=None):
         """Force calling of the MPL figure close event."""
         fig = fig or self
