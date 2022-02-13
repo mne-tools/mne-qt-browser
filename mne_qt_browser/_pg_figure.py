@@ -1385,6 +1385,9 @@ class BaseScaleBar:
                         ch_name not in self.mne.whitened_ch_names:
                     self.ypos = self.mne.ch_start + idx + 1
                     break
+            # Consider all indices bad
+            if self.ypos is None:
+                self.ypos = self.mne.ch_start + ch_type_idxs[0] + 1
 
     def update_x_position(self):
         """Update x-position of Scalebar."""
@@ -4141,9 +4144,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             fig = self._create_epoch_histogram()
             if fig is not None:
                 self._get_dlg_from_mpl(fig)
-
-    def _update_trace_offsets(self):
-        pass
 
     def _create_selection_fig(self):
         SelectionDialog(self)
