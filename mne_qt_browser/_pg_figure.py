@@ -754,7 +754,7 @@ class ChannelScrollBar(BaseScrollBar):
 
     def update_nchan(self):
         """Update bar size."""
-        if self.mne.group_by in ['position', 'selection']:
+        if getattr(self.mne, 'group_by', None) in ['position', 'selection']:
             self.setPageStep(1)
             self.setMaximum(len(self.mne.ch_selections) - 1)
         else:
@@ -876,7 +876,8 @@ class OverviewBar(QGraphicsView):
 
     def update_events(self):
         """Update representation of events."""
-        if self.mne.event_nums is not None and self.mne.events_visible:
+        if getattr(self.mne, 'event_nums', None) is not None \
+                and self.mne.events_visible:
             for ev_t, ev_id in zip(self.mne.event_times, self.mne.event_nums):
                 color_name = self.mne.event_color_dict[ev_id]
                 color = _get_color(color_name)
@@ -2705,7 +2706,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 plt.addItem(grid_line)
 
         # Add events
-        if self.mne.event_nums is not None:
+        if getattr(self.mne, 'event_nums', None) is not None:
             self.mne.events_visible = True
             for ev_time, ev_id in zip(self.mne.event_times,
                                       self.mne.event_nums):
@@ -2749,7 +2750,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Initialize BrowserView (inherits QGraphicsView)
         view = BrowserView(plt, useOpenGL=self.mne.use_opengl)
         if hasattr(self.mne, 'bgcolor'):
-            view.setBackground(_get_color(self.mne.bgcolor))
+            bgcolor = self.mne.bgcolor
+        else:
+            bgcolor = 'w'
+        view.setBackground(_get_color(bgcolor))
         layout.addWidget(view, 0, 0)
 
         # Initialize Scroll-Bars
@@ -2905,8 +2909,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'modifier': [None, 'Shift'],
                 'slot': [self.hscroll],
                 'parameter': [-40, '-full'],
-                'description': [f'Move left ({hscroll_type})',
-                                'Move left (full page)']
+                'description': [f'Scroll left ({hscroll_type})',
+                                'Scroll left (full page)']
             },
             'right': {
                 'alias': '→',
@@ -2914,22 +2918,22 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'modifier': [None, 'Shift'],
                 'slot': [self.hscroll],
                 'parameter': [40, '+full'],
-                'description': [f'Move right ({hscroll_type})',
-                                'Move right (full page)']
+                'description': [f'Scroll right ({hscroll_type})',
+                                'Scroll right (full page)']
             },
             'up': {
                 'alias': '↑',
                 'qt_key': Qt.Key_Up,
                 'slot': [self.vscroll],
                 'parameter': ['-full'],
-                'description': ['Move up (full page)']
+                'description': ['Scroll up (full page)']
             },
             'down': {
                 'alias': '↓',
                 'qt_key': Qt.Key_Down,
                 'slot': [self.vscroll],
                 'parameter': ['+full'],
-                'description': ['Move down (full page)']
+                'description': ['Scroll down (full page)']
             },
             'home': {
                 'alias': dur_keys[0],
@@ -4029,7 +4033,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self._draw_traces()
 
     def _toggle_butterfly(self):
-        self._set_butterfly(not self.mne.butterfly)
+        if self.mne.instance_type != 'ica':
+            self._set_butterfly(not self.mne.butterfly)
 
     def _toggle_dc(self):
         self.mne.remove_dc = not self.mne.remove_dc
