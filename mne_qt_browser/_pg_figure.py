@@ -3600,6 +3600,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self._rerun_load_thread = False
             self._init_precompute()
 
+        # Revert info lock-state
+        self.mne.info._unlocked = False
+
     def _init_precompute(self):
         # Remove previously loaded data
         self.mne.data_precomputed = False
@@ -3607,6 +3610,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 for st in ['global_data', 'global_times']]):
             del self.mne.global_data, self.mne.global_times
         gc.collect()
+
+        # Set lock-state of info to True to avoid
+        # clashes with loading in main thread
+        self.mne.info._unlocked = True
 
         if self.mne.precompute == 'auto':
             self.mne.enable_precompute = self._check_space_for_precompute()
@@ -3703,7 +3710,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         else:
             # While data is not precomputed get data only from shown range and
             # process only those.
-            super()._update_data()
+            with self.mne.info._unlock():
+                super()._update_data()
 
         # Initialize decim
         self.mne.decim_data = np.ones_like(self.mne.picks)
