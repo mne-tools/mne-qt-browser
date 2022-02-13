@@ -7,32 +7,47 @@ assignees: ''
 
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+**READ THIS FIRST:** If you are having trouble getting MNE-Python to work with
+your own data, you should ask for help on the
+[MNE Forum](https://mne.discourse.group).
 
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+Our GitHub issue tracker is only used to report bugs and suggest improvements
+to MNE-Python. For any other questions, please use the forum.
+Usage questions that are posted as GitHub issues are usually closed without
+being answered. See
+[the FAQ entry on filing bug reports](https://mne.tools/dev/overview/faq.html#i-think-i-found-a-bug-what-do-i-do)
+for more guidance. If you're pretty sure your problem is a bug in MNE-Python,
+please **delete this section** and fill in the headings below, replacing the
+placeholder text with your own responses. Surround any code samples with triple
+backticks above and below the code block (see
+[the GitHub guide to markdown](https://guides.github.com/features/mastering-markdown/#GitHub-flavored-markdown)
+for help with issue formatting). Alternatively, you can put your MWE in a
+[public gist](https://gist.github.com) and link to it in this issue.
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+#### Describe the bug
+*Replace this text with a description of the bug.*
 
-**Desktop (please complete the following information):**
- - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
 
-**Smartphone (please complete the following information):**
- - Device: [e.g. iPhone6]
- - OS: [e.g. iOS8.1]
- - Browser [e.g. stock browser, safari]
- - Version [e.g. 22]
+#### Steps to reproduce
+*Replace this text with a code snippet or minimal working example [MWE] to
+replicate your problem, using one of the [built-in datasets], preferably the
+one called [sample]. If you can't replicate on a built-in dataset, provide also
+a link to a small, anonymized portion of your data that does yield the error.*
 
-**Additional context**
-Add any other context about the problem here.
+[MWE]: https://en.wikipedia.org/wiki/Minimal_Working_Example
+[built-in datasets]: https://mne.tools/dev/overview/datasets_index.html
+[sample]: https://mne.tools/dev/overview/datasets_index.html#sample
+
+
+#### Expected results
+*Replace this text with a description of what you expected to happen.*
+
+
+#### Actual results☺
+*Replace this text with the actual output, traceback, screenshot, or other
+description of the results.*
+
+
+#### Additional information
+*Replace this text with the output of `mne.sys_info()`.*
