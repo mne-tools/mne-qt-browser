@@ -3108,6 +3108,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.scalebar_texts[ch_type] = scale_bar_text
             self.mne.plt.addItem(scale_bar_text)
 
+        self._set_scalebars_visible(self.mne.scalebars_visible)
+
     def _update_scalebar_x_positions(self):
         if self.mne.scalebars_visible:
             for scalebar in self.mne.scalebars.values():
