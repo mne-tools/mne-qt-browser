@@ -190,6 +190,10 @@ def test_scroll_speed_epochs(raw_orig, benchmark_param, store,
     epoch_colors[1::3] = epoch_col2
     epoch_colors[2::3] = epoch_col3
     epoch_colors = epoch_colors.tolist()
+
+    if sys.platform == 'darwin':
+        benchmark_param['use_opengl'] = True
+
     fig = epochs.plot(show=False, block=False, epoch_colors=epoch_colors,
                       **benchmark_param)
 
