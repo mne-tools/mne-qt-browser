@@ -10,7 +10,8 @@ import pytest
 from mne.conftest import (raw_orig, pg_backend, garbage_collect)  # noqa: F401
 
 _store = {'Raw': {},
-          'Epochs': {}}
+          'Epochs_unicolor': {},
+          'Epochs_multicolor': {}}
 
 
 def pytest_configure(config):
