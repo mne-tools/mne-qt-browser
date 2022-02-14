@@ -1,22 +1,16 @@
 # -*- coding: utf-8 -*-
-# Author: Eric Larson <larson.eric.d@gmail.com>
+# Authors: Eric Larson <larson.eric.d@gmail.com>
+#          Martin Schulz <dev@earthman-music.de>
 #
 # License: BSD-3-Clause
 
 
 import pytest
 
-from mne.viz import use_browser_backend
 from mne.conftest import (raw_orig, pg_backend, garbage_collect)  # noqa: F401
 
-_store = dict()
-
-
-@pytest.fixture
-def browser_backend(garbage_collect):  # noqa: F811
-    """Parametrizes the name of the browser backend."""
-    with use_browser_backend('pyqtgraph') as backend:
-        yield backend
+_store = {'Raw': {},
+          'Epochs': {}}
 
 
 def pytest_configure(config):
@@ -39,8 +33,10 @@ def pytest_sessionfinish(session, exitstatus):
         writer = TerminalWriter()
         writer.line()  # newline
         writer.sep('=', 'benchmark results')
-        for name, vals in _store.items():
-            writer.line(
-                f'{name}:\n'
-                f'    Horizontal: {vals["h"]:6.2f}\n'
-                f'    Vertical:   {vals["v"]:6.2f}')
+        for type_name, results in _store.items():
+            writer.sep('-', type_name)
+            for name, vals in results.items():
+                writer.line(
+                    f'{name}:\n'
+                    f'    Horizontal: {vals["h"]:6.2f}\n'
+                    f'    Vertical:   {vals["v"]:6.2f}')
