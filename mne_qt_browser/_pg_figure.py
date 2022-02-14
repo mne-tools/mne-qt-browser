@@ -2556,8 +2556,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Initialize attributes which are only used by pyqtgraph, not by
         # matplotlib and add them to MNEBrowseParams.
 
-        # Blocks concurrent scolling to avoid segmentation faults
-        self.is_scrolling = False
         # Exactly one MessageBox for messages to facilitate testing/debugging
         self.msg_box = QMessageBox(self)
         # MessageBox modality needs to be adapted for tests
@@ -3174,11 +3172,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def hscroll(self, step):
         """Scroll horizontally by step."""
-        if self.is_scrolling:
-            return
-
-        self.is_scrolling = True
-
         if step == '+full':
             rel_step = self.mne.duration
         elif step == '-full':
@@ -3202,11 +3195,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def vscroll(self, step):
         """Scroll vertically by step."""
-        if self.is_scrolling:
-            return
-
-        self.is_scrolling = True
-
         if self.mne.fig_selection is not None:
             if step == '+full':
                 step = 1
@@ -3437,9 +3425,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Update Scalebars
         self._update_scalebar_x_positions()
 
-        # Relieve Scrolling-Block
-        self.is_scrolling = False
-
     def _update_events_xrange(self, xrange):
         """Add or remove event-lines depending on view-range.
 
@@ -3533,9 +3518,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             trace.set_ch_idx(ch_idx)
             trace.update_color()
             trace.update_data()
-
-        # Relieve Scrolling-Block
-        self.is_scrolling = False
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     # DATA HANDLING
