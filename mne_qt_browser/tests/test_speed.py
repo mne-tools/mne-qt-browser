@@ -224,7 +224,7 @@ def test_scroll_speed_epochs_multicolor(raw_orig, benchmark_param, store,
 
     events = np.full((50, 3), [0, 0, 1])
     events[:, 0] = np.arange(0, len(raw_orig), len(raw_orig) / 50) \
-                   + raw_orig.first_samp
+        + raw_orig.first_samp
     epochs = mne.Epochs(raw_orig, events, preload=True)
     # Prevent problems with info's locked-stated
     epochs.info._unlocked = True
