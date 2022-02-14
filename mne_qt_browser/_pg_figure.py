@@ -2819,6 +2819,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         widget.setLayout(layout)
         self.setCentralWidget(widget)
 
+        # Initialize Selection-Dialog
+        if getattr(self.mne, 'group_by', None) in ['position', 'selection']:
+            self._create_selection_fig()
+
         # Initialize Toolbar
         toolbar = self.addToolBar('Tools')
         toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
