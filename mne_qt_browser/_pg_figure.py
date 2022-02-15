@@ -3354,12 +3354,20 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                              tr.ypos - 0.5 < y < tr.ypos + 0.5]
                     if len(trace) == 1:
                         trace = trace[0]
-                        idx = np.argmin(np.abs(trace.xData - x))
-                        yshown = trace.get_ydata()[idx]
-
+                        idx = np.searchsorted(self.mne.times, x)
+                        if self.mne.data_precomputed:
+                            data = self.mne.data[trace.order_idx]
+                        else:
+                            data = self.mne.data[trace.range_idx]
+                        yvalue = data[idx]
+                        yshown = yvalue + trace.ypos
                         self.mne.crosshair.set_data(x, yshown)
 
-                        yvalue = yshown - trace.ypos
+                        # relative x for epochs
+                        if self.mne.is_epochs:
+                            rel_idx = idx % len(self.mne.inst.times)
+                            x = self.mne.inst.times[rel_idx]
+
                         # negative because plot is inverted for Y
                         scaler = -1 if self.mne.butterfly else -2
                         inv_norm = (scaler *
