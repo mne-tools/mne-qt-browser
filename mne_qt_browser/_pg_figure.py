@@ -4132,7 +4132,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 self._get_dlg_from_mpl(fig)
 
     def _create_selection_fig(self):
-        SelectionDialog(self)
+        if not any([isinstance(fig, SelectionDialog) for
+                    fig in self.mne.child_figs]):
+            SelectionDialog(self)
 
     def message_box(self, text, info_text=None, buttons=None,
                     default_button=None, icon=None, modal=True):
@@ -4321,6 +4323,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
             self._fake_click((x, y), fig=self.mne.view, button=button,
                              xform='none')
+
+    def _update_trace_offsets(self):
+        """legacy method for mne<1.0"""
+        pass
 
     def _resize_by_factor(self, factor):
         pass
