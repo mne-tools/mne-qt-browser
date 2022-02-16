@@ -3311,7 +3311,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             if self.mne.vline is None:
                 self.mne.vline = list()
                 for xt in ts:
-                    epo_idx = np.searchsorted(self.mne.boundary_times, xt) - 1
+                    epo_idx = np.clip(
+                            np.searchsorted(self.mne.boundary_times, xt) - 1,
+                            0, len(self.mne.inst))
                     bmin, bmax = self.mne.boundary_times[epo_idx:epo_idx + 2]
                     # Avoid off-by-one-error at bmax for VlineLabel
                     bmax -= 1 / self.mne.info['sfreq']
