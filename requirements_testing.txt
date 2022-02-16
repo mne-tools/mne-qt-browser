@@ -5,3 +5,4 @@ pytest-timeout
 pooch
 pyvista  # for mne sys_info to tell us about OpenGL
 tqdm
+sklearn  # for testing ICA

@@ -754,7 +754,7 @@ class ChannelScrollBar(BaseScrollBar):
 
     def update_nchan(self):
         """Update bar size."""
-        if self.mne.group_by in ['position', 'selection']:
+        if getattr(self.mne, 'group_by', None) in ['position', 'selection']:
             self.setPageStep(1)
             self.setMaximum(len(self.mne.ch_selections) - 1)
         else:
@@ -876,7 +876,8 @@ class OverviewBar(QGraphicsView):
 
     def update_events(self):
         """Update representation of events."""
-        if self.mne.event_nums is not None and self.mne.events_visible:
+        if getattr(self.mne, 'event_nums', None) is not None \
+                and self.mne.events_visible:
             for ev_t, ev_id in zip(self.mne.event_times, self.mne.event_nums):
                 color_name = self.mne.event_color_dict[ev_id]
                 color = _get_color(color_name)
@@ -1384,6 +1385,9 @@ class BaseScaleBar:
                         ch_name not in self.mne.whitened_ch_names:
                     self.ypos = self.mne.ch_start + idx + 1
                     break
+            # Consider all indices bad
+            if self.ypos is None:
+                self.ypos = self.mne.ch_start + ch_type_idxs[0] + 1
 
     def update_x_position(self):
         """Update x-position of Scalebar."""
@@ -2552,8 +2556,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Initialize attributes which are only used by pyqtgraph, not by
         # matplotlib and add them to MNEBrowseParams.
 
-        # Blocks concurrent scolling to avoid segmentation faults
-        self.is_scrolling = False
         # Exactly one MessageBox for messages to facilitate testing/debugging
         self.msg_box = QMessageBox(self)
         # MessageBox modality needs to be adapted for tests
@@ -2705,7 +2707,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 plt.addItem(grid_line)
 
         # Add events
-        if self.mne.event_nums is not None:
+        if getattr(self.mne, 'event_nums', None) is not None:
             self.mne.events_visible = True
             for ev_time, ev_id in zip(self.mne.event_times,
                                       self.mne.event_nums):
@@ -2749,7 +2751,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Initialize BrowserView (inherits QGraphicsView)
         view = BrowserView(plt, useOpenGL=self.mne.use_opengl)
         if hasattr(self.mne, 'bgcolor'):
-            view.setBackground(_get_color(self.mne.bgcolor))
+            bgcolor = self.mne.bgcolor
+        else:
+            bgcolor = 'w'
+        view.setBackground(_get_color(bgcolor))
         layout.addWidget(view, 0, 0)
 
         # Initialize Scroll-Bars
@@ -2811,6 +2816,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         widget.setLayout(layout)
         self.setCentralWidget(widget)
+
+        # Initialize Selection-Dialog
+        if getattr(self.mne, 'group_by', None) in ['position', 'selection']:
+            self._create_selection_fig()
 
         # Initialize Toolbar
         toolbar = self.addToolBar('Tools')
@@ -2905,8 +2914,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'modifier': [None, 'Shift'],
                 'slot': [self.hscroll],
                 'parameter': [-40, '-full'],
-                'description': [f'Move left ({hscroll_type})',
-                                'Move left (full page)']
+                'description': [f'Scroll left ({hscroll_type})',
+                                'Scroll left (full page)']
             },
             'right': {
                 'alias': '→',
@@ -2914,22 +2923,22 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'modifier': [None, 'Shift'],
                 'slot': [self.hscroll],
                 'parameter': [40, '+full'],
-                'description': [f'Move right ({hscroll_type})',
-                                'Move right (full page)']
+                'description': [f'Scroll right ({hscroll_type})',
+                                'Scroll right (full page)']
             },
             'up': {
                 'alias': '↑',
                 'qt_key': Qt.Key_Up,
                 'slot': [self.vscroll],
                 'parameter': ['-full'],
-                'description': ['Move up (full page)']
+                'description': ['Scroll up (full page)']
             },
             'down': {
                 'alias': '↓',
                 'qt_key': Qt.Key_Down,
                 'slot': [self.vscroll],
                 'parameter': ['+full'],
-                'description': ['Move down (full page)']
+                'description': ['Scroll down (full page)']
             },
             'home': {
                 'alias': dur_keys[0],
@@ -3104,6 +3113,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.scalebar_texts[ch_type] = scale_bar_text
             self.mne.plt.addItem(scale_bar_text)
 
+        self._set_scalebars_visible(self.mne.scalebars_visible)
+
     def _update_scalebar_x_positions(self):
         if self.mne.scalebars_visible:
             for scalebar in self.mne.scalebars.values():
@@ -3161,11 +3172,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def hscroll(self, step):
         """Scroll horizontally by step."""
-        if self.is_scrolling:
-            return
-
-        self.is_scrolling = True
-
         if step == '+full':
             rel_step = self.mne.duration
         elif step == '-full':
@@ -3189,11 +3195,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def vscroll(self, step):
         """Scroll vertically by step."""
-        if self.is_scrolling:
-            return
-
-        self.is_scrolling = True
-
         if self.mne.fig_selection is not None:
             if step == '+full':
                 step = 1
@@ -3353,12 +3354,20 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                              tr.ypos - 0.5 < y < tr.ypos + 0.5]
                     if len(trace) == 1:
                         trace = trace[0]
-                        idx = np.argmin(np.abs(trace.xData - x))
-                        yshown = trace.get_ydata()[idx]
-
+                        idx = np.searchsorted(self.mne.times, x)
+                        if self.mne.data_precomputed:
+                            data = self.mne.data[trace.order_idx]
+                        else:
+                            data = self.mne.data[trace.range_idx]
+                        yvalue = data[idx]
+                        yshown = yvalue + trace.ypos
                         self.mne.crosshair.set_data(x, yshown)
 
-                        yvalue = yshown - trace.ypos
+                        # relative x for epochs
+                        if self.mne.is_epochs:
+                            rel_idx = idx % len(self.mne.inst.times)
+                            x = self.mne.inst.times[rel_idx]
+
                         # negative because plot is inverted for Y
                         scaler = -1 if self.mne.butterfly else -2
                         inv_norm = (scaler *
@@ -3423,9 +3432,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Update Scalebars
         self._update_scalebar_x_positions()
-
-        # Relieve Scrolling-Block
-        self.is_scrolling = False
 
     def _update_events_xrange(self, xrange):
         """Add or remove event-lines depending on view-range.
@@ -3520,9 +3526,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             trace.set_ch_idx(ch_idx)
             trace.update_color()
             trace.update_data()
-
-        # Relieve Scrolling-Block
-        self.is_scrolling = False
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     # DATA HANDLING
@@ -4029,7 +4032,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self._draw_traces()
 
     def _toggle_butterfly(self):
-        self._set_butterfly(not self.mne.butterfly)
+        if self.mne.instance_type != 'ica':
+            self._set_butterfly(not self.mne.butterfly)
 
     def _toggle_dc(self):
         self.mne.remove_dc = not self.mne.remove_dc
@@ -4135,11 +4139,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             if fig is not None:
                 self._get_dlg_from_mpl(fig)
 
-    def _update_trace_offsets(self):
-        pass
-
     def _create_selection_fig(self):
-        SelectionDialog(self)
+        if not any([isinstance(fig, SelectionDialog) for
+                    fig in self.mne.child_figs]):
+            SelectionDialog(self)
 
     def message_box(self, text, info_text=None, buttons=None,
                     default_button=None, icon=None, modal=True):
@@ -4328,6 +4331,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
             self._fake_click((x, y), fig=self.mne.view, button=button,
                              xform='none')
+
+    def _update_trace_offsets(self):
+        """legacy method for mne<1.0"""
+        pass
 
     def _resize_by_factor(self, factor):
         pass

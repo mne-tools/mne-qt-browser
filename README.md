@@ -11,8 +11,7 @@ The backend is based on [pyqtgraph](https://github.com/pyqtgraph/pyqtgraph)
 which uses Qt's [Graphics View Framework](https://doc.qt.io/qt-5/graphicsview.html)
 for the plotting.
 Development started as a [2021's Google Summer of Code Project](https://github.com/marsipu/gsoc2021).
-Currently, only `Raw.plot()` is supported. For the future support for Epochs
-and ICA-Sources is planned.
+For supported features look [here](https://mne.tools/stable/generated/mne.viz.set_browser_backend.html)
 
 ## Installation
 Install **full MNE-Python** with the instructions provided [here](https://mne.tools/stable/install/mne_python.html#d-plotting-and-source-analysis) or install **minimal MNE-Python** with
