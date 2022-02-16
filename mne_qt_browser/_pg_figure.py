@@ -51,6 +51,7 @@ from mne.io.pick import (_DATA_CH_TYPES_ORDER_DEFAULT,
 from mne.utils import _to_rgb, logger, sizeof_fmt, warn, get_config
 
 from . import _browser_instances
+from .icons import resources  # noqa: F401
 
 try:
     from pytestqt.exceptions import capture_exceptions
@@ -122,11 +123,6 @@ except ImportError:
             app.setWindowIcon(QIcon(f":/mne-{kind}icon.png"))
 
         return app
-
-
-def _get_std_icon(icon_name):
-    return QApplication.instance().style().standardIcon(
-            getattr(QStyle, icon_name))
 
 
 def _get_color(color_spec):
@@ -2117,7 +2113,7 @@ class AnnotationDock(QDockWidget):
         self.stop_bx.editingFinished.connect(self._stop_changed)
         layout.addWidget(self.stop_bx)
 
-        help_bt = QPushButton(_get_std_icon('SP_DialogHelpButton'), 'Help')
+        help_bt = QPushButton(QIcon(":/help.svg"), 'Help')
         help_bt.clicked.connect(self._show_help)
         layout.addWidget(help_bt)
 
@@ -2834,59 +2830,53 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         toolbar = self.addToolBar('Tools')
         toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
 
-        adecr_time = QAction(_get_std_icon('SP_ArrowDown'),
-                             'Time', parent=self)
+        adecr_time = QAction(QIcon(":/less_time.svg"), '- Time', parent=self)
         adecr_time.triggered.connect(partial(self.change_duration, -0.2))
         toolbar.addAction(adecr_time)
 
-        aincr_time = QAction(_get_std_icon('SP_ArrowUp'),
-                             'Time', parent=self)
+        aincr_time = QAction(QIcon(":/more_time.svg"), '+ Time', parent=self)
         aincr_time.triggered.connect(partial(self.change_duration, 0.25))
         toolbar.addAction(aincr_time)
 
-        adecr_nchan = QAction(_get_std_icon('SP_ArrowDown'),
-                              'Channels', parent=self)
+        adecr_nchan = QAction(QIcon(":/less_channels.svg"), '- Channels',
+                              parent=self)
         adecr_nchan.triggered.connect(partial(self.change_nchan, -10))
         toolbar.addAction(adecr_nchan)
 
-        aincr_nchan = QAction(_get_std_icon('SP_ArrowUp'),
-                              'Channels', parent=self)
+        aincr_nchan = QAction(QIcon(":/more_channels.svg"), '+ Channels',
+                              parent=self)
         aincr_nchan.triggered.connect(partial(self.change_nchan, 10))
         toolbar.addAction(aincr_nchan)
 
-        adecr_nchan = QAction(_get_std_icon('SP_ArrowDown'),
-                              'Zoom', parent=self)
+        adecr_nchan = QAction(QIcon(":/zoom_out.svg"), 'Zoom Out', parent=self)
         adecr_nchan.triggered.connect(partial(self.scale_all, 4 / 5))
         toolbar.addAction(adecr_nchan)
 
-        aincr_nchan = QAction(_get_std_icon('SP_ArrowUp'),
-                              'Zoom', parent=self)
+        aincr_nchan = QAction(QIcon(":/zoom_in.svg"), 'Zoom In', parent=self)
         aincr_nchan.triggered.connect(partial(self.scale_all, 5 / 4))
         toolbar.addAction(aincr_nchan)
 
         if not self.mne.is_epochs:
-            atoggle_annot = QAction(_get_std_icon('SP_DialogResetButton'),
-                                    'Annotations', parent=self)
+            atoggle_annot = QAction(QIcon(":/annotations.svg"), 'Annotations',
+                                    parent=self)
             atoggle_annot.triggered.connect(self._toggle_annotation_fig)
             toolbar.addAction(atoggle_annot)
 
-        atoggle_proj = QAction(_get_std_icon('SP_DialogOkButton'),
-                               'SSP', parent=self)
+        atoggle_proj = QAction(QIcon(":/ssp.svg"), 'SSP', parent=self)
         atoggle_proj.triggered.connect(self._toggle_proj_fig)
         toolbar.addAction(atoggle_proj)
 
-        atoggle_fullscreen = QAction(_get_std_icon('SP_TitleBarMaxButton'),
-                                     'Full-Screen', parent=self)
+        atoggle_fullscreen = QAction(QIcon(":/fullscreen.svg"), 'Fullscreen',
+                                     parent=self)
         atoggle_fullscreen.triggered.connect(self._toggle_fullscreen)
         toolbar.addAction(atoggle_fullscreen)
 
-        asettings = QAction(_get_std_icon('SP_FileDialogDetailedView'),
-                            'Settings', parent=self)
+        asettings = QAction(QIcon(":/settings.svg"), 'Settings',
+                            parent=self)
         asettings.triggered.connect(self._toggle_settings_fig)
         toolbar.addAction(asettings)
 
-        ahelp = QAction(_get_std_icon('SP_DialogHelpButton'),
-                        'Help', parent=self)
+        ahelp = QAction(QIcon(":/help.svg"), 'Help', parent=self)
         ahelp.triggered.connect(self._toggle_help_fig)
         toolbar.addAction(ahelp)
 

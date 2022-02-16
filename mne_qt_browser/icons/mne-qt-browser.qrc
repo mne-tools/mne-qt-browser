@@ -1,0 +1,16 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource>
+        <file alias="annotations.svg">border_color_black_18dp.svg</file>
+        <file alias="help.svg">help_black_18dp.svg</file>
+        <file alias="less_channels.svg">less_channels_black_18dp.svg</file>
+        <file alias="less_time.svg">less_time_black_18dp.svg</file>
+        <file alias="more_channels.svg">more_channels_black_18dp.svg</file>
+        <file alias="more_time.svg">more_time_black_18dp.svg</file>
+        <file alias="ssp.svg">north_east_black_18dp.svg</file>
+        <file alias="fullscreen.svg">open_in_full_black_18dp.svg</file>
+        <file alias="settings.svg">settings_black_18dp.svg</file>
+        <file alias="zoom_in.svg">zoom_in_black_18dp.svg</file>
+        <file alias="zoom_out.svg">zoom_out_black_18dp.svg</file>
+    </qresource>
+</RCC>
