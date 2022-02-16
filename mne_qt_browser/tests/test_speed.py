@@ -156,8 +156,8 @@ def test_scroll_speed_raw(raw_orig, benchmark_param, store,
 def _check_epochs_version():
     import mne
     from packaging.version import parse
-    if parse(mne.__version__) < parse('1.0.'):
-        pytest.skip('Epochs-Test were skipped because of mne < 1.0!')
+    if parse(mne.__version__) <= parse('0.24.1'):
+        pytest.skip('Epochs-Test were skipped because of mne <= 0.24.1!')
 
 
 @pytest.mark.benchmark
