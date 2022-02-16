@@ -2547,12 +2547,12 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def __init__(self, **kwargs):
         self.backend_name = 'pyqtgraph'
 
+        BrowserBase.__init__(self, **kwargs)
+        QMainWindow.__init__(self)
+
         # Add to list to keep a reference and avoid premature
         # garbage-collection.
         _browser_instances.append(self)
-
-        BrowserBase.__init__(self, **kwargs)
-        QMainWindow.__init__(self)
 
         if self.mne.window_title is not None:
             self.setWindowTitle(self.mne.window_title)
