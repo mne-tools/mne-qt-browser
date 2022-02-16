@@ -995,32 +995,40 @@ class OverviewBar(QGraphicsView):
         x, y = self._mapToData(pos)
 
         # Set X
-        # Move click position to middle of view range
-        if self.mne.is_epochs:
-            epo_idx = max(x - self.mne.n_epochs // 2, 0)
-            xmin = self.mne.boundary_times[epo_idx]
-        else:
-            xmin = x - self.mne.duration / 2
-        xmax = xmin + self.mne.duration
-
         # Check boundaries
-        if x == '-offbounds' or xmin < 0:
-            xmin = 0
-            xmax = self.mne.duration
-        elif x == '+offbounds' or xmax > self.mne.xmax:
-            xmin = self.mne.xmax - self.mne.duration
-            xmax = self.mne.xmax
+        if self.mne.is_epochs:
+            if x == '-offbounds':
+                epo_idx = 0
+            elif x == '+offbounds':
+                epo_idx = len(self.mne.inst) - self.mne.n_epochs
+            else:
+                epo_idx = max(x - self.mne.n_epochs // 2, 0)
+            x = self.mne.boundary_times[epo_idx]
+        elif x == '-offbounds':
+            x = 0
+        elif x == '+offbounds':
+            x = self.mne.xmax - self.mne.duration
+        else:
+            # Move click position to middle of view range
+            x -= self.mne.duration / 2
+        xmin = np.clip(x, 0, self.mne.xmax - self.mne.duration)
+        xmax = np.clip(xmin + self.mne.duration,
+                       self.mne.duration, self.mne.xmax)
+
         self.mne.plt.setXRange(xmin, xmax, padding=0)
 
         # Set Y
-        ymin = y - self.mne.n_channels / 2
-        ymax = ymin + self.mne.n_channels + 1
+        if y == '-offbounds':
+            y = 0
+        elif y == '+offbounds':
+            y = self.mne.ymax - (self.mne.n_channels + 1)
+        else:
+            # Move click position to middle of view range
+            y -= self.mne.n_channels / 2
+        ymin = np.clip(y, 0, self.mne.ymax - (self.mne.n_channels + 1))
+        ymax = np.clip(ymin + self.mne.n_channels + 1,
+                       self.mne.n_channels, self.mne.ymax)
         # Check boundaries
-        if y == '-offbounds' or ymin < 0:
-            ymin, ymax = (0, self.mne.n_channels + 1)
-        elif y == '+offbounds' or ymax > self.mne.ymax:
-            ymin, ymax = (self.mne.ymax - self.mne.n_channels - 1,
-                          self.mne.ymax)
         if self.mne.fig_selection:
             self.mne.fig_selection._scroll_to_idx(int(ymin))
         else:
@@ -2749,7 +2757,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 logger.info(
                         f'Using pyopengl with version {OpenGL.__version__}')
         # Initialize BrowserView (inherits QGraphicsView)
-        view = BrowserView(plt, useOpenGL=self.mne.use_opengl)
+        view = BrowserView(plt, useOpenGL=self.mne.use_opengl,
+                           background='w')
         if hasattr(self.mne, 'bgcolor'):
             bgcolor = self.mne.bgcolor
         else:
