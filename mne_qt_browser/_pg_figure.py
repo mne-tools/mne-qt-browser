@@ -2850,8 +2850,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if not self.mne.is_epochs:
             atoggle_annot = QAction(QIcon(":/annotations.svg"), 'Annotations',
                                     parent=self)
-        atoggle_annot.triggered.connect(self._toggle_annotation_fig)
-        toolbar.addAction(atoggle_annot)
+            atoggle_annot.triggered.connect(self._toggle_annotation_fig)
+            toolbar.addAction(atoggle_annot)
 
         atoggle_proj = QAction(QIcon(":/ssp.svg"), 'SSP', parent=self)
         atoggle_proj.triggered.connect(self._toggle_proj_fig)
