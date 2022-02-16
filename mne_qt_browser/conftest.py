@@ -29,7 +29,7 @@ def store():
 
 def pytest_sessionfinish(session, exitstatus):
     """Print our benchmark results (if present)."""
-    if len(_store):
+    if any([len(_store[key]) for key in _store]):
         from py.io import TerminalWriter
         writer = TerminalWriter()
         writer.line()  # newline
