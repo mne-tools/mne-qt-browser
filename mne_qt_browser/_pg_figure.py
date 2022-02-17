@@ -921,7 +921,8 @@ class OverviewBar(QGraphicsView):
             rect.setZValue(3)
             self.annotations_rect_dict[add_onset] = {'rect': rect,
                                                      'plot_onset': plot_onset,
-                                                     'duration': duration}
+                                                     'duration': duration,
+                                                     'color': color_name}
 
         # Remove onsets
         for rm_onset in rm_onsets:
@@ -929,20 +930,31 @@ class OverviewBar(QGraphicsView):
                                     ['rect'])
             self.annotations_rect_dict.pop(rm_onset)
 
-        # Edit changed duration
+        # Changes
         for edit_onset in self.annotations_rect_dict:
             plot_onset = _sync_onset(self.mne.inst, edit_onset)
-            annot_idx = np.where(self.mne.inst.annotations.onset
-                                 == edit_onset)[0][0]
+            annot_idx = np.where(annotations.onset == edit_onset)[0][0]
             duration = annotations.duration[annot_idx]
             rect_duration = self.annotations_rect_dict[edit_onset]['duration']
+            rect = self.annotations_rect_dict[edit_onset]['rect']
+            # Update changed duration
             if duration != rect_duration:
                 self.annotations_rect_dict[edit_onset]['duration'] = duration
-                rect = self.annotations_rect_dict[edit_onset]['rect']
                 top_left = self._mapFromData(plot_onset, 0)
                 bottom_right = self._mapFromData(plot_onset + duration,
                                                  len(self.mne.ch_order))
                 rect.setRect(QRectF(top_left, bottom_right))
+            # Update changed color
+            description = annotations.description[annot_idx]
+            color_name = self.mne.annotation_segment_colors[description]
+            rect_color = self.annotations_rect_dict[edit_onset]['color']
+            if color_name != rect_color:
+                color = _get_color(color_name)
+                color.setAlpha(150)
+                pen = mkPen(color)
+                brush = mkBrush(color)
+                rect.setPen(pen)
+                rect.setBrush(brush)
 
     def update_vline(self):
         """Update representation of vline."""
@@ -1039,13 +1051,12 @@ class OverviewBar(QGraphicsView):
         self._set_range_from_pos(event.pos())
 
     def _fit_bg_img(self):
+        # Remove previous item from scene
+        if (self.bg_pxmp_item is not None and
+                self.bg_pxmp_item in self.scene().items()):
+            self.scene().removeItem(self.bg_pxmp_item)
         # Resize Pixmap
-        if self.bg_pxmp:
-            # Remove previous item from scene
-            if (self.bg_pxmp_item is not None and
-                    self.bg_pxmp_item in self.scene().items()):
-                self.scene().removeItem(self.bg_pxmp_item)
-
+        if self.bg_pxmp is not None:
             cnt_rect = self.contentsRect()
             self.bg_pxmp = self.bg_pxmp.scaled(cnt_rect.width(),
                                                cnt_rect.height(),
@@ -1119,8 +1130,9 @@ class OverviewBar(QGraphicsView):
     def set_background(self):
         """Set the background-image for the selected overview-mode."""
         # Add Overview-Pixmap
-        if (self.mne.overview_mode == 'channels'
-                or not self.mne.enable_precompute):
+        if self.mne.overview_mode == 'empty':
+            self.bg_pxmp = None
+        elif self.mne.overview_mode == 'channels':
             channel_rgba = np.empty((len(self.mne.ch_order),
                                      2, 4))
             for line_idx, ch_idx in enumerate(self.mne.ch_order):
@@ -2166,6 +2178,7 @@ class AnnotationDock(QDockWidget):
         self.main._setup_annotation_colors()
         self._update_regions_colors()
         self._update_description_cmbx()
+        self.mne.overview_bar.update_annotations()
 
     def _edit_description_selected(self, new_des):
         """Update description only of selected region."""
@@ -2189,6 +2202,7 @@ class AnnotationDock(QDockWidget):
         self.main._setup_annotation_colors()
         self._update_regions_colors()
         self._update_description_cmbx()
+        self.mne.overview_bar.update_annotations()
 
     def _edit_description_dlg(self):
         if len(self.mne.inst.annotations.description) > 0:
@@ -2340,8 +2354,8 @@ class AnnotationDock(QDockWidget):
                                       f'Choose color for {curr_descr}!')
         if color.isValid():
             self.mne.annotation_segment_colors[curr_descr] = color
-            self._update_description_cmbx()
             self._update_regions_colors()
+            self._update_description_cmbx()
             self.mne.overview_bar.update_annotations()
 
     def update_values(self, region):
@@ -2790,17 +2804,19 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Add Combobox to select Overview-Mode
         self.overview_mode_chkbx = _FastToolTipComboBox()
-        self.overview_mode_chkbx.addItems(['channels'])
+        self.overview_mode_chkbx.addItems(['empty', 'channels'])
         tooltip = (
             '<h2>Overview-Modes</h2>'
             '<ul>'
-            '<li>channels:<br> '
+            '<li>empty:<br>'
+            'Display no background.</li>'
+            '<li>channels:<br>'
             'Display each channel with its channel-type color.</li>'
             '<li>zscore:<br>'
             'Display the zscore for the data from each channel across time. '
             'Red indicates high zscores, blue indicates low zscores, '
             'and the boundaries of the color gradient are defined by the '
-            'minimum/maximum zscore. '
+            'minimum/maximum zscore.'
             'This only works if precompute is set to "True", or if it is '
             'enabled with "auto" and enough free RAM is available.</li>'
             '</ul>')
