@@ -2677,12 +2677,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         layout = QGridLayout()
 
         # Initialize Axis-Items
-        time_axis = TimeAxis(self.mne)
-        time_axis.setLabel(text='Time', units='s')
-        channel_axis = ChannelAxis(self)
-        viewbox = RawViewBox(self)
-        vars(self.mne).update(time_axis=time_axis, channel_axis=channel_axis,
-                              viewbox=viewbox)
+        self.mne.time_axis = TimeAxis(self.mne)
+        self.mne.time_axis.setLabel(text='Time', units='s')
+        self.mne.channel_axis = ChannelAxis(self)
+        self.mne.viewbox = RawViewBox(self)
 
         # Start precomputing if enabled
         self._init_precompute()
@@ -2691,10 +2689,11 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self._update_data()
 
         # Initialize Trace-Plot
-        plt = PlotItem(viewBox=viewbox,
-                       axisItems={'bottom': time_axis, 'left': channel_axis})
+        self.mne.plt = PlotItem(viewBox=self.mne.viewbox,
+                                axisItems={'bottom': self.mne.time_axis,
+                                           'left': self.mne.channel_axis})
         # Hide AutoRange-Button
-        plt.hideButtons()
+        self.mne.plt.hideButtons()
         # Configure XY-Range
         if self.mne.is_epochs:
             self.mne.xmax = len(self.mne.inst.times) * len(self.mne.inst) \
@@ -2704,12 +2703,11 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Add one empty line as padding at top (y=0).
         # Negative Y-Axis to display channels from top.
         self.mne.ymax = len(self.mne.ch_order) + 1
-        plt.setLimits(xMin=0, xMax=self.mne.xmax,
-                      yMin=0, yMax=self.mne.ymax)
+        self.mne.plt.setLimits(xMin=0, xMax=self.mne.xmax,
+                               yMin=0, yMax=self.mne.ymax)
         # Connect Signals from PlotItem
-        plt.sigXRangeChanged.connect(self._xrange_changed)
-        plt.sigYRangeChanged.connect(self._yrange_changed)
-        vars(self.mne).update(plt=plt)
+        self.mne.plt.sigXRangeChanged.connect(self._xrange_changed)
+        self.mne.plt.sigYRangeChanged.connect(self._yrange_changed)
 
         # Add traces
         for ch_idx in self.mne.picks:
@@ -2722,7 +2720,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 grid_line = InfiniteLine(pos=x_grid,
                                          pen=grid_pen,
                                          movable=False)
-                plt.addItem(grid_line)
+                self.mne.plt.addItem(grid_line)
 
         # Add events
         if getattr(self.mne, 'event_nums', None) is not None:
@@ -2767,21 +2765,21 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 logger.info(
                         f'Using pyopengl with version {OpenGL.__version__}')
         # Initialize BrowserView (inherits QGraphicsView)
-        view = BrowserView(plt, useOpenGL=self.mne.use_opengl,
-                           background='w')
+        self.mne.view = BrowserView(self.mne.plt, useOpenGL=self.mne.use_opengl,
+                                    background='w')
         if hasattr(self.mne, 'bgcolor'):
             bgcolor = self.mne.bgcolor
         else:
             bgcolor = 'w'
-        view.setBackground(_get_color(bgcolor))
-        layout.addWidget(view, 0, 0)
+        self.mne.view.setBackground(_get_color(bgcolor))
+        layout.addWidget(self.mne.view, 0, 0)
 
         # Initialize Scroll-Bars
-        ax_hscroll = TimeScrollBar(self.mne)
-        layout.addWidget(ax_hscroll, 1, 0, 1, 2)
+        self.mne.ax_hscroll = TimeScrollBar(self.mne)
+        layout.addWidget(self.mne.ax_hscroll, 1, 0, 1, 2)
 
-        ax_vscroll = ChannelScrollBar(self.mne)
-        layout.addWidget(ax_vscroll, 0, 1)
+        self.mne.ax_vscroll = ChannelScrollBar(self.mne)
+        layout.addWidget(self.mne.ax_vscroll, 0, 1)
 
         # Initialize VLine
         self.mne.vline = None
@@ -2791,7 +2789,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.crosshair_enabled = False
         self.mne.crosshair_h = None
         self.mne.crosshair = None
-        view.sigSceneMouseMoved.connect(self._mouse_moved)
+        self.mne.view.sigSceneMouseMoved.connect(self._mouse_moved)
 
         # Initialize Annotation-Widgets
         self.mne.annotation_mode = False
@@ -2799,8 +2797,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self._init_annot_mode()
 
         # OverviewBar
-        overview_bar = OverviewBar(self)
-        layout.addWidget(overview_bar, 2, 0, 1, 2)
+        self.mne.overview_bar = OverviewBar(self)
+        layout.addWidget(self.mne.overview_bar, 2, 0, 1, 2)
 
         # Add Combobox to select Overview-Mode
         self.overview_mode_chkbx = _FastToolTipComboBox()
@@ -2823,9 +2821,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.overview_mode_chkbx.setToolTip(tooltip)
         if self.mne.enable_precompute:
             self.overview_mode_chkbx.addItems(['zscore'])
+        self.overview_mode_chkbx.setCurrentText(self.mne.overview_mode)
         self.overview_mode_chkbx.currentTextChanged.connect(
                 self._overview_mode_changed)
-        self.overview_mode_chkbx.setCurrentIndex(0)
         # Avoid taking keyboard-focus
         self.overview_mode_chkbx.setFocusPolicy(Qt.NoFocus)
         overview_mode_layout = QHBoxLayout()
@@ -2847,74 +2845,67 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self._toggle_proj_fig()
 
         # Initialize Toolbar
-        toolbar = self.addToolBar('Tools')
-        toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.mne.toolbar = self.addToolBar('Tools')
+        self.mne.toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
 
         adecr_time = QAction(QIcon(":/less_time.svg"), '- Time', parent=self)
         adecr_time.triggered.connect(partial(self.change_duration, -0.2))
-        toolbar.addAction(adecr_time)
+        self.mne.toolbar.addAction(adecr_time)
 
         aincr_time = QAction(QIcon(":/more_time.svg"), '+ Time', parent=self)
         aincr_time.triggered.connect(partial(self.change_duration, 0.25))
-        toolbar.addAction(aincr_time)
+        self.mne.toolbar.addAction(aincr_time)
 
         adecr_nchan = QAction(QIcon(":/less_channels.svg"), '- Channels',
                               parent=self)
         adecr_nchan.triggered.connect(partial(self.change_nchan, -10))
-        toolbar.addAction(adecr_nchan)
+        self.mne.toolbar.addAction(adecr_nchan)
 
         aincr_nchan = QAction(QIcon(":/more_channels.svg"), '+ Channels',
                               parent=self)
         aincr_nchan.triggered.connect(partial(self.change_nchan, 10))
-        toolbar.addAction(aincr_nchan)
+        self.mne.toolbar.addAction(aincr_nchan)
 
         adecr_nchan = QAction(QIcon(":/zoom_out.svg"), 'Zoom Out', parent=self)
         adecr_nchan.triggered.connect(partial(self.scale_all, 4 / 5))
-        toolbar.addAction(adecr_nchan)
+        self.mne.toolbar.addAction(adecr_nchan)
 
         aincr_nchan = QAction(QIcon(":/zoom_in.svg"), 'Zoom In', parent=self)
         aincr_nchan.triggered.connect(partial(self.scale_all, 5 / 4))
-        toolbar.addAction(aincr_nchan)
+        self.mne.toolbar.addAction(aincr_nchan)
 
         if not self.mne.is_epochs:
             atoggle_annot = QAction(QIcon(":/annotations.svg"), 'Annotations',
                                     parent=self)
             atoggle_annot.triggered.connect(self._toggle_annotation_fig)
-            toolbar.addAction(atoggle_annot)
+            self.mne.toolbar.addAction(atoggle_annot)
 
         atoggle_proj = QAction(QIcon(":/ssp.svg"), 'SSP', parent=self)
         atoggle_proj.triggered.connect(self._toggle_proj_fig)
-        toolbar.addAction(atoggle_proj)
+        self.mne.toolbar.addAction(atoggle_proj)
 
         atoggle_fullscreen = QAction(QIcon(":/fullscreen.svg"), 'Fullscreen',
                                      parent=self)
         atoggle_fullscreen.triggered.connect(self._toggle_fullscreen)
-        toolbar.addAction(atoggle_fullscreen)
+        self.mne.toolbar.addAction(atoggle_fullscreen)
 
         asettings = QAction(QIcon(":/settings.svg"), 'Settings',
                             parent=self)
         asettings.triggered.connect(self._toggle_settings_fig)
-        toolbar.addAction(asettings)
+        self.mne.toolbar.addAction(asettings)
 
         ahelp = QAction(QIcon(":/help.svg"), 'Help', parent=self)
         ahelp.triggered.connect(self._toggle_help_fig)
-        toolbar.addAction(ahelp)
-
-        # Add GUI-Elements to MNEBrowserParams-Instance
-        vars(self.mne).update(
-                plt=plt, view=view, ax_hscroll=ax_hscroll,
-                ax_vscroll=ax_vscroll,
-                overview_bar=overview_bar, toolbar=toolbar
-        )
+        self.mne.toolbar.addAction(ahelp)
 
         # Set Start-Range (after all necessary elements are initialized)
-        plt.setXRange(self.mne.t_start,
-                      self.mne.t_start + self.mne.duration,
-                      padding=0)
+        self.mne.plt.setXRange(self.mne.t_start,
+                               self.mne.t_start + self.mne.duration,
+                               padding=0)
         if self.mne.butterfly:
             self._set_butterfly(True)
         else:
-            plt.setYRange(0, self.mne.n_channels + 1, padding=0)
+            self.mne.plt.setYRange(0, self.mne.n_channels + 1, padding=0)
 
         # Set Size
         width = int(self.mne.figsize[0] * self.logicalDpiX())
@@ -3895,10 +3886,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Initialize Annotation-Dock
         existing_dock = getattr(self.mne, 'fig_annotation', None)
         if existing_dock is None:
-            fig_annotation = AnnotationDock(self)
-            self.addDockWidget(Qt.TopDockWidgetArea, fig_annotation)
-            fig_annotation.setVisible(False)
-            vars(self.mne).update(fig_annotation=fig_annotation)
+            self.mne.fig_annotation = AnnotationDock(self)
+            self.addDockWidget(Qt.TopDockWidgetArea, self.mne.fig_annotation)
+            self.mne.fig_annotation.setVisible(False)
 
         # Add annotations as regions
         for annot in self.mne.inst.annotations:
