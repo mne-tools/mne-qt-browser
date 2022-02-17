@@ -3681,7 +3681,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 if isinstance(self.mne.inst, BaseRaw):
                     fmt = self.mne.inst.orig_format
                 else:  # assume float32 for Epochs and ICA
-                    fmt = np.float32
+                    fmt = 'single'
                 # Apply size change to 64-bit float in memory
                 # (* 2 because when loading data will be loaded into a copy
                 # of self.mne.inst._data to apply processing.
