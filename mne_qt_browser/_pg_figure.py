@@ -2826,6 +2826,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if getattr(self.mne, 'group_by', None) in ['position', 'selection']:
             self._create_selection_fig()
 
+        # Initialize Projectors-Dialog if show_options=True
+        if getattr(self.mne, 'show_options', False):
+            self._toggle_proj_fig()
+
         # Initialize Toolbar
         toolbar = self.addToolBar('Tools')
         toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
