@@ -44,8 +44,9 @@ from scipy.stats import zscore
 
 from mne.viz import plot_sensors
 from mne.viz._figure import BrowserBase
-from mne.viz.utils import _simplify_float, _merge_annotations
+from mne.viz.utils import _simplify_float, _merge_annotations, _figure_agg
 from mne.annotations import _sync_onset
+from mne.io import BaseRaw
 from mne.io.pick import (_DATA_CH_TYPES_ORDER_DEFAULT,
                          channel_indices_by_type, _DATA_CH_TYPES_SPLIT)
 from mne.utils import _to_rgb, logger, sizeof_fmt, warn, get_config
@@ -1756,12 +1757,19 @@ class SelectionDialog(_BaseDialog):
         layout = QVBoxLayout()
 
         # Add channel plot
+        fig = _figure_agg(figsize=(6, 6), dpi=96)
+        ax = fig.add_axes([0, 0, 1, 1])
         self.channel_fig = plot_sensors(self.mne.info, kind='select',
                                         ch_type='all', title='',
-                                        ch_groups=self.mne.group_by,
+                                        ch_groups=self.mne.group_by, axes=ax,
                                         show=False)[0]
-        self.channel_fig.canvas.mpl_connect('lasso_event',
-                                            self._set_custom_selection)
+        if hasattr(self.channel_fig.lasso, 'callbacks'):
+            # MNE >= 1.0
+            self.channel_fig.lasso.callbacks.append(self._set_custom_selection)
+        else:
+            # MNE <= 0.24
+            self.channel_fig.canvas.mpl_connect(
+                'lasso_event', self._set_custom_selection)
         self.channel_widget = _ChannelFig(self.channel_fig)
         layout.addWidget(self.channel_widget)
 
@@ -3670,7 +3678,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                                    'int': 2,
                                    'short': 4}
 
-                fmt = self.mne.inst.orig_format
+                if isinstance(self.mne.inst, BaseRaw):
+                    fmt = self.mne.inst.orig_format
+                else:  # assume float32 for Epochs and ICA
+                    fmt = np.float32
                 # Apply size change to 64-bit float in memory
                 # (* 2 because when loading data will be loaded into a copy
                 # of self.mne.inst._data to apply processing.
