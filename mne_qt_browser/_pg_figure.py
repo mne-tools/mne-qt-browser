@@ -2765,7 +2765,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 logger.info(
                         f'Using pyopengl with version {OpenGL.__version__}')
         # Initialize BrowserView (inherits QGraphicsView)
-        self.mne.view = BrowserView(self.mne.plt, useOpenGL=self.mne.use_opengl,
+        self.mne.view = BrowserView(self.mne.plt,
+                                    useOpenGL=self.mne.use_opengl,
                                     background='w')
         if hasattr(self.mne, 'bgcolor'):
             bgcolor = self.mne.bgcolor
