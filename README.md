@@ -11,7 +11,6 @@ The backend is based on [pyqtgraph](https://github.com/pyqtgraph/pyqtgraph)
 which uses Qt's [Graphics View Framework](https://doc.qt.io/qt-5/graphicsview.html)
 for the plotting.
 Development started as a [2021's Google Summer of Code Project](https://github.com/marsipu/gsoc2021).
-For supported features look [here](https://mne.tools/stable/generated/mne.viz.set_browser_backend.html)
 
 ## Installation
 Install **full MNE-Python** with the instructions provided [here](https://mne.tools/stable/install/mne_python.html#d-plotting-and-source-analysis) or install **minimal MNE-Python** with
@@ -27,8 +26,16 @@ conda install -c conda-forge mne-base matplotlib mne-qt-browser
 
 ## Usage
 
-In the following example, we'll read M/EEG data from the MNE `sample` dataset
-and plot it using the `mne-qt-browser`.
+The backend supports plotting for the following MNE-Python methods:
+
+- [`mne.io.Raw.plot()`](https://mne.tools/dev/generated/mne.io.Raw.html?highlight=raw%20plot#mne.io.Raw.plot)
+- [`mne.Epochs.plot()`](https://mne.tools/dev/generated/mne.Epochs.html?highlight=epochs%20plot#mne.Epochs.plot)
+- [`mne.preprocessing.ICA.plot_sources(raw)`](https://mne.tools/dev/generated/mne.preprocessing.ICA.html?highlight=ica%20plot_sources#mne.preprocessing.ICA.plot_sources)
+- [`mne.preprocessing.ICA.plot_sources(epochs)`](https://mne.tools/dev/generated/mne.preprocessing.ICA.html?highlight=ica%20plot_sources#mne.preprocessing.ICA.plot_sources)
+
+In the following example, we'll read M/EEG raw data from the MNE `sample` dataset
+and plot it using the `qt`-backend.
+(For mne-version >= 1.0 the `qt`-backend will be the default)
 
 ```python
 from pathlib import Path
@@ -38,7 +45,7 @@ sample_dir = mne.datasets.sample.data_path()
 raw_path = Path(sample_dir) / 'MEG' / 'sample' / 'sample_audvis_raw.fif'
 raw = mne.io.read_raw(raw_path)
 
-mne.viz.set_browser_backend('pyqtgraph')  # Enable mne-qt-browser backend
+mne.viz.set_browser_backend('qt')  # Enable mne-qt-browser backend if mne < 1.0
 raw.plot(block=True)
 ```
 
@@ -46,12 +53,13 @@ If the plot is not showing, search for solutions in the
 [troubleshooting](#troubleshooting) section below.
 
 This will use the `mne-qt-browser` for the current Python session. If you
-want to make this change permanent so you don't have to use the
+want to make this change permanent, so you don't have to use the
 `set_browser_backend()` each time after restarting Python, run the following
 line to modify your MNE configuration file:
 
 ```python
-mne.set_config('MNE_BROWSER_BACKEND', 'pyqtgraph')
+import mne
+mne.set_config('MNE_BROWSER_BACKEND', 'qt')
 ```
 
 ## Troubleshooting
@@ -77,7 +85,7 @@ python -i example_script.py
 If the integration of the Qt event loop is not activated for IPython, a plot with `raw.plot()` will freeze.
 Do avoid that either change `raw.plot()` to `raw.plot(block=True)` or activate the integration of the event loop with
 
-```python
+```console
 %gui qt5
 ```
 
