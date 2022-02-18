@@ -2530,9 +2530,9 @@ class LoadThread(QThread):
             logger.info('Waiting for Loading-Thread to finish... '
                         f'(max. {wait_time} sec)')
             self.wait(int(wait_time * 1e3))
-        self.loadProgress.disconnect()
-        self.processText.disconnect()
-        self.loadingFinished.disconnect()
+        _disconnect(self.loadProgress)
+        _disconnect(self.processText)
+        _disconnect(self.loadingFinished)
         del self.mne
         del self.browser
 
@@ -2574,6 +2574,13 @@ qsettings_params = {
     # Downsampling-Method (set SettingsDialog for details)
     'ds_method': 'peak'
 }
+
+
+def _disconnnect(widget):
+    try:
+        widget.disconnect()
+    except TypeError:  # if there are no connections, ignore it
+        pass
 
 
 class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
@@ -4412,10 +4419,10 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if hasattr(self, 'mne'):
             # Explicit disconnects to avoid reference cycles that gc can't
             # properly resolve ()
-            self.mne.plt.sigXRangeChanged.disconnect()
-            self.mne.plt.sigYRangeChanged.disconnect()
+            _disconnect(self.mne.plt.sigXRangeChanged)
+            _disconnect(self.mne.plt.sigYRangeChanged)
             for action in self.mne.toolbar.actions():
-                action.triggered.disconnect()
+                _disconnect(action.triggered)
             # Save settings going into QSettings.
             for qsetting in qsettings_params:
                 value = getattr(self.mne, qsetting)
