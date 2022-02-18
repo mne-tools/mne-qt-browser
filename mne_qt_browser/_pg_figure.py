@@ -2576,9 +2576,9 @@ qsettings_params = {
 }
 
 
-def _disconnnect(widget):
+def _disconnect(sig):
     try:
-        widget.disconnect()
+        sig.disconnect()
     except TypeError:  # if there are no connections, ignore it
         pass
 
