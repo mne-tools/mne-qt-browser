@@ -2461,6 +2461,9 @@ class LoadThread(QThread):
         super().__init__()
         self.browser = browser
         self.mne = browser.mne
+        self.loadProgress.connect(self.mne.load_progressbar.setValue)
+        self.processText.connect(self.browser._show_process)
+        self.loadingFinished.connect(self.browser._precompute_finished)
 
     def run(self):
         """Load and process data in a separate QThread."""
@@ -2521,6 +2524,18 @@ class LoadThread(QThread):
 
         self.loadingFinished.emit()
 
+    def clean(self):
+        if self.isRunning():
+            wait_time = 10  # max. waiting time in seconds
+            logger.info('Waiting for Loading-Thread to finish... '
+                        f'(max. {wait_time} sec)')
+            self.wait(int(wait_time * 1e3))
+        self.loadProgress.disconnect()
+        self.processText.disconnect()
+        self.loadingFinished.disconnect()
+        del self.mne
+        del self.browser
+
 
 class _FastToolTipComboBox(QComboBox):
     def __init__(self, *args, **kwargs):
@@ -2563,6 +2578,7 @@ qsettings_params = {
 
 class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     """A PyQtGraph-backend for 2D data browsing."""
+
     gotClosed = pyqtSignal()
 
     def __init__(self, **kwargs):
@@ -2674,10 +2690,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # A QThread for preloading
         self.load_thread = LoadThread(self)
-        self.load_thread.loadProgress.connect(self.mne.
-                                              load_progressbar.setValue)
-        self.load_thread.processText.connect(self._show_process)
-        self.load_thread.loadingFinished.connect(self._precompute_finished)
 
         # Create centralWidget and layout
         widget = QWidget()
@@ -2770,7 +2782,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 self.mne.use_opengl = False
             else:
                 logger.info(
-                        f'Using pyopengl with version {OpenGL.__version__}')
+                    f'Using pyopengl with version {OpenGL.__version__}')
         # Initialize BrowserView (inherits QGraphicsView)
         self.mne.view = BrowserView(self.mne.plt,
                                     useOpenGL=self.mne.use_opengl,
@@ -4398,23 +4410,24 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         """Customize close event."""
         event.accept()
         if hasattr(self, 'mne'):
+            # Explicit disconnects to avoid reference cycles that gc can't
+            # properly resolve ()
+            self.mne.plt.sigXRangeChanged.disconnect()
+            self.mne.plt.sigYRangeChanged.disconnect()
+            for action in self.mne.toolbar.actions():
+                action.triggered.disconnect()
             # Save settings going into QSettings.
             for qsetting in qsettings_params:
                 value = getattr(self.mne, qsetting)
                 QSettings().setValue(qsetting, value)
-            self._close(event)
-
-        if hasattr(self, 'load_thread') and self.load_thread is not None:
-            if self.load_thread.isRunning():
-                wait_time = 10  # max. waiting time in seconds
-                logger.info('Waiting for Loading-Thread to finish... '
-                            f'(max. {wait_time} sec)')
-                self.load_thread.wait(int(wait_time * 1e3))
+        if getattr(self, 'load_thread', None) is not None:
+            self.load_thread.clean()
+            self.load_thread = None
 
         # Remove self from browser_instances in globals
         if self in _browser_instances:
             _browser_instances.remove(self)
-
+        self._close(event)
         self.gotClosed.emit()
         # Make sure PyQtBrowser gets deleted after it was closed.
         self.deleteLater()
