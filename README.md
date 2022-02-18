@@ -2,7 +2,7 @@
 
 ## A new backend based on pyqtgraph for the 2D-Data-Browser in MNE-Python.
 
-![Screenshot of mne-qt-browser](./screenshot.png)
+![Screenshot of mne-qt-browser](https://github.com/mne-tools/mne-qt-browser/raw/main/screenshot.png)
 
 This repository hosts the code for an alternative backend for plotting 2D-Data with 
 [MNE-Python](https://github.com/mne-tools/mne-python).
