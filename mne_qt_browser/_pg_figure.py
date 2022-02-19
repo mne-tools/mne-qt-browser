@@ -1536,7 +1536,7 @@ class SettingsDialog(_BaseDialog):
         self.downsampling_box.setMinimum(0)
         self.downsampling_box.setSpecialValueText('Auto')
         self.downsampling_box.valueChanged.connect(partial(
-                self._value_changed, value_name='downsampling'))
+            self._value_changed, value_name='downsampling'))
         self.downsampling_box.setValue(0 if self.mne.downsampling == 'auto'
                                        else self.mne.downsampling)
         layout.addRow('downsampling', self.downsampling_box)
@@ -1570,13 +1570,18 @@ class SettingsDialog(_BaseDialog):
                                                   'the scrolling in '
                                                   'horizontal direction.')
         self.scroll_sensitivity_slider.valueChanged.connect(partial(
-                self._value_changed, value_name='scroll_sensitivity'))
+            self._value_changed, value_name='scroll_sensitivity'))
         # Set default
         self.scroll_sensitivity_slider.setValue(self.mne.scroll_sensitivity)
         layout.addRow('horizontal scroll sensitivity',
                       self.scroll_sensitivity_slider)
         self.setLayout(layout)
         self.show()
+
+    def closeEvent(self):
+        _disconnect(self.ds_method_cmbx.currentTextChanged)
+        _disconnect(self.scroll_sensitivity_slider.valueChanged)
+        super.closeEvent()
 
     def _value_changed(self, new_value, value_name):
         if value_name == 'downsampling' and new_value == 0:
@@ -1917,6 +1922,11 @@ class SelectionDialog(_BaseDialog):
 
     def closeEvent(self, event):
         super().closeEvent(event)
+        if hasattr(self.channel_fig.lasso, 'callbacks'):
+            # MNE >= 1.0
+            self.channel_fig.lasso.callbacks.clear()
+        for chkbx in self.chkbxs.values():
+            _disconnect(chkbx.clicked)
         if hasattr(self, 'main'):
             self.main.close()
 
@@ -3837,8 +3847,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         region.regionChangeFinished.connect(self._region_changed)
         region.gotSelected.connect(self._region_selected)
         region.removeRequested.connect(self._remove_region)
-        self.mne.viewbox.sigYRangeChanged.connect(
-                region.update_label_pos)
+        self.mne.viewbox.sigYRangeChanged.connect(region.update_label_pos)
         self.mne.regions.append(region)
 
         region.update_label_pos()
@@ -4436,6 +4445,12 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 for fig in self.mne.child_figs:
                     fig.close()
                 self.mne.child_figs.clear()
+            for attr in ('traces', 'event_lines', 'regions'):
+                getattr(self.mne, attr, []).clear()
+            if getattr(self.mne, 'vline', None) is not None:
+                for vl in self.mne.vline:
+                    _disconnect(vl.sigPositionChangeFinished)
+                self.mne.vline.clear()
         if getattr(self, 'load_thread', None) is not None:
             self.load_thread.clean()
             self.load_thread = None
