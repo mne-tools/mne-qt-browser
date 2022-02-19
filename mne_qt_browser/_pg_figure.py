@@ -4429,7 +4429,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             for qsetting in qsettings_params:
                 value = getattr(self.mne, qsetting)
                 QSettings().setValue(qsetting, value)
-            for attr in ('keyboard_shortcuts', 'traces', 'plt', 'toolbar'):
+            for attr in ('keyboard_shortcuts', 'traces', 'plt', 'toolbar',
+                         'child_figs'):
                 if hasattr(self.mne, attr):
                     delattr(self.mne, attr)
         if getattr(self, 'load_thread', None) is not None:
