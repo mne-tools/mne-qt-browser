@@ -1513,7 +1513,7 @@ class _BaseDialog(QDialog):
         if hasattr(self, 'name') and hasattr(self, 'mne'):
             if self.name is not None and hasattr(self.mne, self.name):
                 setattr(self.mne, self.name, None)
-            if self in getattr(self.mne, 'child_figs', []):
+            if self in self.mne.child_figs:
                 self.mne.child_figs.remove(self)
         event.accept()
 
@@ -4429,10 +4429,13 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             for qsetting in qsettings_params:
                 value = getattr(self.mne, qsetting)
                 QSettings().setValue(qsetting, value)
-            for attr in ('keyboard_shortcuts', 'traces', 'plt', 'toolbar',
-                         'child_figs'):
+            for attr in ('keyboard_shortcuts', 'traces', 'plt', 'toolbar'):
                 if hasattr(self.mne, attr):
                     delattr(self.mne, attr)
+            if hasattr(self.mne, 'child_figs'):
+                for fig in self.mne.child_figs:
+                    fig.close()
+                self.mne.child_figs.clear()
         if getattr(self, 'load_thread', None) is not None:
             self.load_thread.clean()
             self.load_thread = None
