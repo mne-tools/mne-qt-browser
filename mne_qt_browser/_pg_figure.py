@@ -4419,16 +4419,19 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if hasattr(self, 'mne'):
             # Explicit disconnects to avoid reference cycles that gc can't
             # properly resolve ()
-            _disconnect(self.mne.plt.sigXRangeChanged)
-            _disconnect(self.mne.plt.sigYRangeChanged)
-            for action in self.mne.toolbar.actions():
-                _disconnect(action.triggered)
+            if hasattr(self.mne, 'plt'):
+                _disconnect(self.mne.plt.sigXRangeChanged)
+                _disconnect(self.mne.plt.sigYRangeChanged)
+            if hasattr(self.mne, 'toolbar'):
+                for action in self.mne.toolbar.actions():
+                    _disconnect(action.triggered)
             # Save settings going into QSettings.
             for qsetting in qsettings_params:
                 value = getattr(self.mne, qsetting)
                 QSettings().setValue(qsetting, value)
-            for attr in ('keyboard_shortcuts', 'traces', 'plt'):
-                delattr(self.mne, attr)
+            for attr in ('keyboard_shortcuts', 'traces', 'plt', 'toolbar'):
+                if hasattr(self.mne, attr):
+                    delattr(self.mne, attr)
         if getattr(self, 'load_thread', None) is not None:
             self.load_thread.clean()
             self.load_thread = None
