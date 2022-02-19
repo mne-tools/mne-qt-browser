@@ -1513,7 +1513,7 @@ class _BaseDialog(QDialog):
         if hasattr(self, 'name') and hasattr(self, 'mne'):
             if self.name is not None and hasattr(self.mne, self.name):
                 setattr(self.mne, self.name, None)
-            if self in self.mne.child_figs:
+            if self in getattr(self.mne, 'child_figs', []):
                 self.mne.child_figs.remove(self)
         event.accept()
 
