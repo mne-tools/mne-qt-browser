@@ -4448,9 +4448,12 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             for attr in ('traces', 'event_lines', 'regions'):
                 getattr(self.mne, attr, []).clear()
             if getattr(self.mne, 'vline', None) is not None:
-                for vl in self.mne.vline:
-                    _disconnect(vl.sigPositionChangeFinished)
-                self.mne.vline.clear()
+                if self.mne.is_epochs:
+                    for vl in self.mne.vline:
+                        _disconnect(vl.sigPositionChangeFinished)
+                    self.mne.vline.clear()
+                else:
+                    _disconnect(self.mne.vline.sigPositionChangeFinished)
         if getattr(self, 'load_thread', None) is not None:
             self.load_thread.clean()
             self.load_thread = None
