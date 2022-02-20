@@ -1536,7 +1536,7 @@ class SettingsDialog(_BaseDialog):
         self.downsampling_box.setMinimum(0)
         self.downsampling_box.setSpecialValueText('Auto')
         self.downsampling_box.valueChanged.connect(partial(
-                self._value_changed, value_name='downsampling'))
+            self._value_changed, value_name='downsampling'))
         self.downsampling_box.setValue(0 if self.mne.downsampling == 'auto'
                                        else self.mne.downsampling)
         layout.addRow('downsampling', self.downsampling_box)
@@ -1570,13 +1570,18 @@ class SettingsDialog(_BaseDialog):
                                                   'the scrolling in '
                                                   'horizontal direction.')
         self.scroll_sensitivity_slider.valueChanged.connect(partial(
-                self._value_changed, value_name='scroll_sensitivity'))
+            self._value_changed, value_name='scroll_sensitivity'))
         # Set default
         self.scroll_sensitivity_slider.setValue(self.mne.scroll_sensitivity)
         layout.addRow('horizontal scroll sensitivity',
                       self.scroll_sensitivity_slider)
         self.setLayout(layout)
         self.show()
+
+    def closeEvent(self):
+        _disconnect(self.ds_method_cmbx.currentTextChanged)
+        _disconnect(self.scroll_sensitivity_slider.valueChanged)
+        super.closeEvent()
 
     def _value_changed(self, new_value, value_name):
         if value_name == 'downsampling' and new_value == 0:
@@ -1917,6 +1922,11 @@ class SelectionDialog(_BaseDialog):
 
     def closeEvent(self, event):
         super().closeEvent(event)
+        if hasattr(self.channel_fig.lasso, 'callbacks'):
+            # MNE >= 1.0
+            self.channel_fig.lasso.callbacks.clear()
+        for chkbx in self.chkbxs.values():
+            _disconnect(chkbx.clicked)
         if hasattr(self, 'main'):
             self.main.close()
 
@@ -2461,6 +2471,9 @@ class LoadThread(QThread):
         super().__init__()
         self.browser = browser
         self.mne = browser.mne
+        self.loadProgress.connect(self.mne.load_progressbar.setValue)
+        self.processText.connect(self.browser._show_process)
+        self.loadingFinished.connect(self.browser._precompute_finished)
 
     def run(self):
         """Load and process data in a separate QThread."""
@@ -2521,6 +2534,18 @@ class LoadThread(QThread):
 
         self.loadingFinished.emit()
 
+    def clean(self):
+        if self.isRunning():
+            wait_time = 10  # max. waiting time in seconds
+            logger.info('Waiting for Loading-Thread to finish... '
+                        f'(max. {wait_time} sec)')
+            self.wait(int(wait_time * 1e3))
+        _disconnect(self.loadProgress)
+        _disconnect(self.processText)
+        _disconnect(self.loadingFinished)
+        del self.mne
+        del self.browser
+
 
 class _FastToolTipComboBox(QComboBox):
     def __init__(self, *args, **kwargs):
@@ -2561,8 +2586,16 @@ qsettings_params = {
 }
 
 
+def _disconnect(sig):
+    try:
+        sig.disconnect()
+    except TypeError:  # if there are no connections, ignore it
+        pass
+
+
 class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     """A PyQtGraph-backend for 2D data browsing."""
+
     gotClosed = pyqtSignal()
 
     def __init__(self, **kwargs):
@@ -2674,10 +2707,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # A QThread for preloading
         self.load_thread = LoadThread(self)
-        self.load_thread.loadProgress.connect(self.mne.
-                                              load_progressbar.setValue)
-        self.load_thread.processText.connect(self._show_process)
-        self.load_thread.loadingFinished.connect(self._precompute_finished)
 
         # Create centralWidget and layout
         widget = QWidget()
@@ -2770,7 +2799,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 self.mne.use_opengl = False
             else:
                 logger.info(
-                        f'Using pyopengl with version {OpenGL.__version__}')
+                    f'Using pyopengl with version {OpenGL.__version__}')
         # Initialize BrowserView (inherits QGraphicsView)
         self.mne.view = BrowserView(self.mne.plt,
                                     useOpenGL=self.mne.use_opengl,
@@ -3818,8 +3847,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         region.regionChangeFinished.connect(self._region_changed)
         region.gotSelected.connect(self._region_selected)
         region.removeRequested.connect(self._remove_region)
-        self.mne.viewbox.sigYRangeChanged.connect(
-                region.update_label_pos)
+        self.mne.viewbox.sigYRangeChanged.connect(region.update_label_pos)
         self.mne.regions.append(region)
 
         region.update_label_pos()
@@ -4398,23 +4426,42 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         """Customize close event."""
         event.accept()
         if hasattr(self, 'mne'):
+            # Explicit disconnects to avoid reference cycles that gc can't
+            # properly resolve ()
+            if hasattr(self.mne, 'plt'):
+                _disconnect(self.mne.plt.sigXRangeChanged)
+                _disconnect(self.mne.plt.sigYRangeChanged)
+            if hasattr(self.mne, 'toolbar'):
+                for action in self.mne.toolbar.actions():
+                    _disconnect(action.triggered)
             # Save settings going into QSettings.
             for qsetting in qsettings_params:
                 value = getattr(self.mne, qsetting)
                 QSettings().setValue(qsetting, value)
-            self._close(event)
-
-        if hasattr(self, 'load_thread') and self.load_thread is not None:
-            if self.load_thread.isRunning():
-                wait_time = 10  # max. waiting time in seconds
-                logger.info('Waiting for Loading-Thread to finish... '
-                            f'(max. {wait_time} sec)')
-                self.load_thread.wait(int(wait_time * 1e3))
+            for attr in ('keyboard_shortcuts', 'traces', 'plt', 'toolbar'):
+                if hasattr(self.mne, attr):
+                    delattr(self.mne, attr)
+            if hasattr(self.mne, 'child_figs'):
+                for fig in self.mne.child_figs:
+                    fig.close()
+                self.mne.child_figs.clear()
+            for attr in ('traces', 'event_lines', 'regions'):
+                getattr(self.mne, attr, []).clear()
+            if getattr(self.mne, 'vline', None) is not None:
+                if self.mne.is_epochs:
+                    for vl in self.mne.vline:
+                        _disconnect(vl.sigPositionChangeFinished)
+                    self.mne.vline.clear()
+                else:
+                    _disconnect(self.mne.vline.sigPositionChangeFinished)
+        if getattr(self, 'load_thread', None) is not None:
+            self.load_thread.clean()
+            self.load_thread = None
 
         # Remove self from browser_instances in globals
         if self in _browser_instances:
             _browser_instances.remove(self)
-
+        self._close(event)
         self.gotClosed.emit()
         # Make sure PyQtBrowser gets deleted after it was closed.
         self.deleteLater()
