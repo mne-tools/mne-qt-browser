@@ -2776,24 +2776,40 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self._add_scalebars()
 
         # Check for OpenGL
+        # If a user doesn't specify whether or not to use it:
+        # 1. If on macOS, enable it by default to avoid segfault
+        # 2. Otherwise, disable it (performance differences seem minimal, and
+        #    PyOpenGL is an optional requirement)
         if self.mne.use_opengl is None:  # default: opt-in
-            self.mne.use_opengl = (
-                    get_config('MNE_BROWSE_USE_OPENGL', '').lower() == 'true')
-
-        # OpenGL needs to be enabled on macOS
-        # (https://github.com/mne-tools/mne-qt-browser/issues/53)
-        if sys.platform == 'darwin':
-            self.mne.use_opengl = True
+            # OpenGL needs to be enabled on macOS
+            # (https://github.com/mne-tools/mne-qt-browser/issues/53)
+            default = 'true' if sys.platform == 'darwin' else ''
+            config_val = get_config('MNE_BROWSE_USE_OPENGL', default).lower()
+            self.mne.use_opengl = (config_val == 'true')
 
         if self.mne.use_opengl:
             try:
                 import OpenGL
-            except (ModuleNotFoundError, ImportError):
+            except (ModuleNotFoundError, ImportError) as exc:
+                # On macOS, if use_opengl is True we raise an error because
+                # it can lead to segfaults. If a user really knows what they
+                # are doing, they can pass use_opengl=False (or set
+                # MNE_BROWSER_USE_OPENGL=false)
+                if sys.platform == 'darwin':
+                    raise RuntimeError(
+                        'Plotting on macOS without OpenGL may be unstable! '
+                        'We recommend installing PyOpenGL, but it could not '
+                        f'be imported, got:\n{exc}\n\n'
+                        'If you want to try plotting without OpenGL, '
+                        'you can pass use_opengl=False (use at your own '
+                        'risk!). If you know non-OpenGL plotting is stable '
+                        'on your system, you can also set the config value '
+                        'MNE_BROWSE_USE_OPENGL=false to permanently change '
+                        'the default behavior on your system.') from None
+                # otherwise, emit a warning
                 warn('PyOpenGL was not found and OpenGL cannot be used. '
                      'Consider installing pyopengl with pip or conda or set '
                      '"use_opengl=False" to avoid this warning.')
-                if sys.platform == 'darwin':
-                    warn('Plotting on macOS without OpenGL may be unstable!')
                 self.mne.use_opengl = False
             else:
                 logger.info(
