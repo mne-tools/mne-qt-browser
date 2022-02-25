@@ -39,7 +39,7 @@ setup(name='mne-qt-browser',
                         'qtpy',
                         'mne>=0.24',
                         'pyqtgraph>=0.12.3',
-                        'opengl; platform_system=="Darwin"'],
+                        'pyopengl; platform_system=="Darwin"'],
       extras_require={
           'opengl': ['pyopengl'],
       },
