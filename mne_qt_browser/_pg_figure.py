@@ -2780,11 +2780,12 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # 1. If on macOS, enable it by default to avoid segfault
         # 2. Otherwise, disable it (performance differences seem minimal, and
         #    PyOpenGL is an optional requirement)
+        opengl_key = 'MNE_BROWSER_USE_OPENGL'
         if self.mne.use_opengl is None:  # default: opt-in
             # OpenGL needs to be enabled on macOS
             # (https://github.com/mne-tools/mne-qt-browser/issues/53)
             default = 'true' if sys.platform == 'darwin' else ''
-            config_val = get_config('MNE_BROWSE_USE_OPENGL', default).lower()
+            config_val = get_config(opengl_key, default).lower()
             self.mne.use_opengl = (config_val == 'true')
 
         if self.mne.use_opengl:
@@ -2804,7 +2805,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                         'you can pass use_opengl=False (use at your own '
                         'risk!). If you know non-OpenGL plotting is stable '
                         'on your system, you can also set the config value '
-                        'MNE_BROWSE_USE_OPENGL=false to permanently change '
+                        f'{browse_key}=false to permanently change '
                         'the default behavior on your system.') from None
                 # otherwise, emit a warning
                 warn('PyOpenGL was not found and OpenGL cannot be used. '
