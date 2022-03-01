@@ -2805,7 +2805,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                         'you can pass use_opengl=False (use at your own '
                         'risk!). If you know non-OpenGL plotting is stable '
                         'on your system, you can also set the config value '
-                        f'{browse_key}=false to permanently change '
+                        f'{opengl_key}=false to permanently change '
                         'the default behavior on your system.') from None
                 # otherwise, emit a warning
                 warn('PyOpenGL was not found and OpenGL cannot be used. '
