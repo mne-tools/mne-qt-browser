@@ -42,6 +42,7 @@ from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
                        mkPen, setConfigOption, mkColor)
 from scipy.stats import zscore
 
+from mne.fixes import _get_args
 from mne.viz import plot_sensors
 from mne.viz._figure import BrowserBase
 from mne.viz.utils import _simplify_float, _merge_annotations, _figure_agg
@@ -2598,11 +2599,13 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     gotClosed = pyqtSignal()
 
-    def __init__(self, **kwargs):
+    def __init__(self, splash=None, **kwargs):
         self.backend_name = 'pyqtgraph'
 
         BrowserBase.__init__(self, **kwargs)
         QMainWindow.__init__(self)
+        if splash is not None:
+            splash.finish(self)
 
         # Add to list to keep a reference and avoid premature
         # garbage-collection.
@@ -4541,7 +4544,12 @@ def _mouseDrag(widget, positions, button, modifier=None):
 def _init_browser(**kwargs):
     setConfigOption('enableExperimental', True)
 
-    _init_mne_qtapp(pg_app=True)
+    app_kwargs = dict()
+    if 'splash' in _get_args(_init_mne_qtapp):
+        app_kwargs['splash'] = 'Initializing mne-qt-browser...'
+    out = _init_mne_qtapp(pg_app=True, **app_kwargs)
+    if 'splash' in app_kwargs:
+        kwargs['splash'] = out[1]  # returned as secord element
     browser = PyQtGraphBrowser(**kwargs)
 
     return browser
