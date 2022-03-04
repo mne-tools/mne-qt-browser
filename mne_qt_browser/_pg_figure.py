@@ -4428,7 +4428,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.activateWindow()
             self.raise_()
         if self._splash:
-            print('unsplashin')
             self._splash.close()
 
     def _close_event(self, fig=None):
