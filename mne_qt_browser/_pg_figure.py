@@ -2609,6 +2609,16 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # garbage-collection.
         _browser_instances.append(self)
 
+        # Set the browser style
+        try:
+            from mne.viz.backends._utils import _qt_get_stylesheet
+        except Exception:
+            stylesheet = None
+        else:
+            stylesheet = _qt_get_stylesheet()
+        if stylesheet is not None:
+            self.setStyleSheet(stylesheet)
+
         if self.mne.window_title is not None:
             self.setWindowTitle(self.mne.window_title)
 

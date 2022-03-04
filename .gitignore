@@ -131,4 +131,5 @@ dmypy.json
 # PyCharm
 .idea/
 
+*.orig
 junit-results.xml
