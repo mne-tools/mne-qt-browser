@@ -42,7 +42,6 @@ from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
                        mkPen, setConfigOption, mkColor)
 from scipy.stats import zscore
 
-from mne.fixes import _get_args
 from mne.viz import plot_sensors
 from mne.viz._figure import BrowserBase
 from mne.viz.utils import _simplify_float, _merge_annotations, _figure_agg
@@ -2604,8 +2603,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         BrowserBase.__init__(self, **kwargs)
         QMainWindow.__init__(self)
-        if splash is not None:
-            splash.finish(self)
+        self._splash = splash
 
         # Add to list to keep a reference and avoid premature
         # garbage-collection.
@@ -2972,6 +2970,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         dur_keys = ('fn + ←', 'fn + →') if is_mac else ('Home', 'End')
         ch_keys = ('fn + ↑', 'fn + ↓') if is_mac else ('Page up', 'Page down')
         hscroll_type = '1 epoch' if self.mne.is_epochs else '¼ page'
+
         self.mne.keyboard_shortcuts = {
             'left': {
                 'alias': '←',
@@ -4428,6 +4427,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if raise_window:
             self.activateWindow()
             self.raise_()
+        if self._splash:
+            print('unsplashin')
+            self._splash.close()
 
     def _close_event(self, fig=None):
         """Force calling of the MPL figure close event."""
@@ -4541,11 +4543,10 @@ def _mouseDrag(widget, positions, button, modifier=None):
     _mouseRelease(widget, positions[-1], button, modifier)
 
 
-def _init_browser(**kwargs):
+def _init_browser(*, splash=False, **kwargs):
     setConfigOption('enableExperimental', True)
-
     app_kwargs = dict()
-    if 'splash' in _get_args(_init_mne_qtapp):
+    if splash:
         app_kwargs['splash'] = 'Initializing mne-qt-browser...'
     out = _init_mne_qtapp(pg_app=True, **app_kwargs)
     if 'splash' in app_kwargs:
