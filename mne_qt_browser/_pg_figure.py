@@ -41,6 +41,7 @@ from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
                        Point, TextItem, ViewBox, mkBrush,
                        mkPen, setConfigOption, mkColor)
 from scipy.stats import zscore
+from colorspacious import cspace_convert
 
 from mne.viz import plot_sensors
 from mne.viz._figure import BrowserBase
@@ -144,19 +145,10 @@ def _get_color(color_spec, invert=False):
         raise ValueError(f'"{color_spec}" is not a valid matplotlib '
                          f'color-specifier!') from None
     if invert:
-        # Ideally we would use CIELAB, but HSL is probably good enough
         rgba = np.array(color.getRgbF())
-        try:
-            from skimage.color import rgb2lab, lab2rgb
-        except Exception:
-            from colorsys import rgb_to_hls, hls_to_rgb
-            hls = list(rgb_to_hls(*rgba[:3]))
-            hls[1] = 1. - hls[1]
-            rgba[:3] = hls_to_rgb(*hls)
-        else:
-            lab = rgb2lab(rgba[np.newaxis, :3])
-            lab[:, 0] = 100 - lab[:, 0]
-            rgba[:3] = lab2rgb(lab)[0]
+        lab = cspace_convert(rgba[:3], 'sRGB1', 'CIELab')
+        lab[0] = 100. - lab[0]
+        rgba[:3] = np.clip(cspace_convert(lab, 'CIELab', 'sRGB1'), 0, 1)
         color.setRgbF(*rgba)
 
     return color
