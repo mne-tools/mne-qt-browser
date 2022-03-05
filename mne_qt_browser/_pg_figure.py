@@ -125,7 +125,7 @@ except ImportError:
         return app
 
 
-def _get_color(color_spec):
+def _get_color(color_spec, invert=False):
     """Wraps mkColor to accept all possible matplotlib color-specifiers."""
     try:
         # Convert matplotlib color-names if possible
@@ -143,6 +143,21 @@ def _get_color(color_spec):
     except ValueError:
         raise ValueError(f'"{color_spec}" is not a valid matplotlib '
                          f'color-specifier!') from None
+    if invert:
+        # Ideally we would use CIELAB, but HSL is probably good enough
+        rgba = np.array(color.getRgbF())
+        try:
+            from skimage.color import rgb2lab, lab2rgb
+        except Exception:
+            from colorsys import rgb_to_hls, hls_to_rgb
+            hls = list(rgb_to_hls(*rgba[:3]))
+            hls[1] = 1. - hls[1]
+            rgba[:3] = hls_to_rgb(*hls)
+        else:
+            lab = rgb2lab(rgba[np.newaxis, :3])
+            lab[:, 0] = 100 - lab[:, 0]
+            rgba[:3] = lab2rgb(lab)[0]
+        color.setRgbF(*rgba)
 
     return color
 
@@ -276,7 +291,7 @@ class DataTrace(PlotCurveItem):
             else:
                 self.color = self.mne.ch_color_ref[self.ch_name]
 
-        self.setPen(_get_color(self.color))
+        self.setPen(_get_color(self.color, self.mne.dark))
 
     @propagate_to_children
     def update_range_idx(self):
@@ -560,13 +575,17 @@ class ChannelAxis(AxisItem):
         super().drawPicture(p, axisSpec, tickSpecs, textSpecs)
         for rect, flags, text in textSpecs:
             if self.mne.butterfly and self.mne.fig_selection is not None:
-                p.setPen(_get_color('black'))
+                p.setPen(_get_color(
+                    'black', self.mne.dark))
             elif self.mne.butterfly:
-                p.setPen(_get_color(self.mne.ch_color_dict[text]))
+                p.setPen(_get_color(
+                    self.mne.ch_color_dict[text], self.mne.dark))
             elif text in self.mne.info['bads']:
-                p.setPen(_get_color(self.mne.ch_color_bad))
+                p.setPen(_get_color(
+                    self.mne.ch_color_bad, self.mne.dark))
             else:
-                p.setPen(_get_color(self.mne.ch_color_ref[text]))
+                p.setPen(_get_color(
+                    self.mne.ch_color_ref[text], self.mne.dark))
             self.ch_texts[text] = ((rect.left(), rect.left() + rect.width()),
                                    (rect.top(), rect.top() + rect.height()))
             p.drawText(rect, int(flags), text)
@@ -840,7 +859,7 @@ class OverviewBar(QGraphicsView):
             if ch_name in add_chs:
                 start = self._mapFromData(0, line_idx)
                 stop = self._mapFromData(self.mne.inst.times[-1], line_idx)
-                pen = _get_color(self.mne.ch_color_bad)
+                pen = _get_color(self.mne.ch_color_bad, self.mne.dark)
                 line = self.scene().addLine(QLineF(start, stop), pen)
                 line.setZValue(2)
                 self.bad_line_dict[ch_name] = line
@@ -861,7 +880,7 @@ class OverviewBar(QGraphicsView):
                 start, stop = self.mne.boundary_times[epo_idx:epo_idx + 2]
                 top_left = self._mapFromData(start, 0)
                 bottom_right = self._mapFromData(stop, len(self.mne.ch_order))
-                pen = _get_color(self.mne.epoch_color_bad)
+                pen = _get_color(self.mne.epoch_color_bad, self.mne.dark)
                 rect = self.scene().addRect(QRectF(top_left, bottom_right),
                                             pen=pen, brush=pen)
                 rect.setZValue(3)
@@ -876,7 +895,7 @@ class OverviewBar(QGraphicsView):
                 and self.mne.events_visible:
             for ev_t, ev_id in zip(self.mne.event_times, self.mne.event_nums):
                 color_name = self.mne.event_color_dict[ev_id]
-                color = _get_color(color_name)
+                color = _get_color(color_name, self.mne.dark)
                 color.setAlpha(100)
                 pen = mkPen(color)
                 top_left = self._mapFromData(ev_t, 0)
@@ -909,7 +928,7 @@ class OverviewBar(QGraphicsView):
             duration = annotations.duration[annot_idx]
             description = annotations.description[annot_idx]
             color_name = self.mne.annotation_segment_colors[description]
-            color = _get_color(color_name)
+            color = _get_color(color_name, self.mne.dark)
             color.setAlpha(150)
             pen = mkPen(color)
             brush = mkBrush(color)
@@ -949,7 +968,7 @@ class OverviewBar(QGraphicsView):
             color_name = self.mne.annotation_segment_colors[description]
             rect_color = self.annotations_rect_dict[edit_onset]['color']
             if color_name != rect_color:
-                color = _get_color(color_name)
+                color = _get_color(color_name, self.mne.dark)
                 color.setAlpha(150)
                 pen = mkPen(color)
                 brush = mkBrush(color)
@@ -1137,7 +1156,8 @@ class OverviewBar(QGraphicsView):
                                      2, 4))
             for line_idx, ch_idx in enumerate(self.mne.ch_order):
                 ch_type = self.mne.ch_types[ch_idx]
-                color = _get_color(self.mne.ch_color_dict[ch_type])
+                color = _get_color(
+                    self.mne.ch_color_dict[ch_type], self.mne.dark)
                 channel_rgba[line_idx, :] = color.getRgb()
 
             channel_rgba = np.require(channel_rgba, np.uint8, 'C')
@@ -1964,9 +1984,9 @@ class AnnotRegion(LinearRegionItem):
     def update_color(self):
         """Update color of annotation-region."""
         color_string = self.mne.annotation_segment_colors[self.description]
-        self.base_color = _get_color(color_string)
-        self.hover_color = _get_color(color_string)
-        self.text_color = _get_color(color_string)
+        self.base_color = _get_color(color_string, self.mne.dark)
+        self.hover_color = _get_color(color_string, self.mne.dark)
+        self.text_color = _get_color(color_string, self.mne.dark)
         self.base_color.setAlpha(75)
         self.hover_color.setAlpha(150)
         self.text_color.setAlpha(255)
@@ -2151,7 +2171,8 @@ class AnnotationDock(QDockWidget):
 
     def _add_description_to_cmbx(self, description):
         color_pixmap = QPixmap(25, 25)
-        color = _get_color(self.mne.annotation_segment_colors[description])
+        color = _get_color(
+            self.mne.annotation_segment_colors[description], self.mne.dark)
         color.setAlpha(75)
         color_pixmap.fill(color)
         color_icon = QIcon(color_pixmap)
@@ -2367,9 +2388,13 @@ class AnnotationDock(QDockWidget):
             curr_col = self.mne.annotation_segment_colors[curr_descr]
         else:
             curr_col = None
-        color = QColorDialog.getColor(_get_color(curr_col), self,
-                                      f'Choose color for {curr_descr}!')
+        color = QColorDialog.getColor(
+            _get_color(curr_col, self.mne.dark), self,
+            f'Choose color for {curr_descr}!')
         if color.isValid():
+            # Invert it (we only want to display inverted colors, all stored
+            # colors should be for light mode)
+            color = _get_color(color.getRgb(), self.mne.dark)
             self.mne.annotation_segment_colors[curr_descr] = color
             self._update_regions_colors()
             self._update_description_cmbx()
@@ -2620,6 +2645,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         if self.mne.window_title is not None:
             self.setWindowTitle(self.mne.window_title)
+        self.mne.dark = \
+            self.palette().color(self.backgroundRole()).getHsvF()[2] < 0.5
 
         # Initialize attributes which are only used by pyqtgraph, not by
         # matplotlib and add them to MNEBrowseParams.
@@ -2833,7 +2860,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             bgcolor = self.mne.bgcolor
         else:
             bgcolor = 'w'
-        self.mne.view.setBackground(_get_color(bgcolor))
+        self.mne.view.setBackground(_get_color(bgcolor, self.mne.dark))
         layout.addWidget(self.mne.view, 0, 0)
 
         # Initialize Scroll-Bars
