@@ -2598,11 +2598,12 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     gotClosed = pyqtSignal()
 
-    def __init__(self, **kwargs):
+    def __init__(self, splash=None, **kwargs):
         self.backend_name = 'pyqtgraph'
 
         BrowserBase.__init__(self, **kwargs)
         QMainWindow.__init__(self)
+        self._splash = splash
 
         # Add to list to keep a reference and avoid premature
         # garbage-collection.
@@ -2969,6 +2970,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         dur_keys = ('fn + ←', 'fn + →') if is_mac else ('Home', 'End')
         ch_keys = ('fn + ↑', 'fn + ↓') if is_mac else ('Page up', 'Page down')
         hscroll_type = '1 epoch' if self.mne.is_epochs else '¼ page'
+
         self.mne.keyboard_shortcuts = {
             'left': {
                 'alias': '←',
@@ -4425,6 +4427,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if raise_window:
             self.activateWindow()
             self.raise_()
+        if self._splash:
+            self._splash.close()
 
     def _close_event(self, fig=None):
         """Force calling of the MPL figure close event."""
@@ -4538,10 +4542,14 @@ def _mouseDrag(widget, positions, button, modifier=None):
     _mouseRelease(widget, positions[-1], button, modifier)
 
 
-def _init_browser(**kwargs):
+def _init_browser(*, splash=False, **kwargs):
     setConfigOption('enableExperimental', True)
-
-    _init_mne_qtapp(pg_app=True)
+    app_kwargs = dict()
+    if splash:
+        app_kwargs['splash'] = 'Initializing mne-qt-browser...'
+    out = _init_mne_qtapp(pg_app=True, **app_kwargs)
+    if 'splash' in app_kwargs:
+        kwargs['splash'] = out[1]  # returned as secord element
     browser = PyQtGraphBrowser(**kwargs)
 
     return browser
