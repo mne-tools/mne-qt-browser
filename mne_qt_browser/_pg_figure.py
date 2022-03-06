@@ -2598,16 +2598,25 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     gotClosed = pyqtSignal()
 
-    def __init__(self, splash=None, **kwargs):
+    def __init__(self, **kwargs):
         self.backend_name = 'pyqtgraph'
 
         BrowserBase.__init__(self, **kwargs)
         QMainWindow.__init__(self)
-        self._splash = splash
 
         # Add to list to keep a reference and avoid premature
         # garbage-collection.
         _browser_instances.append(self)
+
+        # Set the browser style
+        try:
+            from mne.viz.backends._utils import _qt_get_stylesheet
+        except Exception:
+            stylesheet = None
+        else:
+            stylesheet = _qt_get_stylesheet(getattr(self.mne, 'theme', 'auto'))
+        if stylesheet is not None:
+            self.setStyleSheet(stylesheet)
 
         if self.mne.window_title is not None:
             self.setWindowTitle(self.mne.window_title)
@@ -4427,8 +4436,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if raise_window:
             self.activateWindow()
             self.raise_()
-        if self._splash:
-            self._splash.close()
+        if getattr(self.mne, 'splash', None):
+            self.mne.splash.close()
+            del self.mne.splash
 
     def _close_event(self, fig=None):
         """Force calling of the MPL figure close event."""
@@ -4542,10 +4552,10 @@ def _mouseDrag(widget, positions, button, modifier=None):
     _mouseRelease(widget, positions[-1], button, modifier)
 
 
-def _init_browser(*, splash=False, **kwargs):
+def _init_browser(**kwargs):
     setConfigOption('enableExperimental', True)
     app_kwargs = dict()
-    if splash:
+    if kwargs.get('splash', False):
         app_kwargs['splash'] = 'Initializing mne-qt-browser...'
     out = _init_mne_qtapp(pg_app=True, **app_kwargs)
     if 'splash' in app_kwargs:
