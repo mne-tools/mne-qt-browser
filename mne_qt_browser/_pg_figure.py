@@ -2637,8 +2637,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         if self.mne.window_title is not None:
             self.setWindowTitle(self.mne.window_title)
-        self.mne.dark = \
-            self.palette().color(self.backgroundRole()).getHsvF()[2] < 0.5
+        QApplication.processEvents()  # needs to happen for the theme to be set
+        bgcolor = self.palette().color(self.backgroundRole()).getRgbF()[:3]
+        self.mne.dark = cspace_convert(bgcolor, 'sRGB1', 'CIELab')[0] < 50
 
         # Initialize attributes which are only used by pyqtgraph, not by
         # matplotlib and add them to MNEBrowseParams.
