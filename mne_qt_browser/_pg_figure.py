@@ -4438,6 +4438,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.raise_()
         if getattr(self.mne, 'splash', None):
             self.mne.splash.close()
+            del self.mne.splash
 
     def _close_event(self, fig=None):
         """Force calling of the MPL figure close event."""
