@@ -4578,12 +4578,9 @@ def _setup_ipython(ipython=None):
     # ipython magic
     if scooby.in_ipython():
         from IPython import get_ipython
-
         ipython = get_ipython()
         ipython.run_line_magic("gui", "qt")
-
         from IPython.external.qt_for_kernel import QtGui
-
         QtGui.QApplication.instance()
     return ipython
 
