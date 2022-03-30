@@ -43,6 +43,7 @@ from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
 from scipy.stats import zscore
 from colorspacious import cspace_convert
 
+import scooby
 from mne.viz import plot_sensors
 from mne.viz._figure import BrowserBase
 from mne.viz.utils import _simplify_float, _merge_annotations, _figure_agg
@@ -4572,7 +4573,23 @@ def _mouseDrag(widget, positions, button, modifier=None):
     _mouseRelease(widget, positions[-1], button, modifier)
 
 
+# modified from: https://github.com/pyvista/pyvistaqt
+def _setup_ipython(ipython=None):
+    # ipython magic
+    if scooby.in_ipython():
+        from IPython import get_ipython
+
+        ipython = get_ipython()
+        ipython.run_line_magic("gui", "qt")
+
+        from IPython.external.qt_for_kernel import QtGui
+
+        QtGui.QApplication.instance()
+    return ipython
+
+
 def _init_browser(**kwargs):
+    _setup_ipython()
     setConfigOption('enableExperimental', True)
     app_kwargs = dict()
     if kwargs.get('splash', False):
