@@ -4,6 +4,7 @@ scipy
 matplotlib
 mne
 qtpy
+scooby
 PyQt5
 pyqtgraph
 pyopengl; platform_system=="Darwin"
