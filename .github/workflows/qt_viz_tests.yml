@@ -6,6 +6,8 @@ on:
     pull_request:
     push:
       branches: [main]
+    schedule:
+      - cron: "0 4 * * *"
 
 jobs:
   flake:
@@ -89,7 +91,7 @@ jobs:
         name: 'Download testing data'
       - run: |
           set -e
-          git clone --depth 1 git://github.com/pyvista/gl-ci-helpers.git
+          git clone --depth 1 https://github.com/pyvista/gl-ci-helpers.git
           powershell gl-ci-helpers/appveyor/install_opengl.ps1
         name: Setup OpenGL on Windows
         if: runner.os == 'Windows'
