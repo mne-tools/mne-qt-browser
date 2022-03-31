@@ -1591,10 +1591,10 @@ class SettingsDialog(_BaseDialog):
         self.setLayout(layout)
         self.show()
 
-    def closeEvent(self):
+    def closeEvent(self, event):
         _disconnect(self.ds_method_cmbx.currentTextChanged)
         _disconnect(self.scroll_sensitivity_slider.valueChanged)
-        super.closeEvent()
+        super().closeEvent(event)
 
     def _value_changed(self, new_value, value_name):
         if value_name == 'downsampling' and new_value == 0:
@@ -4072,8 +4072,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if self.mne.fig_settings is None:
             SettingsDialog(self, name='fig_settings')
         else:
-            self.mne.fig_help.close()
-            self.mne.fig_help = None
+            self.mne.fig_settings.close()
+            self.mne.fig_settings = None
 
     def _toggle_help_fig(self):
         if self.mne.fig_help is None:
