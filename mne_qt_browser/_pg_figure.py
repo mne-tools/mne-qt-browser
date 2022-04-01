@@ -27,8 +27,8 @@ from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
                              QDockWidget, QDoubleSpinBox, QFormLayout,
                              QGridLayout, QHBoxLayout, QInputDialog,
-                             QLabel, QMainWindow, QMessageBox,
-                             QPushButton, QScrollBar, QToolTip, QWidget,
+                             QLabel, QMainWindow, QMessageBox, QToolButton,
+                             QPushButton, QScrollBar, QWidget, QMenu,
                              QStyleOptionSlider, QStyle,
                              QApplication, QGraphicsView, QProgressBar,
                              QVBoxLayout, QLineEdit, QCheckBox, QScrollArea,
@@ -2565,19 +2565,6 @@ class LoadThread(QThread):
         del self.browser
 
 
-class _FastToolTipComboBox(QComboBox):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.setMouseTracking(True)
-
-    def setToolTip(self, tooltip):
-        self.tooltip = tooltip
-
-    def enterEvent(self, event):
-        QToolTip.showText(event.globalPos(), self.tooltip)
-        super().enterEvent(event)
-
-
 class _PGMetaClass(type(BrowserBase), type(QMainWindow)):
     """Class is necessary to prevent a metaclass conflict.
 
@@ -2883,39 +2870,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.overview_bar = OverviewBar(self)
         layout.addWidget(self.mne.overview_bar, 2, 0, 1, 2)
 
-        # Add Combobox to select Overview-Mode
-        self.overview_mode_chkbx = _FastToolTipComboBox()
-        self.overview_mode_chkbx.addItems(['empty', 'channels'])
-        tooltip = (
-            '<h2>Overview-Modes</h2>'
-            '<ul>'
-            '<li>empty:<br>'
-            'Display no background.</li>'
-            '<li>channels:<br>'
-            'Display each channel with its channel-type color.</li>'
-            '<li>zscore:<br>'
-            'Display the zscore for the data from each channel across time. '
-            'Red indicates high zscores, blue indicates low zscores, '
-            'and the boundaries of the color gradient are defined by the '
-            'minimum/maximum zscore.'
-            'This only works if precompute is set to "True", or if it is '
-            'enabled with "auto" and enough free RAM is available.</li>'
-            '</ul>')
-        self.overview_mode_chkbx.setToolTip(tooltip)
-        if self.mne.enable_precompute:
-            self.overview_mode_chkbx.addItems(['zscore'])
-        self.overview_mode_chkbx.setCurrentText(self.mne.overview_mode)
-        self.overview_mode_chkbx.currentTextChanged.connect(
-                self._overview_mode_changed)
-        # Avoid taking keyboard-focus
-        self.overview_mode_chkbx.setFocusPolicy(Qt.NoFocus)
-        overview_mode_layout = QHBoxLayout()
-        overview_mode_layout.addWidget(QLabel('Overview-Mode:'))
-        overview_mode_layout.addWidget(self.overview_mode_chkbx)
-        overview_mode_widget = QWidget()
-        overview_mode_widget.setLayout(overview_mode_layout)
-        self.statusBar().addPermanentWidget(overview_mode_widget)
-
         widget.setLayout(layout)
         self.setCentralWidget(widget)
 
@@ -2980,6 +2934,39 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         ahelp = QAction(QIcon(":/help.svg"), 'Help', parent=self)
         ahelp.triggered.connect(self._toggle_help_fig)
         self.mne.toolbar.addAction(ahelp)
+
+        button = QToolButton(self)
+        button.setToolTip(
+            '<h2>Overview-Modes</h2>'
+            '<ul>'
+            '<li>empty:<br>'
+            'Display no background.</li>'
+            '<li>channels:<br>'
+            'Display each channel with its channel-type color.</li>'
+            '<li>zscore:<br>'
+            'Display the zscore for the data from each channel across time. '
+            'Red indicates high zscores, blue indicates low zscores, '
+            'and the boundaries of the color gradient are defined by the '
+            'minimum/maximum zscore.'
+            'This only works if precompute is set to "True", or if it is '
+            'enabled with "auto" and enough free RAM is available.</li>'
+            '</ul>')
+        button.setText('Overview Bar')
+        button.setIcon(QIcon(self.style().standardIcon(QStyle.SP_TitleBarMaxButton)))
+        self.mne.overview_menu = QMenu(button)
+        overview_items = ['empty', 'channels']
+        if self.mne.enable_precompute:
+            overview_items.append('zscore')
+        for kind in overview_items:
+            action = self.mne.overview_menu.addAction(kind)
+            action.setCheckable(True)
+            action.setChecked(kind == self.mne.overview_mode)
+            action.triggered.connect(
+                partial(self._overview_mode_changed, new_mode=kind))
+        button.setMenu(self.mne.overview_menu)
+        button.setPopupMode(QToolButton.InstantPopup)
+        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.mne.toolbar.addWidget(button)
 
         # Set Start-Range (after all necessary elements are initialized)
         self.mne.plt.setXRange(self.mne.t_start,
@@ -3244,10 +3231,18 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _overview_mode_changed(self, new_mode):
         self.mne.overview_mode = new_mode
+        visible = True
+        for action in self.mne.overview_menu.actions():
+            if action.text() == new_mode:
+                visible = action.isChecked()
+            else:
+                action.setChecked(False)
         if self.mne.overview_mode == 'zscore':
             while self.mne.zscore_rgba is None:
                 QApplication.processEvents()
         self.mne.overview_bar.set_background()
+        if visible != self.mne.show_overview_bar:
+            self._toggle_overview_bar()
 
     def scale_all(self, step):
         """Scale all traces by multiplying with step."""
