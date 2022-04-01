@@ -2883,59 +2883,52 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Initialize Toolbar
         self.mne.toolbar = self.addToolBar('Tools')
-        self.mne.toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        # tool_button_style = Qt.ToolButtonTextBesideIcon
+        tool_button_style = Qt.ToolButtonIconOnly
+        self.mne.toolbar.setToolButtonStyle(tool_button_style)
 
-        adecr_time = QAction(QIcon(":/less_time.svg"), '- Time', parent=self)
+        adecr_time = QAction(
+            QIcon(":/less_time.svg"), '- Time', parent=self)
         adecr_time.triggered.connect(partial(self.change_duration, -0.2))
         self.mne.toolbar.addAction(adecr_time)
-
-        aincr_time = QAction(QIcon(":/more_time.svg"), '+ Time', parent=self)
+        aincr_time = QAction(
+            QIcon(":/more_time.svg"), '+ Time', parent=self)
         aincr_time.triggered.connect(partial(self.change_duration, 0.25))
         self.mne.toolbar.addAction(aincr_time)
+        self.mne.toolbar.addSeparator()
 
-        adecr_nchan = QAction(QIcon(":/less_channels.svg"), '- Channels',
-                              parent=self)
+        adecr_nchan = QAction(
+            QIcon(":/less_channels.svg"), '- Channels', parent=self)
         adecr_nchan.triggered.connect(partial(self.change_nchan, -10))
         self.mne.toolbar.addAction(adecr_nchan)
-
-        aincr_nchan = QAction(QIcon(":/more_channels.svg"), '+ Channels',
-                              parent=self)
+        aincr_nchan = QAction(
+            QIcon(":/more_channels.svg"), '+ Channels', parent=self)
         aincr_nchan.triggered.connect(partial(self.change_nchan, 10))
         self.mne.toolbar.addAction(aincr_nchan)
+        self.mne.toolbar.addSeparator()
 
-        adecr_nchan = QAction(QIcon(":/zoom_out.svg"), 'Zoom Out', parent=self)
+        adecr_nchan = QAction(
+            QIcon(":/zoom_out.svg"), 'Zoom out', parent=self)
         adecr_nchan.triggered.connect(partial(self.scale_all, 4 / 5))
         self.mne.toolbar.addAction(adecr_nchan)
-
-        aincr_nchan = QAction(QIcon(":/zoom_in.svg"), 'Zoom In', parent=self)
+        aincr_nchan = QAction(
+            QIcon(":/zoom_in.svg"), 'Zoom in', parent=self)
         aincr_nchan.triggered.connect(partial(self.scale_all, 5 / 4))
         self.mne.toolbar.addAction(aincr_nchan)
+        self.mne.toolbar.addSeparator()
 
         if not self.mne.is_epochs:
-            atoggle_annot = QAction(QIcon(":/annotations.svg"), 'Annotations',
-                                    parent=self)
+            atoggle_annot = QAction(
+                QIcon(":/annotations.svg"), 'Annotations', parent=self)
             atoggle_annot.triggered.connect(self._toggle_annotation_fig)
             self.mne.toolbar.addAction(atoggle_annot)
 
-        atoggle_proj = QAction(QIcon(":/ssp.svg"), 'SSP', parent=self)
+        atoggle_proj = QAction(
+            QIcon(":/ssp.svg"), 'SSP', parent=self)
         atoggle_proj.triggered.connect(self._toggle_proj_fig)
         self.mne.toolbar.addAction(atoggle_proj)
 
-        atoggle_fullscreen = QAction(QIcon(":/fullscreen.svg"), 'Fullscreen',
-                                     parent=self)
-        atoggle_fullscreen.triggered.connect(self._toggle_fullscreen)
-        self.mne.toolbar.addAction(atoggle_fullscreen)
-
-        asettings = QAction(QIcon(":/settings.svg"), 'Settings',
-                            parent=self)
-        asettings.triggered.connect(self._toggle_settings_fig)
-        self.mne.toolbar.addAction(asettings)
-
-        ahelp = QAction(QIcon(":/help.svg"), 'Help', parent=self)
-        ahelp.triggered.connect(self._toggle_help_fig)
-        self.mne.toolbar.addAction(ahelp)
-
-        button = QToolButton(self)
+        button = QToolButton(self.mne.toolbar)
         button.setToolTip(
             '<h2>Overview-Modes</h2>'
             '<ul>'
@@ -2952,7 +2945,8 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             'enabled with "auto" and enough free RAM is available.</li>'
             '</ul>')
         button.setText('Overview Bar')
-        button.setIcon(QIcon(self.style().standardIcon(QStyle.SP_TitleBarMaxButton)))
+        button.setIcon(QIcon(':/overview_bar.svg'))
+        button.setToolButtonStyle(tool_button_style)
         self.mne.overview_menu = QMenu(button)
         overview_items = ['empty', 'channels']
         if self.mne.enable_precompute:
@@ -2965,8 +2959,18 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 partial(self._overview_mode_changed, new_mode=kind))
         button.setMenu(self.mne.overview_menu)
         button.setPopupMode(QToolButton.InstantPopup)
-        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.mne.toolbar.addWidget(button)
+
+        self.mne.toolbar.addSeparator()
+
+        asettings = QAction(QIcon(":/settings.svg"), 'Settings',
+                            parent=self)
+        asettings.triggered.connect(self._toggle_settings_fig)
+        self.mne.toolbar.addAction(asettings)
+
+        ahelp = QAction(QIcon(":/help.svg"), 'Help', parent=self)
+        ahelp.triggered.connect(self._toggle_help_fig)
+        self.mne.toolbar.addAction(ahelp)
 
         # Set Start-Range (after all necessary elements are initialized)
         self.mne.plt.setXRange(self.mne.t_start,

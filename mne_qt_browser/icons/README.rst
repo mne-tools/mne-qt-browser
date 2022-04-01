@@ -15,7 +15,7 @@ To automatically generate the resource file:
 
 .. code-block:: bash
 
-    pyrcc5 -o mne/icons/resources.py mne/icons/mne.qrc
+    pyrcc5 -o mne_qt_browser/icons/resources.py mne_qt_browser/icons/mne-qt-browser.qrc
 
 These Material design icons are provided by Google under the `Apache 2.0`_ license.
 
