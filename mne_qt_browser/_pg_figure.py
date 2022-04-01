@@ -29,11 +29,12 @@ from PyQt5.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
                              QGridLayout, QHBoxLayout, QInputDialog,
                              QLabel, QMainWindow, QMessageBox, QToolButton,
                              QPushButton, QScrollBar, QWidget, QMenu,
-                             QStyleOptionSlider, QStyle,
+                             QStyleOptionSlider, QStyle, QActionGroup,
                              QApplication, QGraphicsView, QProgressBar,
                              QVBoxLayout, QLineEdit, QCheckBox, QScrollArea,
                              QGraphicsLineItem, QGraphicsScene, QTextEdit,
-                             QSizePolicy, QSpinBox, QDesktopWidget, QSlider)
+                             QSizePolicy, QSpinBox, QDesktopWidget, QSlider,
+                             QWidgetAction, QRadioButton)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from matplotlib.colors import to_rgba_array
 from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
@@ -2943,20 +2944,34 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             'minimum/maximum zscore.'
             'This only works if precompute is set to "True", or if it is '
             'enabled with "auto" and enough free RAM is available.</li>'
+            '<li>hidden:<br>'
+            'Hide the overview bar.</li>'
             '</ul>')
         button.setText('Overview Bar')
         button.setIcon(QIcon(':/overview_bar.svg'))
         button.setToolButtonStyle(tool_button_style)
-        self.mne.overview_menu = QMenu(button)
-        overview_items = ['empty', 'channels']
+        menu = self.mne.overview_menu = QMenu(button)
+        overview_items = dict(
+            empty='Empty',
+            channels='Channels',
+        )
         if self.mne.enable_precompute:
-            overview_items.append('zscore')
-        for kind in overview_items:
-            action = self.mne.overview_menu.addAction(kind)
-            action.setCheckable(True)
-            action.setChecked(kind == self.mne.overview_mode)
-            action.triggered.connect(
-                partial(self._overview_mode_changed, new_mode=kind))
+            overview_items['zscore'] = 'Z-Score'
+        overview_items['hidden'] = 'Hidden'
+        group = QActionGroup(menu)
+        for key, text in overview_items.items():
+            radio = QRadioButton(menu)
+            radio.setText(text)
+            if key == self.mne.overview_mode:
+                radio.setChecked(True)
+            action = QWidgetAction(menu)
+            action.setDefaultWidget(radio)
+            menu.addAction(action)
+            group.addAction(action)
+            radio.clicked.connect(
+                lambda *args, key=key, **kwargs: (
+                    menu.close(),
+                    self._overview_mode_changed(new_mode=key)))
         button.setMenu(self.mne.overview_menu)
         button.setPopupMode(QToolButton.InstantPopup)
         self.mne.toolbar.addWidget(button)
@@ -3234,13 +3249,12 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self._set_scalebars_visible(self.mne.scalebars_visible)
 
     def _overview_mode_changed(self, new_mode):
-        self.mne.overview_mode = new_mode
-        visible = True
-        for action in self.mne.overview_menu.actions():
-            if action.text() == new_mode:
-                visible = action.isChecked()
-            else:
-                action.setChecked(False)
+        new_mode = new_mode.lower().replace('-', '')
+        if new_mode == 'hidden':
+            visible = False
+        else:
+            self.mne.overview_mode = new_mode
+            visible = True
         if self.mne.overview_mode == 'zscore':
             while self.mne.zscore_rgba is None:
                 QApplication.processEvents()
