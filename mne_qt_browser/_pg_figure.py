@@ -3249,7 +3249,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self._set_scalebars_visible(self.mne.scalebars_visible)
 
     def _overview_mode_changed(self, new_mode):
-        new_mode = new_mode.lower().replace('-', '')
         if new_mode == 'hidden':
             visible = False
         else:
