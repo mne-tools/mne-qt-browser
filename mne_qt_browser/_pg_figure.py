@@ -2611,7 +2611,7 @@ def _disconnect(sig):
         pass
 
 
-class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
+class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     """A PyQtGraph-backend for 2D data browsing."""
 
     gotClosed = pyqtSignal()
@@ -4513,7 +4513,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             _browser_instances.remove(self)
         self._close(event)
         self.gotClosed.emit()
-        # Make sure PyQtBrowser gets deleted after it was closed.
+        # Make sure it gets deleted after it was closed.
         self.deleteLater()
 
 
@@ -4594,6 +4594,10 @@ def _init_browser(**kwargs):
     out = _init_mne_qtapp(pg_app=True, **app_kwargs)
     if 'splash' in app_kwargs:
         kwargs['splash'] = out[1]  # returned as secord element
-    browser = PyQtGraphBrowser(**kwargs)
+    browser = MNEQtBrowser(**kwargs)
 
     return browser
+
+
+class PyQtGraphBrowser(MNEQtBrowser):
+    pass  # just for backward compat with MNE 1.0 scraping
