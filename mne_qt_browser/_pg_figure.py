@@ -11,6 +11,7 @@ import gc
 import math
 import platform
 import sys
+from pathlib import Path
 from ast import literal_eval
 from collections import OrderedDict
 from contextlib import contextmanager
@@ -54,7 +55,6 @@ from mne.io.pick import (_DATA_CH_TYPES_ORDER_DEFAULT,
 from mne.utils import _to_rgb, logger, sizeof_fmt, warn, get_config
 
 from . import _browser_instances
-from .icons import resources  # noqa: F401
 
 try:
     from pytestqt.exceptions import capture_exceptions
@@ -2156,7 +2156,7 @@ class AnnotationDock(QDockWidget):
         self.stop_bx.editingFinished.connect(self._stop_changed)
         layout.addWidget(self.stop_bx)
 
-        help_bt = QPushButton(QIcon(":/help.svg"), 'Help')
+        help_bt = QPushButton(QIcon.fromTheme("help"), 'Help')
         help_bt.clicked.connect(self._show_help)
         layout.addWidget(help_bt)
 
@@ -2630,6 +2630,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         bgcolor = self.palette().color(self.backgroundRole()).getRgbF()[:3]
         self.mne.dark = cspace_convert(bgcolor, 'sRGB1', 'CIELab')[0] < 50
 
+        # update icon theme
+        _qt_init_icons()
+        if self.mne.dark:
+            QIcon.setThemeName('dark')
+        else:
+            QIcon.setThemeName('light')
+
         # Initialize attributes which are only used by pyqtgraph, not by
         # matplotlib and add them to MNEBrowseParams.
 
@@ -2889,43 +2896,43 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.toolbar.setToolButtonStyle(tool_button_style)
 
         adecr_time = QAction(
-            QIcon(":/less_time.svg"), '- Time', parent=self)
+            QIcon.fromTheme("less_time"), '- Time', parent=self)
         adecr_time.triggered.connect(partial(self.change_duration, -0.2))
         self.mne.toolbar.addAction(adecr_time)
         aincr_time = QAction(
-            QIcon(":/more_time.svg"), '+ Time', parent=self)
+            QIcon.fromTheme("more_time"), '+ Time', parent=self)
         aincr_time.triggered.connect(partial(self.change_duration, 0.25))
         self.mne.toolbar.addAction(aincr_time)
         self.mne.toolbar.addSeparator()
 
         adecr_nchan = QAction(
-            QIcon(":/less_channels.svg"), '- Channels', parent=self)
+            QIcon.fromTheme("less_channels"), '- Channels', parent=self)
         adecr_nchan.triggered.connect(partial(self.change_nchan, -10))
         self.mne.toolbar.addAction(adecr_nchan)
         aincr_nchan = QAction(
-            QIcon(":/more_channels.svg"), '+ Channels', parent=self)
+            QIcon.fromTheme("more_channels"), '+ Channels', parent=self)
         aincr_nchan.triggered.connect(partial(self.change_nchan, 10))
         self.mne.toolbar.addAction(aincr_nchan)
         self.mne.toolbar.addSeparator()
 
         adecr_nchan = QAction(
-            QIcon(":/zoom_out.svg"), 'Zoom out', parent=self)
+            QIcon.fromTheme("zoom_out"), 'Zoom out', parent=self)
         adecr_nchan.triggered.connect(partial(self.scale_all, 4 / 5))
         self.mne.toolbar.addAction(adecr_nchan)
         aincr_nchan = QAction(
-            QIcon(":/zoom_in.svg"), 'Zoom in', parent=self)
+            QIcon.fromTheme("zoom_in"), 'Zoom in', parent=self)
         aincr_nchan.triggered.connect(partial(self.scale_all, 5 / 4))
         self.mne.toolbar.addAction(aincr_nchan)
         self.mne.toolbar.addSeparator()
 
         if not self.mne.is_epochs:
             atoggle_annot = QAction(
-                QIcon(":/annotations.svg"), 'Annotations', parent=self)
+                QIcon.fromTheme("annotations"), 'Annotations', parent=self)
             atoggle_annot.triggered.connect(self._toggle_annotation_fig)
             self.mne.toolbar.addAction(atoggle_annot)
 
         atoggle_proj = QAction(
-            QIcon(":/ssp.svg"), 'SSP', parent=self)
+            QIcon.fromTheme("ssp"), 'SSP', parent=self)
         atoggle_proj.triggered.connect(self._toggle_proj_fig)
         self.mne.toolbar.addAction(atoggle_proj)
 
@@ -2948,7 +2955,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             'Hide the overview bar.</li>'
             '</ul>')
         button.setText('Overview Bar')
-        button.setIcon(QIcon(':/overview_bar.svg'))
+        button.setIcon(QIcon.fromTheme('overview_bar'))
         button.setToolButtonStyle(tool_button_style)
         menu = self.mne.overview_menu = QMenu(button)
         overview_items = dict(
@@ -2978,12 +2985,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         self.mne.toolbar.addSeparator()
 
-        asettings = QAction(QIcon(":/settings.svg"), 'Settings',
+        asettings = QAction(QIcon.fromTheme("settings"), 'Settings',
                             parent=self)
         asettings.triggered.connect(self._toggle_settings_fig)
         self.mne.toolbar.addAction(asettings)
 
-        ahelp = QAction(QIcon(":/help.svg"), 'Help', parent=self)
+        ahelp = QAction(QIcon.fromTheme("help"), 'Help', parent=self)
         ahelp.triggered.connect(self._toggle_help_fig)
         self.mne.toolbar.addAction(ahelp)
 
@@ -4595,6 +4602,13 @@ def _setup_ipython(ipython=None):
         from IPython.external.qt_for_kernel import QtGui
         QtGui.QApplication.instance()
     return ipython
+
+
+def _qt_init_icons():
+    from PyQt5.QtGui import QIcon
+    icons_path = f"{Path(__file__).parent}/icons"
+    QIcon.setThemeSearchPaths([icons_path])
+    return icons_path
 
 
 def _init_browser(**kwargs):
