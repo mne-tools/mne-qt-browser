@@ -12,5 +12,6 @@
         <file alias="settings.svg">settings_black_18dp.svg</file>
         <file alias="zoom_in.svg">zoom_in_black_18dp.svg</file>
         <file alias="zoom_out.svg">zoom_out_black_18dp.svg</file>
+        <file alias="overview_bar.svg">view_quilt_black_18dp.svg</file>
     </qresource>
 </RCC>
