@@ -2642,7 +2642,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         bgcolor = self.palette().color(self.backgroundRole()).getRgbF()[:3]
         self.mne.dark = cspace_convert(bgcolor, 'sRGB1', 'CIELab')[0] < 50
 
-        # udpate icon theme
+        # update icon theme
         _qt_init_icons()
         if self.mne.dark:
             QIcon.setThemeName('dark')
