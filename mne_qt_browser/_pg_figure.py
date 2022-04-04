@@ -285,7 +285,7 @@ class DataTrace(PlotCurveItem):
             else:
                 self.color = self.mne.ch_color_ref[self.ch_name]
 
-        self.setPen(_get_color(self.color, self.mne.dark))
+        self.setPen(self.mne.mkPen(_get_color(self.color, self.mne.dark)))
 
     @propagate_to_children
     def update_range_idx(self):
@@ -831,7 +831,7 @@ class OverviewBar(QGraphicsView):
 
     def update_epoch_lines(self):
         """Update representation of epoch lines."""
-        epoch_line_pen = mkPen(color='k', width=1)
+        epoch_line_pen = self.mne.mkPen(color='k', width=1)
         for t in self.mne.boundary_times[1:-1]:
             top_left = self._mapFromData(t, 0)
             bottom_right = self._mapFromData(t, len(self.mne.ch_order))
@@ -891,7 +891,7 @@ class OverviewBar(QGraphicsView):
                 color_name = self.mne.event_color_dict[ev_id]
                 color = _get_color(color_name, self.mne.dark)
                 color.setAlpha(100)
-                pen = mkPen(color)
+                pen = self.mne.mkPen(color)
                 top_left = self._mapFromData(ev_t, 0)
                 bottom_right = self._mapFromData(ev_t, len(self.mne.ch_order))
                 line = self.scene().addLine(QLineF(top_left, bottom_right),
@@ -924,7 +924,7 @@ class OverviewBar(QGraphicsView):
             color_name = self.mne.annotation_segment_colors[description]
             color = _get_color(color_name, self.mne.dark)
             color.setAlpha(150)
-            pen = mkPen(color)
+            pen = self.mne.mkPen(color)
             brush = mkBrush(color)
             top_left = self._mapFromData(plot_onset, 0)
             bottom_right = self._mapFromData(plot_onset + duration,
@@ -964,7 +964,7 @@ class OverviewBar(QGraphicsView):
             if color_name != rect_color:
                 color = _get_color(color_name, self.mne.dark)
                 color.setAlpha(150)
-                pen = mkPen(color)
+                pen = self.mne.mkPen(color)
                 brush = mkBrush(color)
                 rect.setPen(pen)
                 rect.setBrush(brush)
@@ -981,7 +981,7 @@ class OverviewBar(QGraphicsView):
             bottom_right = self._mapFromData(value, len(self.mne.ch_order))
             line = QLineF(top_left, bottom_right)
             if self.v_line is None:
-                pen = mkPen('g')
+                pen = self.mne.mkPen('g')
                 self.v_line = self.scene().addLine(line, pen)
                 self.v_line.setZValue(1)
             else:
@@ -1005,7 +1005,7 @@ class OverviewBar(QGraphicsView):
                                              + self.mne.n_channels)
         rect = QRectF(top_left, bottom_right)
         if self.viewrange_rect is None:
-            pen = mkPen(color='g')
+            pen = self.mne.mkPen(color='g')
             brush = mkBrush(color=(0, 0, 0, 100))
             self.viewrange_rect = self.scene().addRect(rect, pen, brush)
             self.viewrange_rect.setZValue(4)
@@ -1386,7 +1386,7 @@ class Crosshair(InfiniteLine):
     def paint(self, p, *args):
         super().paint(p, *args)
 
-        p.setPen(mkPen('r', width=4))
+        p.setPen(self.mne.mkPen('r', width=4))
         p.drawPoint(Point(self.y, 0))
 
 
@@ -1467,7 +1467,7 @@ class ScaleBar(BaseScaleBar, QGraphicsLineItem):
         QGraphicsLineItem.__init__(self)
 
         self.setZValue(1)
-        self.setPen(mkPen(color='#AA3377', width=5))
+        self.setPen(self.mne.mkPen(color='#AA3377', width=5))
         self.update_y_position()
 
     def _set_position(self, x, y):
@@ -1752,7 +1752,7 @@ class _ChannelFig(FigureCanvasQTAgg):
         # in Qt.
         if self._lasso_path is not None:
             painter = QPainter(self)
-            painter.setPen(mkPen('red', width=2))
+            painter.setPen(self.mne.mkPen('red', width=2))
             painter.drawPath(self._lasso_path)
             painter.end()
 
@@ -1984,8 +1984,8 @@ class AnnotRegion(LinearRegionItem):
         self.base_color.setAlpha(75)
         self.hover_color.setAlpha(150)
         self.text_color.setAlpha(255)
-        self.line_pen = mkPen(color=self.hover_color, width=2)
-        self.hover_pen = mkPen(color=self.text_color, width=2)
+        self.line_pen = self.mne.mkPen(color=self.hover_color, width=2)
+        self.hover_pen = self.mne.mkPen(color=self.text_color, width=2)
         self.setBrush(self.base_color)
         self.setHoverBrush(self.hover_color)
         self.label_item.setColor(self.text_color)
@@ -2627,6 +2627,18 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if self.mne.window_title is not None:
             self.setWindowTitle(self.mne.window_title)
         QApplication.processEvents()  # needs to happen for the theme to be set
+
+        # HiDPI stuff
+        desktop = QApplication.desktop()
+        dpi_ratio = desktop.physicalDpiY() / desktop.logicalDpiY()
+        logger.debug(f'Desktop DPI ratio: {dpi_ratio:0.3f}')
+
+        def _hidpi_mkPen(*args, **kwargs):
+            kwargs['width'] = dpi_ratio * kwargs.get('width', 1.)
+            return mkPen(*args, **kwargs)
+
+        self.mne.mkPen = _hidpi_mkPen
+
         bgcolor = self.palette().color(self.backgroundRole()).getRgbF()[:3]
         self.mne.dark = cspace_convert(bgcolor, 'sRGB1', 'CIELab')[0] < 50
 
@@ -2770,7 +2782,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Initialize Epochs Grid
         if self.mne.is_epochs:
-            grid_pen = mkPen(color='k', width=2, style=Qt.DashLine)
+            grid_pen = self.mne.mkPen(color='k', width=2, style=Qt.DashLine)
             for x_grid in self.mne.boundary_times[1:-1]:
                 grid_line = InfiniteLine(pos=x_grid,
                                          pen=grid_pen,
