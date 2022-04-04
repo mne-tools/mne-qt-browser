@@ -28,13 +28,14 @@ from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
                              QDockWidget, QDoubleSpinBox, QFormLayout,
                              QGridLayout, QHBoxLayout, QInputDialog,
-                             QLabel, QMainWindow, QMessageBox,
-                             QPushButton, QScrollBar, QToolTip, QWidget,
-                             QStyleOptionSlider, QStyle,
+                             QLabel, QMainWindow, QMessageBox, QToolButton,
+                             QPushButton, QScrollBar, QWidget, QMenu,
+                             QStyleOptionSlider, QStyle, QActionGroup,
                              QApplication, QGraphicsView, QProgressBar,
                              QVBoxLayout, QLineEdit, QCheckBox, QScrollArea,
                              QGraphicsLineItem, QGraphicsScene, QTextEdit,
-                             QSizePolicy, QSpinBox, QDesktopWidget, QSlider)
+                             QSizePolicy, QSpinBox, QDesktopWidget, QSlider,
+                             QWidgetAction, QRadioButton)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from matplotlib.colors import to_rgba_array
 from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
@@ -2565,19 +2566,6 @@ class LoadThread(QThread):
         del self.browser
 
 
-class _FastToolTipComboBox(QComboBox):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.setMouseTracking(True)
-
-    def setToolTip(self, tooltip):
-        self.tooltip = tooltip
-
-    def enterEvent(self, event):
-        QToolTip.showText(event.globalPos(), self.tooltip)
-        super().enterEvent(event)
-
-
 class _PGMetaClass(type(BrowserBase), type(QMainWindow)):
     """Class is necessary to prevent a metaclass conflict.
 
@@ -2611,7 +2599,7 @@ def _disconnect(sig):
         pass
 
 
-class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
+class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     """A PyQtGraph-backend for 2D data browsing."""
 
     gotClosed = pyqtSignal()
@@ -2890,39 +2878,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.overview_bar = OverviewBar(self)
         layout.addWidget(self.mne.overview_bar, 2, 0, 1, 2)
 
-        # Add Combobox to select Overview-Mode
-        self.overview_mode_chkbx = _FastToolTipComboBox()
-        self.overview_mode_chkbx.addItems(['empty', 'channels'])
-        tooltip = (
-            '<h2>Overview-Modes</h2>'
-            '<ul>'
-            '<li>empty:<br>'
-            'Display no background.</li>'
-            '<li>channels:<br>'
-            'Display each channel with its channel-type color.</li>'
-            '<li>zscore:<br>'
-            'Display the zscore for the data from each channel across time. '
-            'Red indicates high zscores, blue indicates low zscores, '
-            'and the boundaries of the color gradient are defined by the '
-            'minimum/maximum zscore.'
-            'This only works if precompute is set to "True", or if it is '
-            'enabled with "auto" and enough free RAM is available.</li>'
-            '</ul>')
-        self.overview_mode_chkbx.setToolTip(tooltip)
-        if self.mne.enable_precompute:
-            self.overview_mode_chkbx.addItems(['zscore'])
-        self.overview_mode_chkbx.setCurrentText(self.mne.overview_mode)
-        self.overview_mode_chkbx.currentTextChanged.connect(
-                self._overview_mode_changed)
-        # Avoid taking keyboard-focus
-        self.overview_mode_chkbx.setFocusPolicy(Qt.NoFocus)
-        overview_mode_layout = QHBoxLayout()
-        overview_mode_layout.addWidget(QLabel('Overview-Mode:'))
-        overview_mode_layout.addWidget(self.overview_mode_chkbx)
-        overview_mode_widget = QWidget()
-        overview_mode_widget.setLayout(overview_mode_layout)
-        self.statusBar().addPermanentWidget(overview_mode_widget)
-
         widget.setLayout(layout)
         self.setCentralWidget(widget)
 
@@ -2936,48 +2891,99 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Initialize Toolbar
         self.mne.toolbar = self.addToolBar('Tools')
-        self.mne.toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        # tool_button_style = Qt.ToolButtonTextBesideIcon
+        tool_button_style = Qt.ToolButtonIconOnly
+        self.mne.toolbar.setToolButtonStyle(tool_button_style)
 
-        adecr_time = QAction(QIcon.fromTheme("less_time"), '- Time', parent=self)
+        adecr_time = QAction(
+            QIcon.fromTheme("less_time"), '- Time', parent=self)
         adecr_time.triggered.connect(partial(self.change_duration, -0.2))
         self.mne.toolbar.addAction(adecr_time)
-
-        aincr_time = QAction(QIcon.fromTheme("more_time"), '+ Time', parent=self)
+        aincr_time = QAction(
+            QIcon.fromTheme("more_time"), '+ Time', parent=self)
         aincr_time.triggered.connect(partial(self.change_duration, 0.25))
         self.mne.toolbar.addAction(aincr_time)
+        self.mne.toolbar.addSeparator()
 
-        adecr_nchan = QAction(QIcon.fromTheme("less_channels"), '- Channels',
-                              parent=self)
+        adecr_nchan = QAction(
+            QIcon.fromTheme("less_channels"), '- Channels', parent=self)
         adecr_nchan.triggered.connect(partial(self.change_nchan, -10))
         self.mne.toolbar.addAction(adecr_nchan)
-
-        aincr_nchan = QAction(QIcon.fromTheme("more_channels"), '+ Channels',
-                              parent=self)
+        aincr_nchan = QAction(
+            QIcon.fromTheme("more_channels"), '+ Channels', parent=self)
         aincr_nchan.triggered.connect(partial(self.change_nchan, 10))
         self.mne.toolbar.addAction(aincr_nchan)
+        self.mne.toolbar.addSeparator()
 
-        adecr_nchan = QAction(QIcon.fromTheme("zoom_out"), 'Zoom Out', parent=self)
+        adecr_nchan = QAction(
+            QIcon.fromTheme("zoom_out"), 'Zoom out', parent=self)
         adecr_nchan.triggered.connect(partial(self.scale_all, 4 / 5))
         self.mne.toolbar.addAction(adecr_nchan)
-
-        aincr_nchan = QAction(QIcon.fromTheme("zoom_in"), 'Zoom In', parent=self)
+        aincr_nchan = QAction(
+            QIcon.fromTheme("zoom_in"), 'Zoom in', parent=self)
         aincr_nchan.triggered.connect(partial(self.scale_all, 5 / 4))
         self.mne.toolbar.addAction(aincr_nchan)
+        self.mne.toolbar.addSeparator()
 
         if not self.mne.is_epochs:
-            atoggle_annot = QAction(QIcon.fromTheme("annotations"), 'Annotations',
-                                    parent=self)
+            atoggle_annot = QAction(
+                QIcon.fromTheme("annotations"), 'Annotations', parent=self)
             atoggle_annot.triggered.connect(self._toggle_annotation_fig)
             self.mne.toolbar.addAction(atoggle_annot)
 
-        atoggle_proj = QAction(QIcon.fromTheme("ssp"), 'SSP', parent=self)
+        atoggle_proj = QAction(
+            QIcon.fromTheme("ssp"), 'SSP', parent=self)
         atoggle_proj.triggered.connect(self._toggle_proj_fig)
         self.mne.toolbar.addAction(atoggle_proj)
 
-        atoggle_fullscreen = QAction(QIcon.fromTheme("fullscreen"), 'Fullscreen',
-                                     parent=self)
-        atoggle_fullscreen.triggered.connect(self._toggle_fullscreen)
-        self.mne.toolbar.addAction(atoggle_fullscreen)
+        button = QToolButton(self.mne.toolbar)
+        button.setToolTip(
+            '<h2>Overview-Modes</h2>'
+            '<ul>'
+            '<li>empty:<br>'
+            'Display no background.</li>'
+            '<li>channels:<br>'
+            'Display each channel with its channel-type color.</li>'
+            '<li>zscore:<br>'
+            'Display the zscore for the data from each channel across time. '
+            'Red indicates high zscores, blue indicates low zscores, '
+            'and the boundaries of the color gradient are defined by the '
+            'minimum/maximum zscore.'
+            'This only works if precompute is set to "True", or if it is '
+            'enabled with "auto" and enough free RAM is available.</li>'
+            '<li>hidden:<br>'
+            'Hide the overview bar.</li>'
+            '</ul>')
+        button.setText('Overview Bar')
+        button.setIcon(QIcon.fromTheme('overview_bar'))
+        button.setToolButtonStyle(tool_button_style)
+        menu = self.mne.overview_menu = QMenu(button)
+        overview_items = dict(
+            empty='Empty',
+            channels='Channels',
+        )
+        if self.mne.enable_precompute:
+            overview_items['zscore'] = 'Z-Score'
+        overview_items['hidden'] = 'Hidden'
+        group = QActionGroup(menu)
+        for key, text in overview_items.items():
+            radio = QRadioButton(menu)
+            radio.setText(text)
+            if key == self.mne.overview_mode:
+                radio.setChecked(True)
+            action = QWidgetAction(menu)
+            action.setDefaultWidget(radio)
+            menu.addAction(action)
+            group.addAction(action)
+            radio.clicked.connect(
+                lambda *args, key=key, **kwargs: (
+                    menu.close(),
+                    self._overview_mode_changed(new_mode=key)))
+        button.setMenu(self.mne.overview_menu)
+        button.setPopupMode(QToolButton.InstantPopup)
+        self.mne.toolbar.addWidget(button)
+
+        self.mne.toolbar.addSeparator()
 
         asettings = QAction(QIcon.fromTheme("settings"), 'Settings',
                             parent=self)
@@ -3250,11 +3256,17 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self._set_scalebars_visible(self.mne.scalebars_visible)
 
     def _overview_mode_changed(self, new_mode):
-        self.mne.overview_mode = new_mode
+        if new_mode == 'hidden':
+            visible = False
+        else:
+            self.mne.overview_mode = new_mode
+            visible = True
         if self.mne.overview_mode == 'zscore':
             while self.mne.zscore_rgba is None:
                 QApplication.processEvents()
         self.mne.overview_bar.set_background()
+        if visible != self.mne.show_overview_bar:
+            self._toggle_overview_bar()
 
     def scale_all(self, step):
         """Scale all traces by multiplying with step."""
@@ -4520,7 +4532,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             _browser_instances.remove(self)
         self._close(event)
         self.gotClosed.emit()
-        # Make sure PyQtBrowser gets deleted after it was closed.
+        # Make sure it gets deleted after it was closed.
         self.deleteLater()
 
 
@@ -4608,6 +4620,10 @@ def _init_browser(**kwargs):
     out = _init_mne_qtapp(pg_app=True, **app_kwargs)
     if 'splash' in app_kwargs:
         kwargs['splash'] = out[1]  # returned as secord element
-    browser = PyQtGraphBrowser(**kwargs)
+    browser = MNEQtBrowser(**kwargs)
 
     return browser
+
+
+class PyQtGraphBrowser(MNEQtBrowser):
+    pass  # just for backward compat with MNE 1.0 scraping
