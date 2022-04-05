@@ -2752,7 +2752,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Initialize Axis-Items
         self.mne.time_axis = TimeAxis(self.mne)
-        self.mne.time_axis.setLabel(text='Time', units='s')
+        if self.mne.is_epochs:
+            self.mne.time_axis.setLabel(text='Epoch Index', units=None)
+        else:
+            self.mne.time_axis.setLabel(text='Time', units='s')
+
         self.mne.channel_axis = ChannelAxis(self)
         self.mne.viewbox = RawViewBox(self)
 
@@ -3203,6 +3207,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'qt_key': Qt.Key_Space
             }
         }
+        if self.mne.is_epochs:
+            # Disable time format toggling
+            del self.mne.keyboard_shortcuts['t']
 
     def _update_yaxis_labels(self):
         self.mne.channel_axis.repaint()
@@ -4193,7 +4200,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def _toggle_time_format(self):
         if self.mne.time_format == 'float':
             self.mne.time_format = 'clock'
-            self.mne.time_axis.setLabel(text='Time')
+            self.mne.time_axis.setLabel(text='Time of day')
         else:
             self.mne.time_format = 'float'
             self.mne.time_axis.setLabel(text='Time', units='s')
