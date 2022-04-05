@@ -1695,10 +1695,10 @@ class HelpDialog(_BaseDialog):
 class ProjDialog(_BaseDialog):
     """A dialog to toggle projections."""
 
-    def __init__(self, main, **kwargs):
+    def __init__(self, main, *, name):
         self.external_change = True
         # Create projection-layout
-        super().__init__(main, **kwargs)
+        super().__init__(main, name=name)
 
         layout = QVBoxLayout()
         labels = [p['desc'] for p in self.mne.projs]
@@ -1725,6 +1725,8 @@ class ProjDialog(_BaseDialog):
         self.toggle_all_bt.clicked.connect(self.toggle_all)
         layout.addWidget(self.toggle_all_bt)
         self.setLayout(layout)
+        # Always keep window on top
+        self.setWindowFlags(Qt.Window | Qt.WindowStaysOnTopHint)
         self.show()
 
     def _proj_changed(self, state, idx):
