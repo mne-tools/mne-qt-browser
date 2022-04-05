@@ -1523,6 +1523,7 @@ class _BaseDialog(QDialog):
             cp = QDesktopWidget().availableGeometry().center()
             qr.moveCenter(cp)
             self.move(qr.topLeft())
+        self.activateWindow()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
