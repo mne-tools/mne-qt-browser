@@ -1698,7 +1698,7 @@ class ProjDialog(_BaseDialog):
     def __init__(self, main, *, name):
         self.external_change = True
         # Create projection-layout
-        super().__init__(main, name=name)
+        super().__init__(main, name=name, title='Projectors')
 
         layout = QVBoxLayout()
         labels = [p['desc'] for p in self.mne.projs]
