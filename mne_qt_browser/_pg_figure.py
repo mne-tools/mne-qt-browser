@@ -1531,7 +1531,7 @@ class _BaseDialog(QDialog):
         else:
             self.parent().keyPressEvent(event)
 
-    def closeEvent(self, event=None):
+    def closeEvent(self, event):
         if hasattr(self, 'name') and hasattr(self, 'mne'):
             if self.name is not None and hasattr(self.mne, self.name):
                 setattr(self.mne, self.name, None)
