@@ -4516,6 +4516,13 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Make sure PyQtBrowser gets deleted after it was closed.
         self.deleteLater()
 
+    def _fake_click_on_toolbar_action(self, action_name, wait_after=500):
+        """Trigger the event slot associated with the action named 'action_name' in the toolbar."""
+        for action in self.mne.toolbar.actions():
+            if not action.isSeparator():
+                if action.iconText() == action_name:
+                    action.trigger()
+        QTest.qWait(wait_after)
 
 def _get_n_figs():
     # Wait for a short time to let the Qt-loop clean up
