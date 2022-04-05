@@ -47,6 +47,7 @@ from colorspacious import cspace_convert
 
 import scooby
 from mne.viz import plot_sensors
+from mne.viz.backends._utils import _init_mne_qtapp
 from mne.viz._figure import BrowserBase
 from mne.viz.utils import _simplify_float, _merge_annotations, _figure_agg
 from mne.annotations import _sync_onset
@@ -68,64 +69,6 @@ except ImportError:
         yield []
 
 name = 'pyqtgraph'
-
-# This can be removed when mne==1.0 is released.
-try:
-    from mne.viz.backends._utils import _init_mne_qtapp
-except ImportError:
-    from mne.viz.backends._utils import _init_qt_resources
-
-    def _init_mne_qtapp(enable_icon=True, pg_app=False):
-        """Get QApplication-instance for MNE-Python.
-
-        Parameter
-        ---------
-        enable_icon: bool
-            If to set an MNE-icon for the app.
-        pg_app: bool
-            If to create the QApplication with pyqtgraph. For an until know
-            undiscovered reason the pyqtgraph-browser won't show without
-            mkQApp from pyqtgraph.
-
-        Returns
-        -------
-        app: ``PyQt5.QtWidgets.QApplication``
-            Instance of QApplication.
-        """
-        from PyQt5.QtWidgets import QApplication
-        from PyQt5.QtGui import QIcon
-
-        app_name = 'MNE-Python'
-        organization_name = 'MNE'
-
-        # Fix from cbrnr/mnelab for app name in menu bar
-        if sys.platform.startswith("darwin"):
-            try:
-                # set bundle name on macOS (app name shown in the menu bar)
-                from Foundation import NSBundle
-                bundle = NSBundle.mainBundle()
-                info = (bundle.localizedInfoDictionary()
-                        or bundle.infoDictionary())
-                info["CFBundleName"] = app_name
-            except ModuleNotFoundError:
-                pass
-
-        if pg_app:
-            from pyqtgraph import mkQApp
-            app = mkQApp(app_name)
-        else:
-            app = (QApplication.instance()
-                   or QApplication(sys.argv or [app_name]))
-            app.setApplicationName(app_name)
-        app.setOrganizationName(organization_name)
-
-        if enable_icon:
-            # Set icon
-            _init_qt_resources()
-            kind = 'bigsur-' if platform.mac_ver()[0] >= '10.16' else ''
-            app.setWindowIcon(QIcon(f":/mne-{kind}icon.png"))
-
-        return app
 
 
 def _get_color(color_spec, invert=False):
