@@ -69,6 +69,12 @@ except ImportError:
 
 name = 'pyqtgraph'
 
+# MNE's butterfly plots traditionally default to the channel ordering of
+# mag, grad, ..., which is inconsistent with the order in non-butterfly mode
+# and hence doesn't match the order in the overview bar either. So we swap
+# grads and mags here.
+DATA_CH_TYPES_ORDER = ('grad', 'mag', *_DATA_CH_TYPES_ORDER_DEFAULT[2:])
+
 # This can be removed when mne==1.0 is released.
 try:
     from mne.viz.backends._utils import _init_mne_qtapp
@@ -552,10 +558,10 @@ class ChannelAxis(AxisItem):
         if self.mne.butterfly and self.mne.fig_selection is not None:
             tick_strings = list(self.main._make_butterfly_selections_dict())
         elif self.mne.butterfly:
-            _, ixs, _ = np.intersect1d(_DATA_CH_TYPES_ORDER_DEFAULT,
+            _, ixs, _ = np.intersect1d(DATA_CH_TYPES_ORDER,
                                        self.mne.ch_types, return_indices=True)
             ixs.sort()
-            tick_strings = np.array(_DATA_CH_TYPES_ORDER_DEFAULT)[ixs]
+            tick_strings = np.array(DATA_CH_TYPES_ORDER)[ixs]
         else:
             # Get channel-names and by substracting 1 from tick-values
             # since the first channel starts at y=1.
@@ -2678,7 +2684,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.scale_factor = 1
         # Stores channel-types for butterfly-mode
         self.mne.butterfly_type_order = [tp for tp in
-                                         _DATA_CH_TYPES_ORDER_DEFAULT
+                                         DATA_CH_TYPES_ORDER
                                          if tp in self.mne.ch_types]
         if self.mne.is_epochs:
             # Stores parameters for epochs
