@@ -3176,6 +3176,11 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             },
             ' ': {
                 'qt_key': Qt.Key_Space
+            },
+            ',': {
+                'qt_key': Qt.Key_Comma,
+                'slot': [self._toggle_settings_fig],
+                'description': ['Settings Window']
             }
         }
 
