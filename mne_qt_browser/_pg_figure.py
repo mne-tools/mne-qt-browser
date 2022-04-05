@@ -2752,7 +2752,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Initialize Axis-Items
         self.mne.time_axis = TimeAxis(self.mne)
-        self.mne.time_axis.setLabel(text='Time', units='s')
+        if self.mne.is_epochs:
+            self.mne.time_axis.setLabel(text='Epoch Index', units=None)
+        else:
+            self.mne.time_axis.setLabel(text='Time', units='s')
+
         self.mne.channel_axis = ChannelAxis(self)
         self.mne.viewbox = RawViewBox(self)
 
