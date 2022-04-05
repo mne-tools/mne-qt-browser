@@ -4195,6 +4195,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self._set_events_visible(self.mne.events_visible)
 
     def _toggle_time_format(self):
+        if self.mne.is_epochs:  # no-op
+            return
+
         if self.mne.time_format == 'float':
             self.mne.time_format = 'clock'
             self.mne.time_axis.setLabel(text='Time')
