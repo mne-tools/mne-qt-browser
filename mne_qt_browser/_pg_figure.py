@@ -1621,7 +1621,7 @@ class HelpDialog(_BaseDialog):
     """Shows all keyboard-shortcuts."""
 
     def __init__(self, main, **kwargs):
-        super().__init__(main, **kwargs)
+        super().__init__(main, title='Help', **kwargs)
 
         # Show all keyboard-shortcuts in a Scroll-Area
         layout = QVBoxLayout()
