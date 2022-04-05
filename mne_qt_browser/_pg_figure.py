@@ -1569,7 +1569,7 @@ class SettingsDialog(_BaseDialog):
                 '<i>(Those methods are adapted from '
                 'pyqtgraph)</i><br>'
                 'Default is "peak".')
-        self.ds_method_cmbx.addItems(['subsample', 'mean', 'peak'])
+        self.ds_method_cmbx.addItems(['mean', 'subsample', 'peak'])
         self.ds_method_cmbx.currentTextChanged.connect(partial(
                 self._value_changed, value_name='ds_method'))
         self.ds_method_cmbx.setCurrentText(
