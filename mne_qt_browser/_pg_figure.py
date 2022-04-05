@@ -1487,8 +1487,9 @@ class ScaleBar(BaseScaleBar, QGraphicsLineItem):
 
 class _BaseDialog(QDialog):
     def __init__(self, main, widget=None,
-                 modal=False, name=None, title=None):
-        super().__init__(main)
+                 modal=False, name=None, title=None,
+                 flags=Qt.Window | Qt.Tool):
+        super().__init__(main, flags=flags)
         self.main = main
         self.widget = widget
         self.mne = main.mne
@@ -1529,7 +1530,7 @@ class _BaseDialog(QDialog):
         else:
             self.parent().keyPressEvent(event)
 
-    def closeEvent(self, event):
+    def closeEvent(self, event=None):
         if hasattr(self, 'name') and hasattr(self, 'mne'):
             if self.name is not None and hasattr(self.mne, self.name):
                 setattr(self.mne, self.name, None)
@@ -1541,8 +1542,8 @@ class _BaseDialog(QDialog):
 class SettingsDialog(_BaseDialog):
     """Shows additional settings."""
 
-    def __init__(self, main, **kwargs):
-        super().__init__(main, **kwargs)
+    def __init__(self, main, title='Settings', **kwargs):
+        super().__init__(main, title=title, **kwargs)
 
         layout = QFormLayout()
 
@@ -1598,10 +1599,10 @@ class SettingsDialog(_BaseDialog):
         self.setLayout(layout)
         self.show()
 
-    def closeEvent(self):
+    def closeEvent(self, event):
         _disconnect(self.ds_method_cmbx.currentTextChanged)
         _disconnect(self.scroll_sensitivity_slider.valueChanged)
-        super.closeEvent()
+        super().closeEvent(event)
 
     def _value_changed(self, new_value, value_name):
         if value_name == 'downsampling' and new_value == 0:
@@ -1698,7 +1699,7 @@ class ProjDialog(_BaseDialog):
     def __init__(self, main, *, name):
         self.external_change = True
         # Create projection-layout
-        super().__init__(main, name=name, title='Projectors')
+        super().__init__(main.window(), name=name, title='Projectors')
 
         layout = QVBoxLayout()
         labels = [p['desc'] for p in self.mne.projs]
@@ -1725,8 +1726,6 @@ class ProjDialog(_BaseDialog):
         self.toggle_all_bt.clicked.connect(self.toggle_all)
         layout.addWidget(self.toggle_all_bt)
         self.setLayout(layout)
-        # Always keep window on top
-        self.setWindowFlags(Qt.Window | Qt.WindowStaysOnTopHint)
         self.show()
 
     def _proj_changed(self, state, idx):
