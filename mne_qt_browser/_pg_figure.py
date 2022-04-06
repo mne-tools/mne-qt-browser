@@ -1600,10 +1600,10 @@ class SettingsDialog(_BaseDialog):
         self.setLayout(layout)
         self.show()
 
-    def closeEvent(self, event):
+    def closeEvent(self):
         _disconnect(self.ds_method_cmbx.currentTextChanged)
         _disconnect(self.scroll_sensitivity_slider.valueChanged)
-        super().closeEvent(event)
+        super.closeEvent()
 
     def _value_changed(self, new_value, value_name):
         if value_name == 'downsampling' and new_value == 0:
