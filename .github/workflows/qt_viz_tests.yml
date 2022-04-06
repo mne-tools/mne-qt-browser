@@ -100,7 +100,11 @@ jobs:
           powershell gl-ci-helpers/appveyor/install_opengl.ps1
         name: Setup OpenGL on Windows
         if: runner.os == 'Windows'
-      - run: ./tools/setup_xvfb.sh
+      - run: |
+          set -e
+          ./tools/setup_xvfb.sh
+          sudo apt install mesa-utils
+          glxinfo | grep enderer
         name: Setup xvfb on Linux
         working-directory: ../mne-python
         if: runner.os == 'Linux'
