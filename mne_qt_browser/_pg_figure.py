@@ -1487,8 +1487,9 @@ class ScaleBar(BaseScaleBar, QGraphicsLineItem):
 
 class _BaseDialog(QDialog):
     def __init__(self, main, widget=None,
-                 modal=False, name=None, title=None):
-        super().__init__(main)
+                 modal=False, name=None, title=None,
+                 flags=Qt.Window | Qt.Tool):
+        super().__init__(main, flags=flags)
         self.main = main
         self.widget = widget
         self.mne = main.mne
@@ -1522,6 +1523,7 @@ class _BaseDialog(QDialog):
             cp = QDesktopWidget().availableGeometry().center()
             qr.moveCenter(cp)
             self.move(qr.topLeft())
+        self.activateWindow()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
@@ -1541,8 +1543,8 @@ class _BaseDialog(QDialog):
 class SettingsDialog(_BaseDialog):
     """Shows additional settings."""
 
-    def __init__(self, main, **kwargs):
-        super().__init__(main, **kwargs)
+    def __init__(self, main, title='Settings', **kwargs):
+        super().__init__(main, title=title, **kwargs)
 
         layout = QFormLayout()
 
@@ -1619,7 +1621,7 @@ class HelpDialog(_BaseDialog):
     """Shows all keyboard-shortcuts."""
 
     def __init__(self, main, **kwargs):
-        super().__init__(main, **kwargs)
+        super().__init__(main, title='Help', **kwargs)
 
         # Show all keyboard-shortcuts in a Scroll-Area
         layout = QVBoxLayout()
@@ -1695,10 +1697,10 @@ class HelpDialog(_BaseDialog):
 class ProjDialog(_BaseDialog):
     """A dialog to toggle projections."""
 
-    def __init__(self, main, **kwargs):
+    def __init__(self, main, *, name):
         self.external_change = True
         # Create projection-layout
-        super().__init__(main, **kwargs)
+        super().__init__(main.window(), name=name, title='Projectors')
 
         layout = QVBoxLayout()
         labels = [p['desc'] for p in self.mne.projs]
