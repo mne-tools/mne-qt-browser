@@ -110,7 +110,7 @@ jobs:
           glxinfo | grep enderer
         name: Check OpenGL
         working-directory: ../mne-python
-        if: runner.os == 'Linux' and matrix.opengl == '[opengl]'
+        if: runner.os == 'Linux' && contains(matrix.opengl, 'opengl')
       - name: Show system information
         run: mne sys_info
       - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/viz
