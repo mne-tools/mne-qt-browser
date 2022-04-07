@@ -106,7 +106,7 @@ To run the PyQtGraph tests you have to run:
 pytest mne_qt_browser/tests/test_pg_specific.py
 ```
 
-Additionaly, clone mne-python, and then run:
+Additionally, clone mne-python, and then run:
 
 ```console
 pytest -m pgtest ../mne-python/mne/viz/tests
