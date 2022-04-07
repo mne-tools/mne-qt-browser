@@ -1164,9 +1164,9 @@ class OverviewBar(QGraphicsView):
     def set_background(self):
         """Set the background-image for the selected overview-mode."""
         # Add Overview-Pixmap
-        if self.mne.overview_mode == 'empty':
+        if self.mne.overview_mode in ('empty', 'hidden'):
             self.bg_pxmp = None
-        elif self.mne.overview_mode in ('channels', 'hidden'):
+        elif self.mne.overview_mode == 'channels':
             channel_rgba = np.empty((len(self.mne.ch_order),
                                      2, 4))
             for line_idx, ch_idx in enumerate(self.mne.ch_order):
