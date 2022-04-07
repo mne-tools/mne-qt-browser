@@ -3325,6 +3325,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.overview_mode = new_mode
         if self.mne.overview_mode == 'zscore':
             while self.mne.zscore_rgba is None:
+                time.sleep(0.01)
                 QApplication.processEvents()
         self.mne.overview_bar.set_background()
         if not self.mne.overview_bar.isVisible():
