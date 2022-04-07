@@ -18,7 +18,6 @@ from contextlib import contextmanager
 from copy import copy
 from functools import partial
 from os.path import getsize
-import time
 
 import numpy as np
 from PyQt5.QtCore import (QEvent, QThread, Qt, pyqtSignal, QRectF, QLineF,
@@ -3323,10 +3322,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _overview_mode_changed(self, new_mode):
         self.mne.overview_mode = new_mode
-        if self.mne.overview_mode == 'zscore':
-            while self.mne.zscore_rgba is None:
-                time.sleep(0.01)
-                QApplication.processEvents()
         self.mne.overview_bar.set_background()
         if not self.mne.overview_bar.isVisible():
             self._toggle_overview_bar()
