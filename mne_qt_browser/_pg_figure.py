@@ -3317,7 +3317,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             while self.mne.zscore_rgba is None:
                 QApplication.processEvents()
         self.mne.overview_bar.set_background()
-        if visible != self.mne.overview_bar.visible():
+        if visible != self.mne.overview_bar.isVisible():
             self._toggle_overview_bar()
 
     def scale_all(self, step):
@@ -4250,7 +4250,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self._redraw()
 
     def _toggle_overview_bar(self):
-        self.mne.overview_bar.setVisible(not self.mne.overview_bar.visible())
+        self.mne.overview_bar.setVisible(not self.mne.overview_bar.isVisible())
 
     def _toggle_zenmode(self):
         self.mne.scrollbars_visible = not self.mne.scrollbars_visible
