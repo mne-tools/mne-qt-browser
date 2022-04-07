@@ -18,6 +18,7 @@ from contextlib import contextmanager
 from copy import copy
 from functools import partial
 from os.path import getsize
+import time
 
 import numpy as np
 from PyQt5.QtCore import (QEvent, QThread, Qt, pyqtSignal, QRectF, QLineF,
@@ -1164,8 +1165,9 @@ class OverviewBar(QGraphicsView):
     def set_background(self):
         """Set the background-image for the selected overview-mode."""
         # Add Overview-Pixmap
-        if self.mne.overview_mode in ('empty', 'hidden'):
-            self.bg_pxmp = None
+        self.bg_pxmp = None
+        if self.mne.overview_mode == 'empty':
+            pass
         elif self.mne.overview_mode == 'channels':
             channel_rgba = np.empty((len(self.mne.ch_order),
                                      2, 4))
@@ -2797,9 +2799,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             warn('Cannot use z-score mode without precomputation, setting '
                  'overview_mode="channels"')
             self.mne.overview_mode = 'channels'
-        overview_items['hidden'] = 'Hidden'
         _check_option(
-            'overview_mode', self.mne.overview_mode, list(overview_items))
+            'overview_mode', self.mne.overview_mode,
+            list(overview_items) + ['hidden'])
+        hide_overview = False
+        if self.mne.overview_mode == 'hidden':
+            hide_overview = True
+            self.mne.overview_mode = 'channels'
 
         # Initialize data (needed in DataTrace.update_data).
         self._update_data()
@@ -3005,9 +3011,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             'minimum/maximum zscore.'
             'This only works if precompute is set to "True", or if it is '
             'enabled with "auto" and enough free RAM is available.</li>'
-            '<li>hidden:<br>'
-            'Hide the overview bar.</li>'
-            '</ul>')
+            )
         button.setText('Overview Bar')
         button.setIcon(QIcon.fromTheme('overview_bar'))
         button.setToolButtonStyle(tool_button_style)
@@ -3018,8 +3022,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             radio.setText(text)
             if key == self.mne.overview_mode:
                 radio.setChecked(True)
-                if key == 'hidden':
-                    self.mne.overview_bar.setVisible(False)
             action = QWidgetAction(menu)
             action.setDefaultWidget(radio)
             menu.addAction(action)
@@ -3028,6 +3030,18 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 lambda *args, key=key, **kwargs: (
                     menu.close(),
                     self._overview_mode_changed(new_mode=key)))
+        menu.addSeparator()
+        visible = QAction('Visible', parent=menu)
+        menu.addAction(visible)
+        visible.setCheckable(True)
+        visible.setChecked(True)
+        self.mne.overview_bar.setVisible(True)
+        visible.triggered.connect(self._toggle_overview_bar)
+        if hide_overview:
+            # This doesn't work because it hasn't been shown yet:
+            # self._toggle_overview_bar()
+            visible.setChecked(False)
+            self.mne.overview_bar.setVisible(False)
         button.setMenu(self.mne.overview_menu)
         button.setPopupMode(QToolButton.InstantPopup)
         self.mne.toolbar.addWidget(button)
@@ -3308,16 +3322,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self._set_scalebars_visible(self.mne.scalebars_visible)
 
     def _overview_mode_changed(self, new_mode):
-        if new_mode == 'hidden':
-            visible = False
-        else:
-            self.mne.overview_mode = new_mode
-            visible = True
+        self.mne.overview_mode = new_mode
         if self.mne.overview_mode == 'zscore':
             while self.mne.zscore_rgba is None:
                 QApplication.processEvents()
         self.mne.overview_bar.set_background()
-        if visible != self.mne.overview_bar.isVisible():
+        if not self.mne.overview_bar.isVisible():
             self._toggle_overview_bar()
 
     def scale_all(self, step):
@@ -4250,7 +4260,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self._redraw()
 
     def _toggle_overview_bar(self):
-        self.mne.overview_bar.setVisible(not self.mne.overview_bar.isVisible())
+        visible = not self.mne.overview_bar.isVisible()
+        for item in self.mne.overview_menu.actions():
+            if item.text() == 'Visible':
+                item.setChecked(visible)
+                break
+        self.mne.overview_bar.setVisible(visible)
 
     def _toggle_zenmode(self):
         self.mne.scrollbars_visible = not self.mne.scrollbars_visible
