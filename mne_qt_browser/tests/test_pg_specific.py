@@ -3,7 +3,6 @@
 #
 # License: BSD-3-Clause
 
-import math
 import numpy as np
 from PyQt5.QtTest import QTest
 
@@ -91,22 +90,22 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
     fig.test_mode = True
     QTest.qWaitForWindowExposed(fig)
     QTest.qWait(50)
-    assert fig.mne.fig_settings == None
+    assert fig.mne.fig_settings is None
     fig._fake_click_on_toolbar_action('Settings', wait_after=500)
-    assert fig.mne.fig_settings != None
+    assert fig.mne.fig_settings is not None
     assert pg_backend._get_n_figs() == 2
     fig._fake_click_on_toolbar_action('Settings', wait_after=500)
     assert pg_backend._get_n_figs() == 1
-    assert fig.mne.fig_settings == None
+    assert fig.mne.fig_settings is None
     fig._fake_click_on_toolbar_action('Settings', wait_after=500)
     assert pg_backend._get_n_figs() == 2
-    assert fig.mne.fig_settings != None
+    assert fig.mne.fig_settings is not None
     fig._fake_click_on_toolbar_action('Settings', wait_after=500)
     assert pg_backend._get_n_figs() == 1
-    assert fig.mne.fig_settings == None
+    assert fig.mne.fig_settings is None
 
     fig._fake_click_on_toolbar_action('Settings', wait_after=500)
-    assert fig.mne.fig_settings != None
+    assert fig.mne.fig_settings is not None
     downsampling_control = fig.mne.fig_settings.downsampling_box
     assert downsampling_control.value() == fig.mne.downsampling
 
@@ -152,22 +151,26 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
     assert fig.mne.scroll_sensitivity == 100
 
     QTest.qWait(100)
-    sensitivity_values = list(range(sensitivity_control.minimum(), sensitivity_control.maximum() + 1, 40))
+    sensitivity_values = list(range(sensitivity_control.minimum(),
+                                    sensitivity_control.maximum() + 1, 40))
     if sensitivity_values[-1] != sensitivity_control.maximum():
         sensitivity_values.append(sensitivity_control.maximum())
     sensitivity_test = [False] * len(sensitivity_values)
     for i in range(len(sensitivity_values)):
         sensitivity_control.setValue(sensitivity_values[i])
         QTest.qWait(50)
-        sensitivity_test[i] = fig.mne.scroll_sensitivity == sensitivity_control.value()
+        sensitivity_test[i] = \
+            fig.mne.scroll_sensitivity == sensitivity_control.value()
     assert all(sensitivity_test)
 
     sensitivity_test = [False] * len(sensitivity_values)
     for i in reversed(range(len(sensitivity_values))):
         sensitivity_control.setValue(sensitivity_values[i])
         QTest.qWait(50)
-        sensitivity_test[i] = fig.mne.scroll_sensitivity == sensitivity_control.value()
+        sensitivity_test[i] = \
+            fig.mne.scroll_sensitivity == sensitivity_control.value()
     assert all(sensitivity_test)
+
 
 def test_pg_help_dialog(raw_orig, pg_backend):
     """Test Settings Dialog toggle on/off for pyqtgraph-backend."""
@@ -175,19 +178,20 @@ def test_pg_help_dialog(raw_orig, pg_backend):
     fig.test_mode = True
     QTest.qWaitForWindowExposed(fig)
     QTest.qWait(50)
-    assert fig.mne.fig_help == None
+    assert fig.mne.fig_help is None
     fig._fake_click_on_toolbar_action('Help', wait_after=500)
-    assert fig.mne.fig_help != None
+    assert fig.mne.fig_help is not None
     assert pg_backend._get_n_figs() == 2
     fig._fake_click_on_toolbar_action('Help', wait_after=500)
-    assert fig.mne.fig_help == None
+    assert fig.mne.fig_help is None
     assert pg_backend._get_n_figs() == 1
     fig._fake_click_on_toolbar_action('Help', wait_after=500)
-    assert fig.mne.fig_help != None
+    assert fig.mne.fig_help is not None
     assert pg_backend._get_n_figs() == 2
     fig._fake_click_on_toolbar_action('Help', wait_after=500)
-    assert fig.mne.fig_help == None
+    assert fig.mne.fig_help is None
     assert pg_backend._get_n_figs() == 1
+
 
 def test_pg_toolbar_time_plus_minus(raw_orig, pg_backend):
     fig = raw_orig.plot()
@@ -195,7 +199,7 @@ def test_pg_toolbar_time_plus_minus(raw_orig, pg_backend):
     QTest.qWaitForWindowExposed(fig)
     assert pg_backend._get_n_figs() == 1
 
-    min_duration = 3 * np.diff(fig.mne.inst.times[:2])[0]  # min duration (set to 3 samples). hard code.
+    min_duration = 3 * np.diff(fig.mne.inst.times[:2])[0]  # hard code.
     xmin, xmax = fig.mne.viewbox.viewRange()[0]
     while xmax - xmin > min_duration:
         fig._fake_click_on_toolbar_action('- Time', wait_after=20)
@@ -206,7 +210,7 @@ def test_pg_toolbar_time_plus_minus(raw_orig, pg_backend):
     step = 0.25
     fig._fake_click_on_toolbar_action('+ Time', wait_after=100)
     xmin_new, xmax_new = fig.mne.viewbox.viewRange()[0]
-    assert xmax_new - (xmax + (xmax - xmin * step)) < eps  # float values close to zero not zero
+    assert xmax_new - (xmax + (xmax - xmin * step)) < eps
 
     xmin, xmax = fig.mne.viewbox.viewRange()[0]
     while xmax + fig.mne.duration * step < fig.mne.xmax:
@@ -219,7 +223,7 @@ def test_pg_toolbar_time_plus_minus(raw_orig, pg_backend):
     xmin, xmax = fig.mne.viewbox.viewRange()[0]
     fig._fake_click_on_toolbar_action('+ Time', wait_after=200)
     xmin_new, xmax_new = fig.mne.viewbox.viewRange()[0]
-    assert xmax_new == xmax  # no effect after max spanned view has been reached.
+    assert xmax_new == xmax  # no effect after span maxed
 
     step = -0.2
     xmin, xmax = fig.mne.viewbox.viewRange()[0]
@@ -237,22 +241,23 @@ def test_pg_toolbar_time_plus_minus(raw_orig, pg_backend):
 
     assert pg_backend._get_n_figs() == 1  # still alive
 
+
 def test_pg_toolbar_channels_plus_minus(raw_orig, pg_backend):
     fig = raw_orig.plot()
     fig.test_mode = True
     QTest.qWaitForWindowExposed(fig)
     assert pg_backend._get_n_figs() == 1
 
-    if fig.mne.butterfly != True:
+    if fig.mne.butterfly is not True:
         fig._fake_keypress('b')  # toggle butterfly mode
     fig._fake_click_on_toolbar_action('- Channels', wait_after=100)
     ymin, ymax = fig.mne.viewbox.viewRange()[1]
     fig._fake_click_on_toolbar_action('- Channels', wait_after=100)
-    assert [ymin, ymax] == fig.mne.viewbox.viewRange()[1]  # no changes in butterfly mode
+    assert [ymin, ymax] == fig.mne.viewbox.viewRange()[1]
     fig._fake_click_on_toolbar_action('+ Channels', wait_after=100)
-    assert [ymin, ymax] == fig.mne.viewbox.viewRange()[1]  # no changes in butterfly mode
+    assert [ymin, ymax] == fig.mne.viewbox.viewRange()[1]
 
-    if fig.mne.butterfly == True:
+    if fig.mne.butterfly is True:
         fig._fake_keypress('b')  # toggle butterfly off
 
     while ymax - ymin > 2:
@@ -280,6 +285,7 @@ def test_pg_toolbar_channels_plus_minus(raw_orig, pg_backend):
 
     assert pg_backend._get_n_figs() == 1    # still alive
 
+
 def test_pg_toolbar_zoom(raw_orig, pg_backend):
     fig = raw_orig.plot()
     fig.test_mode = True
@@ -306,6 +312,7 @@ def test_pg_toolbar_zoom(raw_orig, pg_backend):
 
     assert pg_backend._get_n_figs() == 1  # still alive
 
+
 def test_pg_toolbar_annotations(raw_orig, pg_backend):
     fig = raw_orig.plot()
     fig.test_mode = True
@@ -314,13 +321,14 @@ def test_pg_toolbar_annotations(raw_orig, pg_backend):
 
     state_annotation_widget = fig.mne.annotation_mode
     fig._fake_click_on_toolbar_action('Annotations', wait_after=100)
-    assert  fig.mne.annotation_mode != state_annotation_widget
+    assert fig.mne.annotation_mode != state_annotation_widget
 
     fig._fake_click_on_toolbar_action('Annotations', wait_after=300)
     fig._fake_click_on_toolbar_action('Annotations', wait_after=300)
     fig._fake_click_on_toolbar_action('Annotations', wait_after=300)
 
     assert pg_backend._get_n_figs() == 1    # still alive
+
 
 def test_pg_toolbar_actions(raw_orig, pg_backend):
     """ Test toolbar all actions combined.
