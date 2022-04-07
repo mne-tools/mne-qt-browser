@@ -1697,10 +1697,10 @@ class HelpDialog(_BaseDialog):
 class ProjDialog(_BaseDialog):
     """A dialog to toggle projections."""
 
-    def __init__(self, main, title='Projectors', **kwargs):
+    def __init__(self, main, *, name):
         self.external_change = True
         # Create projection-layout
-        super().__init__(main.window(), title=title, **kwargs)
+        super().__init__(main.window(), name=name, title='Projectors')
 
         layout = QVBoxLayout()
         labels = [p['desc'] for p in self.mne.projs]
