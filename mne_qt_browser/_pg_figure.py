@@ -11,6 +11,7 @@ import gc
 import math
 import platform
 import sys
+from pathlib import Path
 from ast import literal_eval
 from collections import OrderedDict
 from contextlib import contextmanager
@@ -27,13 +28,14 @@ from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
                              QDockWidget, QDoubleSpinBox, QFormLayout,
                              QGridLayout, QHBoxLayout, QInputDialog,
-                             QLabel, QMainWindow, QMessageBox,
-                             QPushButton, QScrollBar, QToolTip, QWidget,
-                             QStyleOptionSlider, QStyle,
+                             QLabel, QMainWindow, QMessageBox, QToolButton,
+                             QPushButton, QScrollBar, QWidget, QMenu,
+                             QStyleOptionSlider, QStyle, QActionGroup,
                              QApplication, QGraphicsView, QProgressBar,
                              QVBoxLayout, QLineEdit, QCheckBox, QScrollArea,
                              QGraphicsLineItem, QGraphicsScene, QTextEdit,
-                             QSizePolicy, QSpinBox, QDesktopWidget, QSlider)
+                             QSizePolicy, QSpinBox, QDesktopWidget, QSlider,
+                             QWidgetAction, QRadioButton)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from matplotlib.colors import to_rgba_array
 from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
@@ -53,7 +55,6 @@ from mne.io.pick import (_DATA_CH_TYPES_ORDER_DEFAULT,
 from mne.utils import _to_rgb, logger, sizeof_fmt, warn, get_config
 
 from . import _browser_instances
-from .icons import resources  # noqa: F401
 
 try:
     from pytestqt.exceptions import capture_exceptions
@@ -67,6 +68,12 @@ except ImportError:
         yield []
 
 name = 'pyqtgraph'
+
+# MNE's butterfly plots traditionally default to the channel ordering of
+# mag, grad, ..., which is inconsistent with the order in non-butterfly mode
+# and hence doesn't match the order in the overview bar either. So we swap
+# grads and mags here.
+DATA_CH_TYPES_ORDER = ('grad', 'mag', *_DATA_CH_TYPES_ORDER_DEFAULT[2:])
 
 # This can be removed when mne==1.0 is released.
 try:
@@ -284,7 +291,7 @@ class DataTrace(PlotCurveItem):
             else:
                 self.color = self.mne.ch_color_ref[self.ch_name]
 
-        self.setPen(_get_color(self.color, self.mne.dark))
+        self.setPen(self.mne.mkPen(_get_color(self.color, self.mne.dark)))
 
     @propagate_to_children
     def update_range_idx(self):
@@ -551,10 +558,10 @@ class ChannelAxis(AxisItem):
         if self.mne.butterfly and self.mne.fig_selection is not None:
             tick_strings = list(self.main._make_butterfly_selections_dict())
         elif self.mne.butterfly:
-            _, ixs, _ = np.intersect1d(_DATA_CH_TYPES_ORDER_DEFAULT,
+            _, ixs, _ = np.intersect1d(DATA_CH_TYPES_ORDER,
                                        self.mne.ch_types, return_indices=True)
             ixs.sort()
-            tick_strings = np.array(_DATA_CH_TYPES_ORDER_DEFAULT)[ixs]
+            tick_strings = np.array(DATA_CH_TYPES_ORDER)[ixs]
         else:
             # Get channel-names and by substracting 1 from tick-values
             # since the first channel starts at y=1.
@@ -830,7 +837,7 @@ class OverviewBar(QGraphicsView):
 
     def update_epoch_lines(self):
         """Update representation of epoch lines."""
-        epoch_line_pen = mkPen(color='k', width=1)
+        epoch_line_pen = self.mne.mkPen(color='k', width=1)
         for t in self.mne.boundary_times[1:-1]:
             top_left = self._mapFromData(t, 0)
             bottom_right = self._mapFromData(t, len(self.mne.ch_order))
@@ -890,7 +897,7 @@ class OverviewBar(QGraphicsView):
                 color_name = self.mne.event_color_dict[ev_id]
                 color = _get_color(color_name, self.mne.dark)
                 color.setAlpha(100)
-                pen = mkPen(color)
+                pen = self.mne.mkPen(color)
                 top_left = self._mapFromData(ev_t, 0)
                 bottom_right = self._mapFromData(ev_t, len(self.mne.ch_order))
                 line = self.scene().addLine(QLineF(top_left, bottom_right),
@@ -923,7 +930,7 @@ class OverviewBar(QGraphicsView):
             color_name = self.mne.annotation_segment_colors[description]
             color = _get_color(color_name, self.mne.dark)
             color.setAlpha(150)
-            pen = mkPen(color)
+            pen = self.mne.mkPen(color)
             brush = mkBrush(color)
             top_left = self._mapFromData(plot_onset, 0)
             bottom_right = self._mapFromData(plot_onset + duration,
@@ -963,7 +970,7 @@ class OverviewBar(QGraphicsView):
             if color_name != rect_color:
                 color = _get_color(color_name, self.mne.dark)
                 color.setAlpha(150)
-                pen = mkPen(color)
+                pen = self.mne.mkPen(color)
                 brush = mkBrush(color)
                 rect.setPen(pen)
                 rect.setBrush(brush)
@@ -980,7 +987,7 @@ class OverviewBar(QGraphicsView):
             bottom_right = self._mapFromData(value, len(self.mne.ch_order))
             line = QLineF(top_left, bottom_right)
             if self.v_line is None:
-                pen = mkPen('g')
+                pen = self.mne.mkPen('g')
                 self.v_line = self.scene().addLine(line, pen)
                 self.v_line.setZValue(1)
             else:
@@ -1004,7 +1011,7 @@ class OverviewBar(QGraphicsView):
                                              + self.mne.n_channels)
         rect = QRectF(top_left, bottom_right)
         if self.viewrange_rect is None:
-            pen = mkPen(color='g')
+            pen = self.mne.mkPen(color='g')
             brush = mkBrush(color=(0, 0, 0, 100))
             self.viewrange_rect = self.scene().addRect(rect, pen, brush)
             self.viewrange_rect.setZValue(4)
@@ -1385,7 +1392,7 @@ class Crosshair(InfiniteLine):
     def paint(self, p, *args):
         super().paint(p, *args)
 
-        p.setPen(mkPen('r', width=4))
+        p.setPen(self.mne.mkPen('r', width=4))
         p.drawPoint(Point(self.y, 0))
 
 
@@ -1466,7 +1473,7 @@ class ScaleBar(BaseScaleBar, QGraphicsLineItem):
         QGraphicsLineItem.__init__(self)
 
         self.setZValue(1)
-        self.setPen(mkPen(color='#AA3377', width=5))
+        self.setPen(self.mne.mkPen(color='#AA3377', width=5))
         self.update_y_position()
 
     def _set_position(self, x, y):
@@ -1480,8 +1487,9 @@ class ScaleBar(BaseScaleBar, QGraphicsLineItem):
 
 class _BaseDialog(QDialog):
     def __init__(self, main, widget=None,
-                 modal=False, name=None, title=None):
-        super().__init__(main)
+                 modal=False, name=None, title=None,
+                 flags=Qt.Window | Qt.Tool):
+        super().__init__(main, flags=flags)
         self.main = main
         self.widget = widget
         self.mne = main.mne
@@ -1515,6 +1523,7 @@ class _BaseDialog(QDialog):
             cp = QDesktopWidget().availableGeometry().center()
             qr.moveCenter(cp)
             self.move(qr.topLeft())
+        self.activateWindow()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
@@ -1688,7 +1697,7 @@ class HelpDialog(_BaseDialog):
 class ProjDialog(_BaseDialog):
     """A dialog to toggle projections."""
 
-    def __init__(self, main, **kwargs):
+    def __init__(self, main, *, name):
         self.external_change = True
         # Create projection-layout
         super().__init__(main.window(), title='Projectors', **kwargs)
@@ -1751,7 +1760,7 @@ class _ChannelFig(FigureCanvasQTAgg):
         # in Qt.
         if self._lasso_path is not None:
             painter = QPainter(self)
-            painter.setPen(mkPen('red', width=2))
+            painter.setPen(self.mne.mkPen('red', width=2))
             painter.drawPath(self._lasso_path)
             painter.end()
 
@@ -1983,8 +1992,8 @@ class AnnotRegion(LinearRegionItem):
         self.base_color.setAlpha(75)
         self.hover_color.setAlpha(150)
         self.text_color.setAlpha(255)
-        self.line_pen = mkPen(color=self.hover_color, width=2)
-        self.hover_pen = mkPen(color=self.text_color, width=2)
+        self.line_pen = self.mne.mkPen(color=self.hover_color, width=2)
+        self.hover_pen = self.mne.mkPen(color=self.text_color, width=2)
         self.setBrush(self.base_color)
         self.setHoverBrush(self.hover_color)
         self.label_item.setColor(self.text_color)
@@ -2155,7 +2164,7 @@ class AnnotationDock(QDockWidget):
         self.stop_bx.editingFinished.connect(self._stop_changed)
         layout.addWidget(self.stop_bx)
 
-        help_bt = QPushButton(QIcon(":/help.svg"), 'Help')
+        help_bt = QPushButton(QIcon.fromTheme("help"), 'Help')
         help_bt.clicked.connect(self._show_help)
         layout.addWidget(help_bt)
 
@@ -2565,19 +2574,6 @@ class LoadThread(QThread):
         del self.browser
 
 
-class _FastToolTipComboBox(QComboBox):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.setMouseTracking(True)
-
-    def setToolTip(self, tooltip):
-        self.tooltip = tooltip
-
-    def enterEvent(self, event):
-        QToolTip.showText(event.globalPos(), self.tooltip)
-        super().enterEvent(event)
-
-
 class _PGMetaClass(type(BrowserBase), type(QMainWindow)):
     """Class is necessary to prevent a metaclass conflict.
 
@@ -2611,7 +2607,7 @@ def _disconnect(sig):
         pass
 
 
-class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
+class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     """A PyQtGraph-backend for 2D data browsing."""
 
     gotClosed = pyqtSignal()
@@ -2639,8 +2635,27 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if self.mne.window_title is not None:
             self.setWindowTitle(self.mne.window_title)
         QApplication.processEvents()  # needs to happen for the theme to be set
+
+        # HiDPI stuff
+        desktop = QApplication.desktop()
+        dpi_ratio = desktop.physicalDpiY() / desktop.logicalDpiY()
+        logger.debug(f'Desktop DPI ratio: {dpi_ratio:0.3f}')
+
+        def _hidpi_mkPen(*args, **kwargs):
+            kwargs['width'] = dpi_ratio * kwargs.get('width', 1.)
+            return mkPen(*args, **kwargs)
+
+        self.mne.mkPen = _hidpi_mkPen
+
         bgcolor = self.palette().color(self.backgroundRole()).getRgbF()[:3]
         self.mne.dark = cspace_convert(bgcolor, 'sRGB1', 'CIELab')[0] < 50
+
+        # update icon theme
+        _qt_init_icons()
+        if self.mne.dark:
+            QIcon.setThemeName('dark')
+        else:
+            QIcon.setThemeName('light')
 
         # Initialize attributes which are only used by pyqtgraph, not by
         # matplotlib and add them to MNEBrowseParams.
@@ -2671,7 +2686,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.scale_factor = 1
         # Stores channel-types for butterfly-mode
         self.mne.butterfly_type_order = [tp for tp in
-                                         _DATA_CH_TYPES_ORDER_DEFAULT
+                                         DATA_CH_TYPES_ORDER
                                          if tp in self.mne.ch_types]
         if self.mne.is_epochs:
             # Stores parameters for epochs
@@ -2745,7 +2760,11 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Initialize Axis-Items
         self.mne.time_axis = TimeAxis(self.mne)
-        self.mne.time_axis.setLabel(text='Time', units='s')
+        if self.mne.is_epochs:
+            self.mne.time_axis.setLabel(text='Epoch Index', units=None)
+        else:
+            self.mne.time_axis.setLabel(text='Time', units='s')
+
         self.mne.channel_axis = ChannelAxis(self)
         self.mne.viewbox = RawViewBox(self)
 
@@ -2782,7 +2801,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Initialize Epochs Grid
         if self.mne.is_epochs:
-            grid_pen = mkPen(color='k', width=2, style=Qt.DashLine)
+            grid_pen = self.mne.mkPen(color='k', width=2, style=Qt.DashLine)
             for x_grid in self.mne.boundary_times[1:-1]:
                 grid_line = InfiniteLine(pos=x_grid,
                                          pen=grid_pen,
@@ -2883,39 +2902,6 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.overview_bar = OverviewBar(self)
         layout.addWidget(self.mne.overview_bar, 2, 0, 1, 2)
 
-        # Add Combobox to select Overview-Mode
-        self.overview_mode_chkbx = _FastToolTipComboBox()
-        self.overview_mode_chkbx.addItems(['empty', 'channels'])
-        tooltip = (
-            '<h2>Overview-Modes</h2>'
-            '<ul>'
-            '<li>empty:<br>'
-            'Display no background.</li>'
-            '<li>channels:<br>'
-            'Display each channel with its channel-type color.</li>'
-            '<li>zscore:<br>'
-            'Display the zscore for the data from each channel across time. '
-            'Red indicates high zscores, blue indicates low zscores, '
-            'and the boundaries of the color gradient are defined by the '
-            'minimum/maximum zscore.'
-            'This only works if precompute is set to "True", or if it is '
-            'enabled with "auto" and enough free RAM is available.</li>'
-            '</ul>')
-        self.overview_mode_chkbx.setToolTip(tooltip)
-        if self.mne.enable_precompute:
-            self.overview_mode_chkbx.addItems(['zscore'])
-        self.overview_mode_chkbx.setCurrentText(self.mne.overview_mode)
-        self.overview_mode_chkbx.currentTextChanged.connect(
-                self._overview_mode_changed)
-        # Avoid taking keyboard-focus
-        self.overview_mode_chkbx.setFocusPolicy(Qt.NoFocus)
-        overview_mode_layout = QHBoxLayout()
-        overview_mode_layout.addWidget(QLabel('Overview-Mode:'))
-        overview_mode_layout.addWidget(self.overview_mode_chkbx)
-        overview_mode_widget = QWidget()
-        overview_mode_widget.setLayout(overview_mode_layout)
-        self.statusBar().addPermanentWidget(overview_mode_widget)
-
         widget.setLayout(layout)
         self.setCentralWidget(widget)
 
@@ -2929,55 +2915,106 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Initialize Toolbar
         self.mne.toolbar = self.addToolBar('Tools')
-        self.mne.toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        # tool_button_style = Qt.ToolButtonTextBesideIcon
+        tool_button_style = Qt.ToolButtonIconOnly
+        self.mne.toolbar.setToolButtonStyle(tool_button_style)
 
-        adecr_time = QAction(QIcon(":/less_time.svg"), '- Time', parent=self)
+        adecr_time = QAction(
+            QIcon.fromTheme("less_time"), '- Time', parent=self)
         adecr_time.triggered.connect(partial(self.change_duration, -0.2))
         self.mne.toolbar.addAction(adecr_time)
-
-        aincr_time = QAction(QIcon(":/more_time.svg"), '+ Time', parent=self)
+        aincr_time = QAction(
+            QIcon.fromTheme("more_time"), '+ Time', parent=self)
         aincr_time.triggered.connect(partial(self.change_duration, 0.25))
         self.mne.toolbar.addAction(aincr_time)
+        self.mne.toolbar.addSeparator()
 
-        adecr_nchan = QAction(QIcon(":/less_channels.svg"), '- Channels',
-                              parent=self)
+        adecr_nchan = QAction(
+            QIcon.fromTheme("less_channels"), '- Channels', parent=self)
         adecr_nchan.triggered.connect(partial(self.change_nchan, -10))
         self.mne.toolbar.addAction(adecr_nchan)
-
-        aincr_nchan = QAction(QIcon(":/more_channels.svg"), '+ Channels',
-                              parent=self)
+        aincr_nchan = QAction(
+            QIcon.fromTheme("more_channels"), '+ Channels', parent=self)
         aincr_nchan.triggered.connect(partial(self.change_nchan, 10))
         self.mne.toolbar.addAction(aincr_nchan)
+        self.mne.toolbar.addSeparator()
 
-        adecr_nchan = QAction(QIcon(":/zoom_out.svg"), 'Zoom Out', parent=self)
+        adecr_nchan = QAction(
+            QIcon.fromTheme("zoom_out"), 'Zoom out', parent=self)
         adecr_nchan.triggered.connect(partial(self.scale_all, 4 / 5))
         self.mne.toolbar.addAction(adecr_nchan)
-
-        aincr_nchan = QAction(QIcon(":/zoom_in.svg"), 'Zoom In', parent=self)
+        aincr_nchan = QAction(
+            QIcon.fromTheme("zoom_in"), 'Zoom in', parent=self)
         aincr_nchan.triggered.connect(partial(self.scale_all, 5 / 4))
         self.mne.toolbar.addAction(aincr_nchan)
+        self.mne.toolbar.addSeparator()
 
         if not self.mne.is_epochs:
-            atoggle_annot = QAction(QIcon(":/annotations.svg"), 'Annotations',
-                                    parent=self)
+            atoggle_annot = QAction(
+                QIcon.fromTheme("annotations"), 'Annotations', parent=self)
             atoggle_annot.triggered.connect(self._toggle_annotation_fig)
             self.mne.toolbar.addAction(atoggle_annot)
 
-        atoggle_proj = QAction(QIcon(":/ssp.svg"), 'SSP', parent=self)
+        atoggle_proj = QAction(
+            QIcon.fromTheme("ssp"), 'SSP', parent=self)
         atoggle_proj.triggered.connect(self._toggle_proj_fig)
         self.mne.toolbar.addAction(atoggle_proj)
 
-        atoggle_fullscreen = QAction(QIcon(":/fullscreen.svg"), 'Fullscreen',
-                                     parent=self)
-        atoggle_fullscreen.triggered.connect(self._toggle_fullscreen)
-        self.mne.toolbar.addAction(atoggle_fullscreen)
+        button = QToolButton(self.mne.toolbar)
+        button.setToolTip(
+            '<h2>Overview-Modes</h2>'
+            '<ul>'
+            '<li>empty:<br>'
+            'Display no background.</li>'
+            '<li>channels:<br>'
+            'Display each channel with its channel-type color.</li>'
+            '<li>zscore:<br>'
+            'Display the zscore for the data from each channel across time. '
+            'Red indicates high zscores, blue indicates low zscores, '
+            'and the boundaries of the color gradient are defined by the '
+            'minimum/maximum zscore.'
+            'This only works if precompute is set to "True", or if it is '
+            'enabled with "auto" and enough free RAM is available.</li>'
+            '<li>hidden:<br>'
+            'Hide the overview bar.</li>'
+            '</ul>')
+        button.setText('Overview Bar')
+        button.setIcon(QIcon.fromTheme('overview_bar'))
+        button.setToolButtonStyle(tool_button_style)
+        menu = self.mne.overview_menu = QMenu(button)
+        overview_items = dict(
+            empty='Empty',
+            channels='Channels',
+        )
+        if self.mne.enable_precompute:
+            overview_items['zscore'] = 'Z-Score'
+        overview_items['hidden'] = 'Hidden'
+        group = QActionGroup(menu)
+        for key, text in overview_items.items():
+            radio = QRadioButton(menu)
+            radio.setText(text)
+            if key == self.mne.overview_mode:
+                radio.setChecked(True)
+            action = QWidgetAction(menu)
+            action.setDefaultWidget(radio)
+            menu.addAction(action)
+            group.addAction(action)
+            radio.clicked.connect(
+                lambda *args, key=key, **kwargs: (
+                    menu.close(),
+                    self._overview_mode_changed(new_mode=key)))
+        button.setMenu(self.mne.overview_menu)
+        button.setPopupMode(QToolButton.InstantPopup)
+        self.mne.toolbar.addWidget(button)
 
-        asettings = QAction(QIcon(":/settings.svg"), 'Settings',
+        self.mne.toolbar.addSeparator()
+
+        asettings = QAction(QIcon.fromTheme("settings"), 'Settings',
                             parent=self)
         asettings.triggered.connect(self._toggle_settings_fig)
         self.mne.toolbar.addAction(asettings)
 
-        ahelp = QAction(QIcon(":/help.svg"), 'Help', parent=self)
+        ahelp = QAction(QIcon.fromTheme("help"), 'Help', parent=self)
         ahelp.triggered.connect(self._toggle_help_fig)
         self.mne.toolbar.addAction(ahelp)
 
@@ -3178,6 +3215,9 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'qt_key': Qt.Key_Space
             }
         }
+        if self.mne.is_epochs:
+            # Disable time format toggling
+            del self.mne.keyboard_shortcuts['t']
 
     def _update_yaxis_labels(self):
         self.mne.channel_axis.repaint()
@@ -3243,11 +3283,17 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self._set_scalebars_visible(self.mne.scalebars_visible)
 
     def _overview_mode_changed(self, new_mode):
-        self.mne.overview_mode = new_mode
+        if new_mode == 'hidden':
+            visible = False
+        else:
+            self.mne.overview_mode = new_mode
+            visible = True
         if self.mne.overview_mode == 'zscore':
             while self.mne.zscore_rgba is None:
                 QApplication.processEvents()
         self.mne.overview_bar.set_background()
+        if visible != self.mne.show_overview_bar:
+            self._toggle_overview_bar()
 
     def scale_all(self, step):
         """Scale all traces by multiplying with step."""
@@ -4163,7 +4209,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def _toggle_time_format(self):
         if self.mne.time_format == 'float':
             self.mne.time_format = 'clock'
-            self.mne.time_axis.setLabel(text='Time')
+            self.mne.time_axis.setLabel(text='Time of day')
         else:
             self.mne.time_format = 'float'
             self.mne.time_axis.setLabel(text='Time', units='s')
@@ -4514,7 +4560,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             _browser_instances.remove(self)
         self._close(event)
         self.gotClosed.emit()
-        # Make sure PyQtBrowser gets deleted after it was closed.
+        # Make sure it gets deleted after it was closed.
         self.deleteLater()
 
     def _fake_click_on_toolbar_action(self, action_name, wait_after=500):
@@ -4593,6 +4639,13 @@ def _setup_ipython(ipython=None):
     return ipython
 
 
+def _qt_init_icons():
+    from PyQt5.QtGui import QIcon
+    icons_path = f"{Path(__file__).parent}/icons"
+    QIcon.setThemeSearchPaths([icons_path])
+    return icons_path
+
+
 def _init_browser(**kwargs):
     _setup_ipython()
     setConfigOption('enableExperimental', True)
@@ -4602,6 +4655,10 @@ def _init_browser(**kwargs):
     out = _init_mne_qtapp(pg_app=True, **app_kwargs)
     if 'splash' in app_kwargs:
         kwargs['splash'] = out[1]  # returned as secord element
-    browser = PyQtGraphBrowser(**kwargs)
+    browser = MNEQtBrowser(**kwargs)
 
     return browser
+
+
+class PyQtGraphBrowser(MNEQtBrowser):
+    pass  # just for backward compat with MNE 1.0 scraping
