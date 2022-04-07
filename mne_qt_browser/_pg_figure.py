@@ -1534,9 +1534,9 @@ class _BaseDialog(QDialog):
 class SettingsDialog(_BaseDialog):
     """Shows additional settings."""
 
-    def __init__(self, main, **kwargs):
-        super().__init__(main, **kwargs)
-        super().setWindowTitle('Settings')
+    def __init__(self, main, title='Settings', **kwargs):
+        super().__init__(main, title=title, **kwargs)
+
         layout = QFormLayout()
 
         self.downsampling_box = QSpinBox()
