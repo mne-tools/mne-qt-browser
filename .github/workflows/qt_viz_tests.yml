@@ -29,9 +29,9 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu, windows, macos]
-        mne: [main, maint/0.24]
+        mne: [main, maint/1.0]
         opengl: ['[opengl]']
-        python: ['3.9']
+        python: ['3.10']
         name: [matrix]
         include:
           - os: ubuntu
@@ -45,10 +45,15 @@ jobs:
             python: '3.9'
             name: no opengl
           - os: ubuntu
-            mne: maint/0.24
+            mne: maint/1.0
             opengl: ''
             python: '3.9'
             name: no opengl
+          - os: ubuntu
+            mne: maint/0.24
+            opengl: '[opengl]'
+            python: '3.9'
+            name: old
     name: pytest ${{ matrix.name }} / ${{ matrix.os }} / MNE ${{ matrix.mne }}
     runs-on: ${{ matrix.os }}-latest
     env:
@@ -99,6 +104,13 @@ jobs:
         name: Setup xvfb on Linux
         working-directory: ../mne-python
         if: runner.os == 'Linux'
+      - run: |
+          set -e
+          sudo apt install mesa-utils
+          glxinfo | grep enderer
+        name: Check OpenGL
+        working-directory: ../mne-python
+        if: runner.os == 'Linux' && contains(matrix.opengl, 'opengl')
       - name: Show system information
         run: mne sys_info
       - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/viz
