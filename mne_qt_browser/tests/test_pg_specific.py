@@ -243,9 +243,10 @@ def test_pg_toolbar_channels_plus_minus(raw_orig, pg_backend):
     QTest.qWaitForWindowExposed(fig)
     assert pg_backend._get_n_figs() == 1
 
-    ymin, ymax = fig.mne.viewbox.viewRange()[1]
     if fig.mne.butterfly != True:
         fig._fake_keypress('b')  # toggle butterfly mode
+    fig._fake_click_on_toolbar_action('- Channels', wait_after=100)
+    ymin, ymax = fig.mne.viewbox.viewRange()[1]
     fig._fake_click_on_toolbar_action('- Channels', wait_after=100)
     assert [ymin, ymax] == fig.mne.viewbox.viewRange()[1]  # no changes in butterfly mode
     fig._fake_click_on_toolbar_action('+ Channels', wait_after=100)
