@@ -225,14 +225,14 @@ def test_pg_toolbar_time_plus_minus(raw_orig, pg_backend):
     xmin, xmax = fig.mne.viewbox.viewRange()[0]
     fig._fake_click_on_toolbar_action('- Time', wait_after=200)
     xmin_new, xmax_new = fig.mne.viewbox.viewRange()[0]
-    assert xmax_new == xmax + (xmax - xmin * step)
+    assert xmax_new == xmax + ((xmax - xmin) * step)
 
     xmin, xmax = fig.mne.viewbox.viewRange()[0]
     fig._fake_click_on_toolbar_action('- Time', wait_after=200)
     xmin_new, xmax_new = fig.mne.viewbox.viewRange()[0]
-    assert xmax_new == xmax + (xmax - xmin * step)
+    assert xmax_new == xmax + ((xmax - xmin) * step)
 
-    for _ in range(12):
+    for _ in range(7):
         fig._fake_click_on_toolbar_action('- Time', wait_after=20)
 
     assert pg_backend._get_n_figs() == 1  # still alive
