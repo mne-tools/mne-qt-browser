@@ -52,7 +52,8 @@ from mne.viz.utils import _simplify_float, _merge_annotations, _figure_agg
 from mne.annotations import _sync_onset
 from mne.io.pick import (_DATA_CH_TYPES_ORDER_DEFAULT,
                          channel_indices_by_type, _DATA_CH_TYPES_SPLIT)
-from mne.utils import _to_rgb, logger, sizeof_fmt, warn, get_config
+from mne.utils import (_to_rgb, logger, sizeof_fmt, warn, get_config,
+                       _check_option)
 
 from . import _browser_instances
 
@@ -175,6 +176,20 @@ def propagate_to_children(method):
         return result
 
     return wrapper
+
+
+def _safe_splash(meth):
+    def func(self, *args, **kwargs):
+        try:
+            meth(self, *args, **kwargs)
+        finally:
+            try:
+                close = self.mne.splash.close
+            except Exception:
+                pass
+            else:
+                close()
+    return func
 
 
 class DataTrace(PlotCurveItem):
@@ -1151,7 +1166,7 @@ class OverviewBar(QGraphicsView):
         # Add Overview-Pixmap
         if self.mne.overview_mode == 'empty':
             self.bg_pxmp = None
-        elif self.mne.overview_mode == 'channels':
+        elif self.mne.overview_mode in ('channels', 'hidden'):
             channel_rgba = np.empty((len(self.mne.ch_order),
                                      2, 4))
             for line_idx, ch_idx in enumerate(self.mne.ch_order):
@@ -1167,7 +1182,8 @@ class OverviewBar(QGraphicsView):
                                  QImage.Format_RGBA8888)
             self.bg_pxmp = QPixmap.fromImage(self.bg_img)
 
-        elif self.mne.overview_mode == 'zscore':
+        elif self.mne.overview_mode == 'zscore' and \
+                self.mne.zscore_rgba is not None:
             self.bg_img = QImage(self.mne.zscore_rgba,
                                  self.mne.zscore_rgba.shape[1],
                                  self.mne.zscore_rgba.shape[0],
@@ -2612,6 +2628,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     gotClosed = pyqtSignal()
 
+    @_safe_splash
     def __init__(self, **kwargs):
         self.backend_name = 'pyqtgraph'
 
@@ -2676,9 +2693,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.enable_precompute = False
         self.mne.data_precomputed = False
         self._rerun_load_thread = False
-        # Parameters for overviewbar
-        self.mne.show_overview_bar = True
-        self.mne.overview_mode = 'channels'
         self.mne.zscore_rgba = None
         # Container for traces
         self.mne.traces = list()
@@ -2770,6 +2784,22 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Start precomputing if enabled
         self._init_precompute()
+
+        # Parameters for overviewbar
+        self.mne.overview_mode = getattr(self.mne, 'overview_mode', 'channels')
+        overview_items = dict(
+            empty='Empty',
+            channels='Channels',
+        )
+        if self.mne.enable_precompute:
+            overview_items['zscore'] = 'Z-Score'
+        elif self.mne.overview_mode == 'zscore':
+            warn('Cannot use z-score mode without precomputation, setting '
+                 'overview_mode="channels"')
+            self.mne.overview_mode = 'channels'
+        overview_items['hidden'] = 'Hidden'
+        _check_option(
+            'overview_mode', self.mne.overview_mode, list(overview_items))
 
         # Initialize data (needed in DataTrace.update_data).
         self._update_data()
@@ -2982,19 +3012,14 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         button.setIcon(QIcon.fromTheme('overview_bar'))
         button.setToolButtonStyle(tool_button_style)
         menu = self.mne.overview_menu = QMenu(button)
-        overview_items = dict(
-            empty='Empty',
-            channels='Channels',
-        )
-        if self.mne.enable_precompute:
-            overview_items['zscore'] = 'Z-Score'
-        overview_items['hidden'] = 'Hidden'
         group = QActionGroup(menu)
         for key, text in overview_items.items():
             radio = QRadioButton(menu)
             radio.setText(text)
             if key == self.mne.overview_mode:
                 radio.setChecked(True)
+                if key == 'hidden':
+                    self.mne.overview_bar.setVisible(False)
             action = QWidgetAction(menu)
             action.setDefaultWidget(radio)
             menu.addAction(action)
@@ -3292,7 +3317,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             while self.mne.zscore_rgba is None:
                 QApplication.processEvents()
         self.mne.overview_bar.set_background()
-        if visible != self.mne.show_overview_bar:
+        if visible != self.mne.overview_bar.visible():
             self._toggle_overview_bar()
 
     def scale_all(self, step):
@@ -4225,8 +4250,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self._redraw()
 
     def _toggle_overview_bar(self):
-        self.mne.show_overview_bar = not self.mne.show_overview_bar
-        self.mne.overview_bar.setVisible(self.mne.show_overview_bar)
+        self.mne.overview_bar.setVisible(not self.mne.overview_bar.visible())
 
     def _toggle_zenmode(self):
         self.mne.scrollbars_visible = not self.mne.scrollbars_visible
