@@ -322,20 +322,6 @@ def test_pg_toolbar_annotations(raw_orig, pg_backend):
 
     assert pg_backend._get_n_figs() == 1    # still alive
 
-def test_pg_toolbar_fullscreen_action(raw_orig, pg_backend):
-    fig = raw_orig.plot()
-    fig.test_mode = True
-    QTest.qWaitForWindowExposed(fig)
-    assert pg_backend._get_n_figs() == 1
-    if fig.isFullScreen():
-        fig._fake_click_on_toolbar_action('Fullscreen', wait_after=500)
-        assert fig.isFullScreen() == False
-    else:
-        fig._fake_click_on_toolbar_action('Fullscreen', wait_after=500)
-        assert fig.isFullScreen() == True
-
-    assert pg_backend._get_n_figs() == 1    # still alive
-
 def test_pg_toolbar_actions(raw_orig, pg_backend):
     """ Test toolbar all actions combined.
         Toolbar actions here create a separate QDialog window.
