@@ -4055,6 +4055,7 @@ class PyQtGraphBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             ProjDialog(self, name='fig_proj')
         else:
             self.mne.fig_proj.close()
+            self.mne.fig_proj = None
 
     def _toggle_all_projs(self):
         if self.mne.fig_proj is None:
