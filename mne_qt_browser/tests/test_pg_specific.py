@@ -3,8 +3,8 @@
 #
 # License: BSD-3-Clause
 
-import numpy as np
 import math
+import numpy as np
 from PyQt5.QtTest import QTest
 
 
