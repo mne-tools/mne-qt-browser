@@ -214,6 +214,10 @@ def test_pg_toolbar_time_plus_minus(raw_orig, pg_backend):
         xmin, xmax = fig.mne.viewbox.viewRange()[0]
 
     fig._fake_click_on_toolbar_action('+ Time', wait_after=200)
+    fig._fake_click_on_toolbar_action('+ Time', wait_after=200)
+
+    xmin, xmax = fig.mne.viewbox.viewRange()[0]
+    fig._fake_click_on_toolbar_action('+ Time', wait_after=200)
     xmin_new, xmax_new = fig.mne.viewbox.viewRange()[0]
     assert xmax_new == xmax  # no effect after max spanned view has been reached.
 
