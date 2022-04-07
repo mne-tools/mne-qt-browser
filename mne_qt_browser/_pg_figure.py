@@ -184,7 +184,7 @@ def _safe_splash(meth):
             meth(self, *args, **kwargs)
         finally:
             try:
-                close = self.mne.splash.close()
+                self.mne.splash.close()
             except Exception:
                 pass
     return func
