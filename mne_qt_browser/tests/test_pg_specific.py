@@ -202,10 +202,11 @@ def test_pg_toolbar_time_plus_minus(raw_orig, pg_backend):
         xmin, xmax = fig.mne.viewbox.viewRange()[0]
     assert xmax - xmin == min_duration
 
+    eps = 0.01
     step = 0.25
     fig._fake_click_on_toolbar_action('+ Time', wait_after=100)
     xmin_new, xmax_new = fig.mne.viewbox.viewRange()[0]
-    assert xmax_new == xmax + (xmax - xmin * step)
+    assert xmax_new - (xmax + (xmax - xmin * step)) < eps  # float values close to zero not zero
 
     xmin, xmax = fig.mne.viewbox.viewRange()[0]
     while xmax + fig.mne.duration * step < fig.mne.xmax:
