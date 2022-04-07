@@ -20,22 +20,22 @@ from functools import partial
 from os.path import getsize
 
 import numpy as np
-from PyQt5.QtCore import (QEvent, QThread, Qt, pyqtSignal, QRectF, QLineF,
-                          QPoint, QSettings)
-from PyQt5.QtGui import (QFont, QIcon, QPixmap, QTransform,
-                         QMouseEvent, QImage, QPainter, QPainterPath)
-from PyQt5.QtTest import QTest
-from PyQt5.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
-                             QDockWidget, QDoubleSpinBox, QFormLayout,
-                             QGridLayout, QHBoxLayout, QInputDialog,
-                             QLabel, QMainWindow, QMessageBox, QToolButton,
-                             QPushButton, QScrollBar, QWidget, QMenu,
-                             QStyleOptionSlider, QStyle, QActionGroup,
-                             QApplication, QGraphicsView, QProgressBar,
-                             QVBoxLayout, QLineEdit, QCheckBox, QScrollArea,
-                             QGraphicsLineItem, QGraphicsScene, QTextEdit,
-                             QSizePolicy, QSpinBox, QDesktopWidget, QSlider,
-                             QWidgetAction, QRadioButton)
+from qtpy.QtCore import (QEvent, QThread, Qt, Signal, QRectF, QLineF,
+                         QPointF, QSettings)
+from qtpy.QtGui import (QFont, QIcon, QPixmap, QTransform,
+                        QMouseEvent, QImage, QPainter, QPainterPath)
+from qtpy.QtTest import QTest
+from qtpy.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
+                            QDockWidget, QDoubleSpinBox, QFormLayout,
+                            QGridLayout, QHBoxLayout, QInputDialog,
+                            QLabel, QMainWindow, QMessageBox, QToolButton,
+                            QPushButton, QScrollBar, QWidget, QMenu,
+                            QStyleOptionSlider, QStyle, QActionGroup,
+                            QApplication, QGraphicsView, QProgressBar,
+                            QVBoxLayout, QLineEdit, QCheckBox, QScrollArea,
+                            QGraphicsLineItem, QGraphicsScene, QTextEdit,
+                            QSizePolicy, QSpinBox, QSlider, QWidgetAction,
+                            QRadioButton)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from matplotlib.colors import to_rgba_array
 from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
@@ -95,11 +95,11 @@ except ImportError:
 
         Returns
         -------
-        app: ``PyQt5.QtWidgets.QApplication``
+        app: ``qtpy.QtWidgets.QApplication``
             Instance of QApplication.
         """
-        from PyQt5.QtWidgets import QApplication
-        from PyQt5.QtGui import QIcon
+        from qtpy.QtWidgets import QApplication
+        from qtpy.QtGui import QIcon
 
         app_name = 'MNE-Python'
         organization_name = 'MNE'
@@ -799,7 +799,7 @@ class OverviewBar(QGraphicsView):
         self.bg_pxmp = None
         self.bg_pxmp_item = None
         # Set minimum Size to 1/10 of display size
-        min_h = int(QApplication.desktop().screenGeometry().height() / 10)
+        min_h = int(self.screen().geometry().height() / 10)
         self.setMinimumSize(1, 1)
         self.setFixedHeight(min_h)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -1086,9 +1086,9 @@ class OverviewBar(QGraphicsView):
         """Customize resize event."""
         super().resizeEvent(event)
         cnt_rect = self.contentsRect()
-        self.setSceneRect(QRectF(QPoint(0, 0),
-                                 QPoint(cnt_rect.width(),
-                                        cnt_rect.height())))
+        self.setSceneRect(QRectF(QPointF(0, 0),
+                                 QPointF(cnt_rect.width(),
+                                         cnt_rect.height())))
         # Resize backgounrd
         self._fit_bg_img()
 
@@ -1520,7 +1520,7 @@ class _BaseDialog(QDialog):
         if center:
             # center dialog
             qr = self.frameGeometry()
-            cp = QDesktopWidget().availableGeometry().center()
+            cp = self.screen().availableGeometry().center()
             qr.moveCenter(cp)
             self.move(qr.topLeft())
         self.activateWindow()
@@ -1789,7 +1789,7 @@ class SelectionDialog(_BaseDialog):
         # Create widget
         super().__init__(main, name='fig_selection',
                          title='Channel selection')
-        xpos = QApplication.desktop().screenGeometry().width() - 400
+        xpos = self.screen().geometry().width() - 400
         self.setGeometry(xpos, 100, 400, 800)
 
         layout = QVBoxLayout()
@@ -1956,9 +1956,9 @@ class SelectionDialog(_BaseDialog):
 class AnnotRegion(LinearRegionItem):
     """Graphics-Oobject for Annotations."""
 
-    regionChangeFinished = pyqtSignal(object)
-    gotSelected = pyqtSignal(object)
-    removeRequested = pyqtSignal(object)
+    regionChangeFinished = Signal(object)
+    gotSelected = Signal(object)
+    removeRequested = Signal(object)
 
     def __init__(self, mne, description, values):
         super().__init__(values=values, orientation='vertical',
@@ -2490,9 +2490,9 @@ class BrowserView(GraphicsView):
 
 class LoadThread(QThread):
     """A worker object for precomputing in a separate QThread."""
-    loadProgress = pyqtSignal(int)
-    processText = pyqtSignal(str)
-    loadingFinished = pyqtSignal()
+    loadProgress = Signal(int)
+    processText = Signal(str)
+    loadingFinished = Signal()
 
     def __init__(self, browser):
         super().__init__()
@@ -2610,7 +2610,7 @@ def _disconnect(sig):
 class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     """A PyQtGraph-backend for 2D data browsing."""
 
-    gotClosed = pyqtSignal()
+    gotClosed = Signal()
 
     def __init__(self, **kwargs):
         self.backend_name = 'pyqtgraph'
@@ -2637,8 +2637,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         QApplication.processEvents()  # needs to happen for the theme to be set
 
         # HiDPI stuff
-        desktop = QApplication.desktop()
-        dpi_ratio = desktop.physicalDpiY() / desktop.logicalDpiY()
+        desktop = self.screen()
+        dpi_ratio = \
+            desktop.physicalDotsPerInchY() / desktop.logicalDotsPerInchY()
         logger.debug(f'Desktop DPI ratio: {dpi_ratio:0.3f}')
 
         def _hidpi_mkPen(*args, **kwargs):
@@ -3890,10 +3891,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _get_zscore(self, data):
         # Reshape data to reasonable size for display
-        if QApplication.desktop() is None:
+        if self.screen() is None:
             max_pixel_width = 3840  # default=UHD
         else:
-            max_pixel_width = QApplication.desktop().screenGeometry().width()
+            max_pixel_width = self.screen().geometry().width()
         collapse_by = data.shape[1] // max_pixel_width
         data = data[:, :max_pixel_width * collapse_by]
         if collapse_by > 0:
@@ -4632,7 +4633,7 @@ def _setup_ipython(ipython=None):
 
 
 def _qt_init_icons():
-    from PyQt5.QtGui import QIcon
+    from qtpy.QtGui import QIcon
     icons_path = f"{Path(__file__).parent}/icons"
     QIcon.setThemeSearchPaths([icons_path])
     return icons_path
