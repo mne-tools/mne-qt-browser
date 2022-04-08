@@ -117,8 +117,10 @@ jobs:
         name: Run MNE-Tests
       - run: pytest mne_qt_browser/tests/test_pg_specific.py
         name: Run pyqtgraph-specific tests
+      # These are slow on macOS, so skip them
       - run: pytest mne_qt_browser/tests/test_speed.py
         name: Run benchmarks
+        if: runner.os != 'macOS'
       - uses: codecov/codecov-action@v1
         if: always()
         name: 'Upload coverage to CodeCov'
