@@ -21,8 +21,8 @@ from os.path import getsize
 
 import numpy as np
 from qtpy.QtCore import (QEvent, QThread, Qt, Signal, QRectF, QLineF,
-                         QPointF, QSettings)
-from qtpy.QtGui import (QFont, QIcon, QPixmap, QTransform,
+                         QPointF, QPoint, QSettings)
+from qtpy.QtGui import (QFont, QIcon, QPixmap, QTransform, QGuiApplication,
                         QMouseEvent, QImage, QPainter, QPainterPath)
 from qtpy.QtTest import QTest
 from qtpy.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
@@ -799,7 +799,7 @@ class OverviewBar(QGraphicsView):
         self.bg_pxmp = None
         self.bg_pxmp_item = None
         # Set minimum Size to 1/10 of display size
-        min_h = int(self.screen().geometry().height() / 10)
+        min_h = int(_screen(self).geometry().height() / 10)
         self.setMinimumSize(1, 1)
         self.setFixedHeight(min_h)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -1520,7 +1520,7 @@ class _BaseDialog(QDialog):
         if center:
             # center dialog
             qr = self.frameGeometry()
-            cp = self.screen().availableGeometry().center()
+            cp = _screen(self).availableGeometry().center()
             qr.moveCenter(cp)
             self.move(qr.topLeft())
         self.activateWindow()
@@ -1789,7 +1789,7 @@ class SelectionDialog(_BaseDialog):
         # Create widget
         super().__init__(main, name='fig_selection',
                          title='Channel selection')
-        xpos = self.screen().geometry().width() - 400
+        xpos = _screen(self).geometry().width() - 400
         self.setGeometry(xpos, 100, 400, 800)
 
         layout = QVBoxLayout()
@@ -2600,6 +2600,16 @@ qsettings_params = {
 }
 
 
+def _screen(widget):
+    try:
+        # Qt 5.14+
+        return widget.screen()
+    except AttributeError:
+        # Top center of the widget
+        return QGuiApplication.screenAt(
+            widget.mapToGlobal(QPoint(widget.width() // 2, 0)))
+
+
 def _disconnect(sig):
     try:
         sig.disconnect()
@@ -2637,7 +2647,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         QApplication.processEvents()  # needs to happen for the theme to be set
 
         # HiDPI stuff
-        desktop = self.screen()
+        desktop = QGuiApplication.primaryScreen()
         dpi_ratio = \
             desktop.physicalDotsPerInchY() / desktop.logicalDotsPerInchY()
         logger.debug(f'Desktop DPI ratio: {dpi_ratio:0.3f}')
@@ -3891,10 +3901,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _get_zscore(self, data):
         # Reshape data to reasonable size for display
-        if self.screen() is None:
+        screen = _screen(self)
+        if screen is None:
             max_pixel_width = 3840  # default=UHD
         else:
-            max_pixel_width = self.screen().geometry().width()
+            max_pixel_width = screen.geometry().width()
         collapse_by = data.shape[1] // max_pixel_width
         data = data[:, :max_pixel_width * collapse_by]
         if collapse_by > 0:
