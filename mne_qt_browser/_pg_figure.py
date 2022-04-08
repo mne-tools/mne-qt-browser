@@ -4311,12 +4311,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # On MacOs additionally KeypadModifier is set when arrow-keys
         # are pressed.
         # On Unix GroupSwitchModifier is set when ctrl is pressed.
-        # To preserve cross-platform consistency the following comparison
-        # of the modifier-values is done.
-        # modifiers need to be exclusive
         modifiers = {
-            'Ctrl': '4' in hex(int(event.modifiers())),
-            'Shift': int(event.modifiers()) == 33554432
+            'Ctrl': bool(Qt.ControlModifier & event.modifiers()),
+            'Shift': bool(Qt.ShiftModifier & event.modifiers()),
         }
         for key_name in self.mne.keyboard_shortcuts:
             key_dict = self.mne.keyboard_shortcuts[key_name]
