@@ -173,7 +173,10 @@ jobs:
         name: 'Cache testing data'
       - run: python -c 'import mne; print(mne.datasets.testing.data_path(verbose=True))'
         name: 'Download testing data'
-      - run: ./tools/setup_xvfb.sh
+      - run: |
+          set -e
+          ./tools/setup_xvfb.sh
+          sudo apt install -yq libegl1
         name: Setup xvfb on Linux
         working-directory: ../mne-python
         if: runner.os == 'Linux'
