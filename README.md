@@ -98,7 +98,7 @@ Please report bugs and feature requests in the [issues](https://github.com/mne-t
 You can run a benchmark locally with:
 
 ```console
-pytest -m benchmark mne_qt_browser/tests/test_speed.py
+pytest -m benchmark mne_qt_browser
 ```
 
 To run the PyQtGraph tests you have to run:
