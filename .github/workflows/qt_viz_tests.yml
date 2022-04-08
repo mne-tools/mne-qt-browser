@@ -139,7 +139,6 @@ jobs:
       MKL_NUM_THREADS: '1'
       PYTHONUNBUFFERED: '1'
       DISPLAY: ':99.0'
-      PYQTGRAPH_QT_LIB: 'PyQt5'
       MNE_BRANCH: ${{ matrix.mne }}
       PIP_OPTION: ${{ matrix.opengl }}
       PYTHON_VERSION: ${{ matrix.python }}
