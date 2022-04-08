@@ -113,13 +113,6 @@ jobs:
         if: runner.os == 'Linux' && contains(matrix.opengl, 'opengl')
       - name: Show system information
         run: mne sys_info
-      # This workaround can be removed once https://github.com/mne-tools/mne-python/pull/10502
-      # is merged and backported, and MNE-Python >= 1.0.1 is released
-      - name: Protect the user config
-        run: |
-          set -e
-          echo "MNE_BROWSE_RAW_SIZE=10,10" >> ${GITHUB_ENV}
-        if: runner.os == 'macOS'
       - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/viz
         name: Run MNE-Tests
       - run: pytest mne_qt_browser/tests/test_pg_specific.py
