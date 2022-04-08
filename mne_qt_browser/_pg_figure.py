@@ -4310,10 +4310,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         """Customize key press events."""
         # On MacOs additionally KeypadModifier is set when arrow-keys
         # are pressed.
-        # On Unix GroupSwitchModifier is set when ctrl is pressed.
         modifiers = {
-            'Ctrl': bool(Qt.ControlModifier & event.modifiers()),
             'Shift': bool(Qt.ShiftModifier & event.modifiers()),
+            'Ctrl': bool(Qt.ControlModifier & event.modifiers()),
         }
         for key_name in self.mne.keyboard_shortcuts:
             key_dict = self.mne.keyboard_shortcuts[key_name]
