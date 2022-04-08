@@ -138,7 +138,7 @@ except ImportError:
 # https://matplotlib.org/3.1.0/gallery/color/named_colors.html
 _dark_dict = {
     # 'w' (bgcolor)
-    (255, 255, 255): (15, 15, 15),  # chrome's dark mode bgcolor
+    (255, 255, 255): (35, 35, 35),  # chrome's dark mode bgcolor
     # 'k' (eeg, eog, emg, misc, stim, resp, chpi, exci, ias, syst, dipole, gof,
     #      bio, ecog, fnirs_*, csd, whitened)
     (0, 0, 0): (255, 255, 255),   # 'w'
@@ -165,6 +165,7 @@ _dark_dict = {
 
 def _get_color(color_spec, invert=False):
     """Wraps mkColor to accept all possible matplotlib color-specifiers."""
+    orig_spec = color_spec
     try:
         # Convert matplotlib color-names if possible
         color_spec = _to_rgb(color_spec, alpha=True)
@@ -188,7 +189,7 @@ def _get_color(color_spec, invert=False):
         if key[:3] in _dark_dict:
             color.setRgb(*(_dark_dict[key[:3]] + key[-1:]))
         else:
-            print(f'Missed {key} ({type(key)})')
+            logger.debug(f'Missed {key} from {orig_spec}')
             rgba = np.array(color.getRgbF())
             lab = cspace_convert(rgba[:3], 'sRGB1', 'CIELab')
             lab[0] = 100. - lab[0]
