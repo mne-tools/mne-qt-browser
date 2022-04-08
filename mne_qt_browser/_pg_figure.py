@@ -1364,6 +1364,13 @@ class VLine(InfiniteLine):
         self.label = VLineLabel(self)
 
 
+def _q_font(point_size, bold=False):
+    font = QFont()
+    font.setPointSize(point_size)
+    font.setBold(bold)
+    return font
+
+
 class EventLine(InfiniteLine):
     """Displays Events inside Trace-Plot"""
 
@@ -1373,7 +1380,7 @@ class EventLine(InfiniteLine):
                                                    'color': color,
                                                    'anchors': [(0, 0.5),
                                                                (0, 0.5)]})
-        self.label.setFont(QFont('AnyStyle', 10, QFont.Bold))
+        self.label.setFont(_q_font(10, bold=True))
         self.setZValue(0)
 
 
@@ -1447,7 +1454,7 @@ class ScaleBarText(BaseScaleBar, TextItem):
         BaseScaleBar.__init__(self, mne, ch_type)
         TextItem.__init__(self, color='#AA3377')
 
-        self.setFont(QFont('AnyStyle', 10))
+        self.setFont(_q_font(10))
         self.setZValue(2)  # To draw over RawTraceItems
 
         self.update_value()
@@ -1626,7 +1633,7 @@ class HelpDialog(_BaseDialog):
         # Show all keyboard-shortcuts in a Scroll-Area
         layout = QVBoxLayout()
         keyboard_label = QLabel('Keyboard Shortcuts')
-        keyboard_label.setFont(QFont('AnyStyle', 16, QFont.Bold))
+        keyboard_label.setFont(_q_font(16, bold=True))
         layout.addWidget(keyboard_label)
 
         scroll_area = QScrollArea()
@@ -1675,7 +1682,7 @@ class HelpDialog(_BaseDialog):
                       ('Right-click on channel name', rclick_name)]
 
         mouse_label = QLabel('Mouse Interaction')
-        mouse_label.setFont(QFont('AnyStyle', 16, QFont.Bold))
+        mouse_label.setFont(_q_font(16, bold=True))
         layout.addWidget(mouse_label)
         mouse_widget = QWidget()
         mouse_layout = QFormLayout()
@@ -1974,7 +1981,7 @@ class AnnotRegion(LinearRegionItem):
         self.selected = False
 
         self.label_item = TextItem(text=description, anchor=(0.5, 0.5))
-        self.label_item.setFont(QFont('AnyStyle', 10, QFont.Bold))
+        self.label_item.setFont(_q_font(10, bold=True))
         self.sigRegionChanged.connect(self.update_label_pos)
 
         self.update_color()
