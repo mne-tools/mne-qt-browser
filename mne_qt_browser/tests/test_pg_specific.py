@@ -151,9 +151,8 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
     assert fig.mne.scroll_sensitivity == 100
 
     QTest.qWait(100)
-    n_sens = 40
     sensitivity_values = list(range(sensitivity_control.minimum(),
-                                    sensitivity_control.maximum() + 1, n_sens - 1))
+                                    sensitivity_control.maximum() + 1, 40))
     if sensitivity_values[-1] != sensitivity_control.maximum():
         sensitivity_values.append(sensitivity_control.maximum())
 
