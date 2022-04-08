@@ -101,7 +101,12 @@ You can run a benchmark locally with:
 pytest -m benchmark mne_qt_browser
 ```
 
-To run tests, clone mne-python, and then run the PyQtGraph tests with e.g.:
+To run the PyQtGraph tests you have to run:
+```
+pytest mne_qt_browser/tests/test_pg_specific.py
+```
+
+Additionally, clone mne-python, and then run:
 
 ```console
 pytest -m pgtest ../mne-python/mne/viz/tests
