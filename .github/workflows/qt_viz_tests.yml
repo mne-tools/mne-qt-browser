@@ -110,3 +110,96 @@ jobs:
       - uses: codecov/codecov-action@v1
         if: always()
         name: 'Upload coverage to CodeCov'
+  qt:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu]
+        mne: [main, maint/0.24]
+        opengl: ['[opengl]']
+        qt: [PyQt5, PyQt6, PySide2, PySide6]
+        python: ['3.9']
+        name: [matrix]
+        include:
+          - os: ubuntu
+            mne: main
+            opengl: '[opengl]'
+            python: '3.7'
+            name: old 3.7
+          - os: ubuntu
+            mne: main
+            opengl: ''
+            python: '3.9'
+            name: no opengl
+          - os: ubuntu
+            mne: maint/0.24
+            opengl: ''
+            python: '3.9'
+            name: no opengl
+    name: qt ${{ matrix.qt }} / ${{ matrix.os }} / MNE ${{ matrix.mne }}
+    runs-on: ${{ matrix.os }}-latest
+    env:
+      MNE_LOGGING_LEVEL: 'warning'
+      MKL_NUM_THREADS: '1'
+      PYTHONUNBUFFERED: '1'
+      DISPLAY: ':99.0'
+      PYQTGRAPH_QT_LIB: 'PyQt5'
+      MNE_BRANCH: ${{ matrix.mne }}
+      PIP_OPTION: ${{ matrix.opengl }}
+      PYTHON_VERSION: ${{ matrix.python }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dependencies
+        run: |  # use MNE main to ensure test files are available
+          set -e
+          python -m pip install --upgrade pip
+          git clone -b ${MNE_BRANCH} --single-branch --depth=1 https://github.com/mne-tools/mne-python.git ../mne-python
+          python -m pip install -qe ../mne-python
+          python -m pip install -ve .${PIP_OPTION} -r requirements.txt -r requirements_testing.txt
+      - name: Install Qt
+        run: |
+          pip uninstall -yq PyQt5 PyQt5-Qt5 PyQt5-sip
+          pip install ${{ matrix.qt }}
+          echo "::set-env name=PYQTGRAPH_QT_LIB::${{ matrix.qt }}"
+      - name: Downgrade pytest for mne==0.24
+        run: python -m pip install pytest==6.2.5
+        if: ${{ matrix.mne }} == 'maint/0.24'
+      - shell: bash -el {0}
+        run: ./tools/get_testing_version.sh
+        name: 'Get testing version'
+        working-directory: ../mne-python
+      - uses: actions/cache@v2
+        with:
+          key: ${{ env.TESTING_VERSION }}
+          path: ~/mne_data
+        name: 'Cache testing data'
+      - run: python -c 'import mne; print(mne.datasets.testing.data_path(verbose=True))'
+        name: 'Download testing data'
+      - run: |
+          set -e
+          git clone --depth 1 https://github.com/pyvista/gl-ci-helpers.git
+          powershell gl-ci-helpers/appveyor/install_opengl.ps1
+        name: Setup OpenGL on Windows
+        if: runner.os == 'Windows'
+      - run: ./tools/setup_xvfb.sh
+        name: Setup xvfb on Linux
+        working-directory: ../mne-python
+        if: runner.os == 'Linux'
+      - name: Show system information
+        run: mne sys_info
+      - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/viz
+        name: Run MNE-Tests
+      - run: pytest mne_qt_browser/tests/test_pg_specific.py
+        name: Run pyqtgraph-specific tests
+      - run: pytest mne_qt_browser/tests/test_speed.py
+        name: Run benchmarks
+      - uses: codecov/codecov-action@v1
+        if: always()
+        name: 'Upload coverage to CodeCov'
