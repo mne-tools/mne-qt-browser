@@ -151,25 +151,32 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
     assert fig.mne.scroll_sensitivity == 100
 
     QTest.qWait(100)
+    n_sens = 40
     sensitivity_values = list(range(sensitivity_control.minimum(),
-                                    sensitivity_control.maximum() + 1, 40))
+                                    sensitivity_control.maximum() + 1, n_sens - 1))
     if sensitivity_values[-1] != sensitivity_control.maximum():
         sensitivity_values.append(sensitivity_control.maximum())
-    sensitivity_test = [False] * len(sensitivity_values)
-    for i in range(len(sensitivity_values)):
-        sensitivity_control.setValue(sensitivity_values[i])
-        QTest.qWait(50)
-        sensitivity_test[i] = \
-            fig.mne.scroll_sensitivity == sensitivity_control.value()
-    assert all(sensitivity_test)
 
-    sensitivity_test = [False] * len(sensitivity_values)
-    for i in reversed(range(len(sensitivity_values))):
-        sensitivity_control.setValue(sensitivity_values[i])
+    sensitivities_mne = list()
+    sensitivities_control = list()
+    for val in sensitivity_values:
+        sensitivity_control.setValue(val)
         QTest.qWait(50)
-        sensitivity_test[i] = \
-            fig.mne.scroll_sensitivity == sensitivity_control.value()
-    assert all(sensitivity_test)
+        sensitivities_mne.append(fig.mne.scroll_sensitivity)
+        sensitivities_control.append(sensitivity_control.value())
+    assert sensitivities_mne == sensitivity_values
+    assert sensitivities_control == sensitivity_values
+
+    sensitivity_values = sensitivity_values[::-1]
+    sensitivities_mne = list()
+    sensitivities_control = list()
+    for val in sensitivity_values:
+        sensitivity_control.setValue(val)
+        QTest.qWait(50)
+        sensitivities_mne.append(fig.mne.scroll_sensitivity)
+        sensitivities_control.append(sensitivity_control.value())
+    assert sensitivities_mne == sensitivity_values
+    assert sensitivities_control == sensitivity_values
 
 
 def test_pg_help_dialog(raw_orig, pg_backend):
