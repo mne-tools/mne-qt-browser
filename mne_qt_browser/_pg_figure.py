@@ -1600,10 +1600,10 @@ class SettingsDialog(_BaseDialog):
         self.setLayout(layout)
         self.show()
 
-    def closeEvent(self):
+    def closeEvent(self, event):
         _disconnect(self.ds_method_cmbx.currentTextChanged)
         _disconnect(self.scroll_sensitivity_slider.valueChanged)
-        super.closeEvent()
+        super().closeEvent(event)
 
     def _value_changed(self, new_value, value_name):
         if value_name == 'downsampling' and new_value == 0:
@@ -4101,6 +4101,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             ProjDialog(self, name='fig_proj')
         else:
             self.mne.fig_proj.close()
+            self.mne.fig_proj = None
 
     def _toggle_all_projs(self):
         if self.mne.fig_proj is None:
@@ -4118,8 +4119,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if self.mne.fig_settings is None:
             SettingsDialog(self, name='fig_settings')
         else:
-            self.mne.fig_help.close()
-            self.mne.fig_help = None
+            self.mne.fig_settings.close()
+            self.mne.fig_settings = None
 
     def _toggle_help_fig(self):
         if self.mne.fig_help is None:
@@ -4562,6 +4563,14 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Make sure it gets deleted after it was closed.
         self.deleteLater()
 
+    def _fake_click_on_toolbar_action(self, action_name, wait_after=500):
+        """Trigger event associated with action 'action_name' in toolbar."""
+        for action in self.mne.toolbar.actions():
+            if not action.isSeparator():
+                if action.iconText() == action_name:
+                    action.trigger()
+        QTest.qWait(wait_after)
+
 
 def _get_n_figs():
     # Wait for a short time to let the Qt-loop clean up
@@ -4646,7 +4655,7 @@ def _init_browser(**kwargs):
         app_kwargs['splash'] = 'Initializing mne-qt-browser...'
     out = _init_mne_qtapp(pg_app=True, **app_kwargs)
     if 'splash' in app_kwargs:
-        kwargs['splash'] = out[1]  # returned as secord element
+        kwargs['splash'] = out[1]  # returned as second element
     browser = MNEQtBrowser(**kwargs)
 
     return browser
