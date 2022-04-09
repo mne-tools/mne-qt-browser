@@ -138,7 +138,7 @@ except ImportError:
 # https://matplotlib.org/3.1.0/gallery/color/named_colors.html
 _dark_dict = {
     # 'w' (bgcolor)
-    (255, 255, 255): (35, 35, 35),  # chrome's dark mode bgcolor
+    (255, 255, 255): (30, 30, 30),  # safari's centered info panel background
     # 'k' (eeg, eog, emg, misc, stim, resp, chpi, exci, ias, syst, dipole, gof,
     #      bio, ecog, fnirs_*, csd, whitened)
     (0, 0, 0): (255, 255, 255),   # 'w'
