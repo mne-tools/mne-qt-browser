@@ -2679,6 +2679,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def __init__(self, **kwargs):
         self.backend_name = 'pyqtgraph'
+        self._closed = False
 
         BrowserBase.__init__(self, **kwargs)
         QMainWindow.__init__(self)
@@ -4616,6 +4617,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.gotClosed.emit()
         # Make sure it gets deleted after it was closed.
         self.deleteLater()
+        self._closed = True
 
     def _fake_click_on_toolbar_action(self, action_name, wait_after=500):
         """Trigger event associated with action 'action_name' in toolbar."""

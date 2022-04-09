@@ -15,6 +15,7 @@ from qtpy.QtCore import QTimer
 from qtpy.QtWidgets import QApplication
 
 import mne
+from mne_qt_browser.figure import MNEQtBrowser
 
 bm_limit = 50
 bm_count = copy(bm_limit)
@@ -62,6 +63,8 @@ def _initiate_hscroll(pg_fig, store, request, timer):
     global vscroll_dir
     global h_last_time
     global v_last_time
+    assert isinstance(pg_fig, MNEQtBrowser)
+    assert not pg_fig._closed
     if bm_count > 0:
         bm_count -= 1
 
