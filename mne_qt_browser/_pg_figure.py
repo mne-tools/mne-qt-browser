@@ -2654,13 +2654,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         QApplication.processEvents()  # needs to happen for the theme to be set
 
         # HiDPI stuff
-        desktop = QGuiApplication.primaryScreen()
-        dpi_ratio = \
-            desktop.physicalDotsPerInchY() / desktop.logicalDotsPerInchY()
-        logger.debug(f'Desktop DPI ratio: {dpi_ratio:0.3f}')
+        pixel_ratio = self.devicePixelRatio()
+        logger.debug(f'Desktop pixel ratio: {pixel_ratio:0.3f}')
 
         def _hidpi_mkPen(*args, **kwargs):
-            kwargs['width'] = dpi_ratio * kwargs.get('width', 1.)
+            kwargs['width'] = pixel_ratio * kwargs.get('width', 1.)
             return mkPen(*args, **kwargs)
 
         self.mne.mkPen = _hidpi_mkPen
