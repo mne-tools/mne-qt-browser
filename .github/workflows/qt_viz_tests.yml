@@ -150,6 +150,7 @@ jobs:
       MNE_BRANCH: ${{ matrix.mne }}
       PIP_OPTION: ${{ matrix.opengl }}
       PYTHON_VERSION: ${{ matrix.python }}
+      QT_LIB: ${{ matrix.qt }}
     defaults:
       run:
         shell: bash
@@ -165,7 +166,7 @@ jobs:
           python -m pip install --upgrade pip
           git clone -b ${MNE_BRANCH} --single-branch --depth=1 https://github.com/mne-tools/mne-python.git ../mne-python
           python -m pip install -qe ../mne-python
-          python -m pip install -ve .${PIP_OPTION} -r requirements.txt -r requirements_testing.txt ${{ matrix.qt }}
+          python -m pip install -ve .${PIP_OPTION} -r requirements.txt -r requirements_testing.txt $QT_LIB
       - shell: bash -el {0}
         run: ./tools/get_testing_version.sh
         name: 'Get testing version'
@@ -187,7 +188,8 @@ jobs:
       - name: Check Qt
         run: |
           mne sys_info -pd
-          mne sys_info -pd | grep "^qtpy: .*{${{ matrix.qt }}}=.*}$"
+          echo ${QT_LIB}:
+          mne sys_info -pd | grep "^qtpy: .*{${QT_LIB}=.*}$"
       - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/viz
         name: Run MNE-Tests
       - run: pytest mne_qt_browser/tests/test_pg_specific.py
