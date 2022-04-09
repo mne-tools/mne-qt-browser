@@ -15,6 +15,7 @@ def parse_requirements_file(fname):
             requirements.append(req)
     return requirements
 
+
 readme = (pathlib.Path(__file__).parent / "README.md").read_text()
 
 version = None
