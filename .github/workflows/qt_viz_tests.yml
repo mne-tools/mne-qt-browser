@@ -140,7 +140,7 @@ jobs:
             opengl: '[opengl]'
             qt: PySide6
             python: '3.10'
-            name: macOS 3.10 PySide6
+            name: macOS PySide6
     name: qt ${{ matrix.qt }} / ${{ matrix.os }} / MNE ${{ matrix.mne }}
     runs-on: ${{ matrix.os }}-latest
     env:
