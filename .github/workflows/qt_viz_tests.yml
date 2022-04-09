@@ -115,7 +115,7 @@ jobs:
         run: mne sys_info
       - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/viz
         name: Run MNE-Tests
-      - run: pytest mne_qt_browser/tests/test_pg_specific.py
+      - run: pytest --error-for-skips mne_qt_browser/tests/test_pg_specific.py
         name: Run pyqtgraph-specific tests
       # These are slow on macOS, so skip them
       - run: pytest mne_qt_browser/tests/test_speed.py
@@ -169,7 +169,7 @@ jobs:
         run: |  # use MNE main to ensure test files are available
           set -e
           python -m pip install --upgrade pip
-          git clone -b ${MNE_BRANCH} --single-branch --depth=1 https://github.com/mne-tools/mne-python.git ../mne-python
+          git clone -b ${MNE_BRANCH} --branch qt6 --single-branch --depth=1 https://github.com/larsoner/mne-python.git ../mne-python
           python -m pip install -qe ../mne-python
           python -m pip install -ve .${PIP_OPTION} -r requirements.txt -r requirements_testing.txt $QT_LIB
       - shell: bash -el {0}
@@ -197,7 +197,7 @@ jobs:
           mne sys_info -pd | grep "^qtpy: .*{${QT_LIB}=.*}$"
       - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/viz
         name: Run MNE-Tests
-      - run: pytest mne_qt_browser/tests/test_pg_specific.py
+      - run: pytest --error-for-skips mne_qt_browser/tests/test_pg_specific.py
         name: Run pyqtgraph-specific tests
       - run: pytest mne_qt_browser/tests/test_speed.py
         name: Run benchmarks
