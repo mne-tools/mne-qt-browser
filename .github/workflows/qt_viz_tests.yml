@@ -132,7 +132,7 @@ jobs:
         mne: [main]
         opengl: ['[opengl]']
         qt: [PyQt5, PyQt6, PySide2, PySide6]
-        python: ['3.9']
+        python: ['3.10']
         name: [matrix]
     name: qt ${{ matrix.qt }} / ${{ matrix.os }} / MNE ${{ matrix.mne }}
     runs-on: ${{ matrix.os }}-latest
