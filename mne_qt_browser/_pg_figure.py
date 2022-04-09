@@ -674,6 +674,8 @@ class BaseScrollBar(QScrollBar):
         if event.button() == Qt.LeftButton:
             opt = QStyleOptionSlider()
             pos = _mouse_event_position(event)
+            # QPointF->QPoint for hitTestComplexControl
+            pos = QPoint(int(round(pos.x())), int(round(pos.y())))
             self.initStyleOption(opt)
             control = self.style().hitTestComplexControl(
                     QStyle.CC_ScrollBar, opt, pos, self)
