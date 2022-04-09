@@ -390,13 +390,12 @@ class DataTrace(PlotCurveItem):
             data = self.mne.data[self.order_idx]
         else:
             data = self.mne.data[self.range_idx]
+        times = self.mne.times
 
         # Get decim-specific time if enabled
         if self.mne.decim != 1:
-            times = self.mne.decim_times[self.mne.decim_data[self.range_idx]]
+            times = times[::self.mne.decim_data[self.range_idx]]
             data = data[..., ::self.mne.decim_data[self.range_idx]]
-        else:
-            times = self.mne.times
 
         # For multiple color traces with epochs
         # replace values from other colors with NaN.
@@ -411,6 +410,7 @@ class DataTrace(PlotCurveItem):
             for start, stop in zip(starts, stops):
                 data[np.logical_and(start <= times, times <= stop)] = np.nan
 
+        assert times.shape[-1] == data.shape[-1]
         self.setData(times, data, connect=connect, skipFiniteCheck=skip,
                      antialias=self.mne.antialiasing)
 
@@ -2733,7 +2733,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.fig_settings = None
         # Stores decimated data
         self.mne.decim_data = None
-        self.mne.decim_times = None
         # Stores ypos for selection-mode
         self.mne.selection_ypos_dict = dict()
         # Parameters for precomputing
@@ -3929,14 +3928,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.decim_data = np.ones_like(self.mne.picks)
         data_picks_mask = np.in1d(self.mne.picks, self.mne.picks_data)
         self.mne.decim_data[data_picks_mask] = self.mne.decim
-
-        # Get decim_times
-        if self.mne.decim != 1:
-            # decim can vary by channel type,
-            # so compute different `times` vectors.
-            self.mne.decim_times = {decim_value: self.mne.times[::decim_value]
-                                    + self.mne.first_time for decim_value
-                                    in set(self.mne.decim_data)}
 
         # Apply clipping
         if self.mne.clipping == 'clamp':
