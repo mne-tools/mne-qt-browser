@@ -8,3 +8,5 @@ scooby
 PyQt5
 pyqtgraph
 pyopengl; platform_system=="Darwin"
+darkdetect
+qdarkstyle
