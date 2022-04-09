@@ -166,11 +166,11 @@ jobs:
           python -m pip install --upgrade pip
           git clone -b ${MNE_BRANCH} --single-branch --depth=1 https://github.com/mne-tools/mne-python.git ../mne-python
           python -m pip install -qe ../mne-python
-          python -m pip install -ve .${PIP_OPTION} -r requirements.txt -r requirements_testing.txt
-      - name: Install Qt
+          python -m pip install -ve .${PIP_OPTION} -r requirements.txt -r requirements_testing.txt ${{ matrix.qt }}
+      - name: Check Qt
         run: |
-          pip uninstall -yq PyQt5 PyQt5-Qt5 PyQt5-sip
-          pip install ${{ matrix.qt }}
+          mne sys_info -pd
+          mne sys_info -pd | grep "^qtpy: .*{${{ matrix.qt }}}=.*}$"
       - shell: bash -el {0}
         run: ./tools/get_testing_version.sh
         name: 'Get testing version'
