@@ -6,6 +6,7 @@ PyQt5>=5.12
 qtpy
 scooby
 qtpy
+mne>=0.24
 pyqtgraph>=0.12.3
 colorspacious
 pyopengl; platform_system=="Darwin"
