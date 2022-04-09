@@ -145,8 +145,6 @@ jobs:
             opengl: '[opengl]'
             qt: PySide6
             python: '3.10'
-            env:
-              MNE_BROWSE_RAW_SIZE: 12,12
     name: ${{ matrix.qt }} / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}-latest
     env:
