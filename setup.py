@@ -2,6 +2,20 @@ import pathlib
 
 from setuptools import setup
 
+
+def parse_requirements_file(fname):
+    requirements = list()
+    with open(fname, 'r') as fid:
+        for line in fid:
+            req = line.strip()
+            if req.startswith('#'):
+                continue
+            # strip end-of-line comments
+            req = req.split('#', maxsplit=1)[0].strip()
+            requirements.append(req)
+    return requirements
+
+
 readme = (pathlib.Path(__file__).parent / "README.md").read_text()
 
 version = None
@@ -32,17 +46,7 @@ setup(name='mne-qt-browser',
                    'Operating System :: OS Independent'],
       packages=['mne_qt_browser'],
       include_package_data=True,
-      install_requires=['numpy',
-                        'scipy',
-                        'matplotlib',
-                        'PyQt5>=5.12',
-                        'qtpy',
-                        'scooby',
-                        'mne>=0.24',
-                        'pyqtgraph>=0.12.3',
-                        'colorspacious',
-                        'pyopengl; platform_system=="Darwin"',
-                        ],
+      install_requires=parse_requirements_file('requirements.txt'),
       extras_require={
           'opengl': ['pyopengl'],
       },
