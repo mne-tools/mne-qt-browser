@@ -167,10 +167,6 @@ jobs:
           git clone -b ${MNE_BRANCH} --single-branch --depth=1 https://github.com/mne-tools/mne-python.git ../mne-python
           python -m pip install -qe ../mne-python
           python -m pip install -ve .${PIP_OPTION} -r requirements.txt -r requirements_testing.txt ${{ matrix.qt }}
-      - name: Check Qt
-        run: |
-          mne sys_info -pd
-          mne sys_info -pd | grep "^qtpy: .*{${{ matrix.qt }}}=.*}$"
       - shell: bash -el {0}
         run: ./tools/get_testing_version.sh
         name: 'Get testing version'
@@ -189,8 +185,10 @@ jobs:
         name: Setup xvfb on Linux
         working-directory: ../mne-python
         if: runner.os == 'Linux'
-      - name: Show system information
-        run: mne sys_info
+      - name: Check Qt
+        run: |
+          mne sys_info -pd
+          mne sys_info -pd | grep "^qtpy: .*{${{ matrix.qt }}}=.*}$"
       - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/viz
         name: Run MNE-Tests
       - run: pytest mne_qt_browser/tests/test_pg_specific.py
