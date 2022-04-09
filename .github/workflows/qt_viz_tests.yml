@@ -135,7 +135,7 @@ jobs:
         python: ['3.10']
         name: [matrix]
         include:
-          - os: macos
+          - os: [macos, windows]
             mne: main
             opengl: '[opengl]'
             qt: PySide6
