@@ -673,10 +673,10 @@ class BaseScrollBar(QScrollBar):
         """
         if event.button() == Qt.LeftButton:
             opt = QStyleOptionSlider()
+            pos = _mouse_event_position(event)
             self.initStyleOption(opt)
             control = self.style().hitTestComplexControl(
-                    QStyle.CC_ScrollBar, opt,
-                    event.pos(), self)
+                    QStyle.CC_ScrollBar, opt, pos, self)
             if (control == QStyle.SC_ScrollBarAddPage or
                     control == QStyle.SC_ScrollBarSubPage):
                 # scroll here
@@ -689,20 +689,20 @@ class BaseScrollBar(QScrollBar):
                                                  QStyle.SC_ScrollBarSlider,
                                                  self)
                 if self.orientation() == Qt.Horizontal:
-                    pos = event.pos().x()
+                    pos_ = pos.x()
                     sliderLength = sr.width()
                     sliderMin = gr.x()
                     sliderMax = gr.right() - sliderLength + 1
                     if (self.layoutDirection() == Qt.RightToLeft):
                         opt.upsideDown = not opt.upsideDown
                 else:
-                    pos = event.pos().y()
+                    pos_ = pos.y()
                     sliderLength = sr.height()
                     sliderMin = gr.y()
                     sliderMax = gr.bottom() - sliderLength + 1
                 self.setValue(QStyle.sliderValueFromPosition(
                         self.minimum(), self.maximum(),
-                        pos - sliderMin, sliderMax - sliderMin,
+                        pos_ - sliderMin, sliderMax - sliderMin,
                         opt.upsideDown))
                 return
 
