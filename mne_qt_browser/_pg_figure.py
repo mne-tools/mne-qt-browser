@@ -1535,7 +1535,7 @@ class _BaseDialog(QDialog):
     def __init__(self, main, widget=None,
                  modal=False, name=None, title=None,
                  flags=Qt.Window | Qt.Tool):
-        super().__init__(main, flags=flags)
+        super().__init__(main, flags)
         self.main = main
         self.widget = widget
         self.mne = main.mne
