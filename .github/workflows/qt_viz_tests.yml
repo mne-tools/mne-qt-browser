@@ -161,10 +161,11 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install dependencies
+        # TODO: Revert to mne main once https://github.com/mne-tools/mne-python/pull/10508 is merged
         run: |  # use MNE main to ensure test files are available
           set -e
           python -m pip install --upgrade pip
-          git clone -b ${MNE_BRANCH} --single-branch --depth=1 https://github.com/mne-tools/mne-python.git ../mne-python
+          git clone -b ${MNE_BRANCH} --branch pyside6 --single-branch --depth=1 https://github.com/larsoner/mne-python.git ../mne-python
           python -m pip install -qe ../mne-python
           python -m pip install -ve .${PIP_OPTION} -r requirements.txt -r requirements_testing.txt ${{ matrix.qt }}
       - shell: bash -el {0}
