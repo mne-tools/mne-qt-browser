@@ -134,6 +134,13 @@ jobs:
         qt: [PyQt5, PyQt6, PySide2, PySide6]
         python: ['3.10']
         name: [matrix]
+        include:
+          - os: macos
+            mne: main
+            opengl: '[opengl]'
+            qt: PySide6
+            python: '3.10'
+            name: macOS 3.10 PySide6
     name: qt ${{ matrix.qt }} / ${{ matrix.os }} / MNE ${{ matrix.mne }}
     runs-on: ${{ matrix.os }}-latest
     env:
