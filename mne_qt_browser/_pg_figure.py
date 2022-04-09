@@ -4440,7 +4440,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         QTest.qWaitForWindowExposed(self)
         # Scene-Dimensions still seem to change to final state when waiting
         # for a short time.
-        QTest.qWait(10)
+        QTest.qWait(1000)
 
         # Qt: right-button=2, matplotlib: right-button=3
         if button == 1:
@@ -4510,7 +4510,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                                f'event loop (look above for traceback).')
 
         # Waiting some time for events to be processed.
-        QTest.qWait(50)
+        QTest.qWait(1000)
 
     def _fake_scroll(self, x, y, step, fig=None):
         # QTest doesn't support simulating scrolling-wheel
