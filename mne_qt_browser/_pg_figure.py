@@ -5,6 +5,7 @@
 #
 # License: BSD-3-Clause
 
+from abc import ABC
 import datetime
 import functools
 import gc
@@ -2618,14 +2619,18 @@ class LoadThread(QThread):
         del self.browser
 
 
-class _PGMetaClass(type(BrowserBase), type(QMainWindow)):
-    """Class is necessary to prevent a metaclass conflict.
+metaclass_kwargs = dict()
+if isinstance(BrowserBase, ABC):
+    class _PGMetaClass(type(BrowserBase), type(QMainWindow)):
+        """Class is necessary to prevent a metaclass conflict.
 
-    The conflict arises due to the different types of QMainWindow and
-    BrowserBase.
-    """
+        The conflict arises due to the different types of QMainWindow and
+        BrowserBase.
+        """
 
-    pass
+        pass
+
+    metaclass_kwargs['metaclass'] = _PGMetaClass
 
 
 # Those are the settings which are stored on each device
@@ -2661,7 +2666,7 @@ def _disconnect(sig):
         pass
 
 
-class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
+class MNEQtBrowser(BrowserBase, QMainWindow, **metaclass_kwargs):
     """A PyQtGraph-backend for 2D data browsing."""
 
     gotClosed = Signal()
