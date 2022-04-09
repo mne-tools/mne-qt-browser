@@ -134,8 +134,38 @@ except ImportError:
         return app
 
 
+# Mostly chosen manually from
+# https://matplotlib.org/3.1.0/gallery/color/named_colors.html
+_dark_dict = {
+    # 'w' (bgcolor)
+    (255, 255, 255): (30, 30, 30),  # safari's centered info panel background
+    # 'k' (eeg, eog, emg, misc, stim, resp, chpi, exci, ias, syst, dipole, gof,
+    #      bio, ecog, fnirs_*, csd, whitened)
+    (0, 0, 0): (255, 255, 255),   # 'w'
+    # 'darkblue' (mag)
+    (0, 0, 139): (173, 216, 230),  # 'lightblue'
+    # 'b' (grad, hbr)
+    (0, 0, 255): (100, 149, 237),  # 'cornflowerblue'
+    # 'steelblue' (ref_meg)
+    (70, 130, 180): (176, 196, 222),  # 'lightsteelblue'
+    # 'm' (ecg)
+    (191, 0, 191): (238, 130, 238),  # 'violet'
+    # 'saddlebrown' (seeg)
+    (139, 69, 19): (244, 164, 96),  # 'sandybrown'
+    # 'seagreen' (dbs)
+    (46, 139,  87): (32, 178, 170),  # 'lightseagreen'
+    # '#AA3377' (hbo), closest to 'mediumvioletred'
+    (170, 51, 119): (255, 105, 180),  # 'hotpink'
+    # 'lightgray' (bad_color)
+    (211, 211, 211): (105, 105, 105),  # 'dimgray'
+    # 'cyan' (event_color)
+    (0, 255, 255): (0, 139, 139),  # 'darkcyan'
+}
+
+
 def _get_color(color_spec, invert=False):
     """Wraps mkColor to accept all possible matplotlib color-specifiers."""
+    orig_spec = color_spec
     try:
         # Convert matplotlib color-names if possible
         color_spec = _to_rgb(color_spec, alpha=True)
@@ -153,11 +183,18 @@ def _get_color(color_spec, invert=False):
         raise ValueError(f'"{color_spec}" is not a valid matplotlib '
                          f'color-specifier!') from None
     if invert:
-        rgba = np.array(color.getRgbF())
-        lab = cspace_convert(rgba[:3], 'sRGB1', 'CIELab')
-        lab[0] = 100. - lab[0]
-        rgba[:3] = np.clip(cspace_convert(lab, 'CIELab', 'sRGB1'), 0, 1)
-        color.setRgbF(*rgba)
+        # First see if the color is in our inversion dictionary
+        key = color.getRgb()
+        assert len(key) == 4
+        if key[:3] in _dark_dict:
+            color.setRgb(*(_dark_dict[key[:3]] + key[-1:]))
+        else:
+            logger.debug(f'Missed {key} from {orig_spec}')
+            rgba = np.array(color.getRgbF())
+            lab = cspace_convert(rgba[:3], 'sRGB1', 'CIELab')
+            lab[0] = 100. - lab[0]
+            rgba[:3] = np.clip(cspace_convert(lab, 'CIELab', 'sRGB1'), 0, 1)
+            color.setRgbF(*rgba)
 
     return color
 
@@ -2885,10 +2922,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.view = BrowserView(self.mne.plt,
                                     useOpenGL=self.mne.use_opengl,
                                     background='w')
-        if hasattr(self.mne, 'bgcolor'):
-            bgcolor = self.mne.bgcolor
-        else:
-            bgcolor = 'w'
+        bgcolor = getattr(self.mne, 'bgcolor', 'w')
         self.mne.view.setBackground(_get_color(bgcolor, self.mne.dark))
         layout.addWidget(self.mne.view, 0, 0)
 

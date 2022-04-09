@@ -2,8 +2,11 @@
 numpy
 scipy
 matplotlib
-mne
 qtpy
 scooby
-pyqtgraph
+mne>=0.24
+pyqtgraph>=0.12.3
+colorspacious
 pyopengl; platform_system=="Darwin"
+darkdetect
+qdarkstyle
