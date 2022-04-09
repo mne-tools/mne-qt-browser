@@ -1794,7 +1794,7 @@ class _ChannelFig(FigureCanvasQTAgg):
     def __init__(self, figure):
         self.figure = figure
         super().__init__(figure)
-        self.setFocusPolicy(Qt.StrongFocus | Qt.WheelFocus)
+        self.setFocusPolicy(Qt.FocusPolicy(Qt.StrongFocus | Qt.WheelFocus))
         self.setFocus()
         self._lasso_path = None
         # Only update when mouse is pressed
@@ -4307,7 +4307,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _get_widget_from_mpl(self, fig):
         canvas = FigureCanvasQTAgg(fig)
-        canvas.setFocusPolicy(Qt.StrongFocus | Qt.WheelFocus)
+        canvas.setFocusPolicy(Qt.FocusPolicy(Qt.StrongFocus | Qt.WheelFocus))
         canvas.setFocus()
         # Pass window title and fig_name on
         if hasattr(fig, 'fig_name'):
