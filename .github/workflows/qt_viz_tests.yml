@@ -140,8 +140,7 @@ jobs:
             opengl: '[opengl]'
             qt: PySide6
             python: '3.10'
-            name: macOS PySide6
-    name: qt ${{ matrix.qt }} / ${{ matrix.os }} / MNE ${{ matrix.mne }}
+    name: ${{ matrix.qt }} / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}-latest
     env:
       MNE_LOGGING_LEVEL: 'warning'
