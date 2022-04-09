@@ -2531,7 +2531,14 @@ class BrowserView(GraphicsView):
         # Don't set GraphicsView.mouseEnabled to True,
         # we only want part of the functionality pyqtgraph offers here.
         super().mouseMoveEvent(ev)
-        self.sigSceneMouseMoved.emit(ev.pos())
+        self.sigSceneMouseMoved.emit(_mouse_event_position(ev))
+
+
+def _mouse_event_position(ev):
+    try:  # Qt6
+        return ev.position()
+    except AttributeError:
+        return ev.pos()
 
 
 class LoadThread(QThread):
@@ -2659,7 +2666,7 @@ def _screen(widget):
 def _disconnect(sig):
     try:
         sig.disconnect()
-    except TypeError:  # if there are no connections, ignore it
+    except (TypeError, RuntimeError):  # if there are no connections, ignore it
         pass
 
 
