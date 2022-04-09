@@ -2,11 +2,12 @@
 numpy
 scipy
 matplotlib
-mne
+PyQt5>=5.12
 qtpy
 scooby
-PyQt5
-pyqtgraph
+qtpy
+pyqtgraph>=0.12.3
+colorspacious
 pyopengl; platform_system=="Darwin"
 darkdetect
 qdarkstyle

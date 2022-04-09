@@ -42,6 +42,8 @@ setup(name='mne-qt-browser',
                         'pyqtgraph>=0.12.3',
                         'colorspacious',
                         'pyopengl; platform_system=="Darwin"',
+                        'darkdetect',
+                        'qdarkstyle',
                         ],
       extras_require={
           'opengl': ['pyopengl'],
