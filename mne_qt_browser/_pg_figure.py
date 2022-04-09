@@ -5,7 +5,6 @@
 #
 # License: BSD-3-Clause
 
-from abc import ABC
 import datetime
 import functools
 import gc
