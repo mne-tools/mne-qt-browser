@@ -829,7 +829,9 @@ class OverviewBar(QGraphicsView):
     """
 
     def __init__(self, main):
-        super().__init__(QGraphicsScene())
+        self._scene = QGraphicsScene()
+        super().__init__(self._scene)
+        assert self.scene() is self._scene
         self.main = main
         self.mne = main.mne
         self.bg_img = None
