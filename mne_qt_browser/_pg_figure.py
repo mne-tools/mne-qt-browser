@@ -20,22 +20,22 @@ from functools import partial
 from os.path import getsize
 
 import numpy as np
-from PyQt5.QtCore import (QEvent, QThread, Qt, pyqtSignal, QRectF, QLineF,
-                          QPoint, QSettings)
-from PyQt5.QtGui import (QFont, QIcon, QPixmap, QTransform,
-                         QMouseEvent, QImage, QPainter, QPainterPath)
-from PyQt5.QtTest import QTest
-from PyQt5.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
-                             QDockWidget, QDoubleSpinBox, QFormLayout,
-                             QGridLayout, QHBoxLayout, QInputDialog,
-                             QLabel, QMainWindow, QMessageBox, QToolButton,
-                             QPushButton, QScrollBar, QWidget, QMenu,
-                             QStyleOptionSlider, QStyle, QActionGroup,
-                             QApplication, QGraphicsView, QProgressBar,
-                             QVBoxLayout, QLineEdit, QCheckBox, QScrollArea,
-                             QGraphicsLineItem, QGraphicsScene, QTextEdit,
-                             QSizePolicy, QSpinBox, QDesktopWidget, QSlider,
-                             QWidgetAction, QRadioButton)
+from qtpy.QtCore import (QEvent, QThread, Qt, Signal, QRectF, QLineF,
+                         QPointF, QPoint, QSettings)
+from qtpy.QtGui import (QFont, QIcon, QPixmap, QTransform, QGuiApplication,
+                        QMouseEvent, QImage, QPainter, QPainterPath)
+from qtpy.QtTest import QTest
+from qtpy.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
+                            QDockWidget, QDoubleSpinBox, QFormLayout,
+                            QGridLayout, QHBoxLayout, QInputDialog,
+                            QLabel, QMainWindow, QMessageBox, QToolButton,
+                            QPushButton, QScrollBar, QWidget, QMenu,
+                            QStyleOptionSlider, QStyle, QActionGroup,
+                            QApplication, QGraphicsView, QProgressBar,
+                            QVBoxLayout, QLineEdit, QCheckBox, QScrollArea,
+                            QGraphicsLineItem, QGraphicsScene, QTextEdit,
+                            QSizePolicy, QSpinBox, QSlider, QWidgetAction,
+                            QRadioButton)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from matplotlib.colors import to_rgba_array
 from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
@@ -95,11 +95,11 @@ except ImportError:
 
         Returns
         -------
-        app: ``PyQt5.QtWidgets.QApplication``
+        app: ``qtpy.QtWidgets.QApplication``
             Instance of QApplication.
         """
-        from PyQt5.QtWidgets import QApplication
-        from PyQt5.QtGui import QIcon
+        from qtpy.QtWidgets import QApplication
+        from qtpy.QtGui import QIcon
 
         app_name = 'MNE-Python'
         organization_name = 'MNE'
@@ -390,13 +390,12 @@ class DataTrace(PlotCurveItem):
             data = self.mne.data[self.order_idx]
         else:
             data = self.mne.data[self.range_idx]
+        times = self.mne.times
 
         # Get decim-specific time if enabled
         if self.mne.decim != 1:
-            times = self.mne.decim_times[self.mne.decim_data[self.range_idx]]
+            times = times[::self.mne.decim_data[self.range_idx]]
             data = data[..., ::self.mne.decim_data[self.range_idx]]
-        else:
-            times = self.mne.times
 
         # For multiple color traces with epochs
         # replace values from other colors with NaN.
@@ -411,6 +410,7 @@ class DataTrace(PlotCurveItem):
             for start, stop in zip(starts, stops):
                 data[np.logical_and(start <= times, times <= stop)] = np.nan
 
+        assert times.shape[-1] == data.shape[-1]
         self.setData(times, data, connect=connect, skipFiniteCheck=skip,
                      antialias=self.mne.antialiasing)
 
@@ -673,10 +673,12 @@ class BaseScrollBar(QScrollBar):
         """
         if event.button() == Qt.LeftButton:
             opt = QStyleOptionSlider()
+            pos = _mouse_event_position(event)
+            # QPointF->QPoint for hitTestComplexControl
+            pos = QPoint(int(round(pos.x())), int(round(pos.y())))
             self.initStyleOption(opt)
             control = self.style().hitTestComplexControl(
-                    QStyle.CC_ScrollBar, opt,
-                    event.pos(), self)
+                    QStyle.CC_ScrollBar, opt, pos, self)
             if (control == QStyle.SC_ScrollBarAddPage or
                     control == QStyle.SC_ScrollBarSubPage):
                 # scroll here
@@ -689,20 +691,20 @@ class BaseScrollBar(QScrollBar):
                                                  QStyle.SC_ScrollBarSlider,
                                                  self)
                 if self.orientation() == Qt.Horizontal:
-                    pos = event.pos().x()
+                    pos_ = pos.x()
                     sliderLength = sr.width()
                     sliderMin = gr.x()
                     sliderMax = gr.right() - sliderLength + 1
                     if (self.layoutDirection() == Qt.RightToLeft):
                         opt.upsideDown = not opt.upsideDown
                 else:
-                    pos = event.pos().y()
+                    pos_ = pos.y()
                     sliderLength = sr.height()
                     sliderMin = gr.y()
                     sliderMax = gr.bottom() - sliderLength + 1
                 self.setValue(QStyle.sliderValueFromPosition(
                         self.minimum(), self.maximum(),
-                        pos - sliderMin, sliderMax - sliderMin,
+                        pos_ - sliderMin, sliderMax - sliderMin,
                         opt.upsideDown))
                 return
 
@@ -829,14 +831,16 @@ class OverviewBar(QGraphicsView):
     """
 
     def __init__(self, main):
-        super().__init__(QGraphicsScene())
+        self._scene = QGraphicsScene()
+        super().__init__(self._scene)
+        assert self.scene() is self._scene
         self.main = main
         self.mne = main.mne
         self.bg_img = None
         self.bg_pxmp = None
         self.bg_pxmp_item = None
         # Set minimum Size to 1/10 of display size
-        min_h = int(QApplication.desktop().screenGeometry().height() / 10)
+        min_h = int(_screen(self).geometry().height() / 10)
         self.setMinimumSize(1, 1)
         self.setFixedHeight(min_h)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -1123,9 +1127,9 @@ class OverviewBar(QGraphicsView):
         """Customize resize event."""
         super().resizeEvent(event)
         cnt_rect = self.contentsRect()
-        self.setSceneRect(QRectF(QPoint(0, 0),
-                                 QPoint(cnt_rect.width(),
-                                        cnt_rect.height())))
+        self.setSceneRect(QRectF(QPointF(0, 0),
+                                 QPointF(cnt_rect.width(),
+                                         cnt_rect.height())))
         # Resize backgounrd
         self._fit_bg_img()
 
@@ -1401,6 +1405,13 @@ class VLine(InfiniteLine):
         self.label = VLineLabel(self)
 
 
+def _q_font(point_size, bold=False):
+    font = QFont()
+    font.setPointSize(point_size)
+    font.setBold(bold)
+    return font
+
+
 class EventLine(InfiniteLine):
     """Displays Events inside Trace-Plot"""
 
@@ -1410,7 +1421,7 @@ class EventLine(InfiniteLine):
                                                    'color': color,
                                                    'anchors': [(0, 0.5),
                                                                (0, 0.5)]})
-        self.label.setFont(QFont('AnyStyle', 10, QFont.Bold))
+        self.label.setFont(_q_font(10, bold=True))
         self.setZValue(0)
 
 
@@ -1484,7 +1495,7 @@ class ScaleBarText(BaseScaleBar, TextItem):
         BaseScaleBar.__init__(self, mne, ch_type)
         TextItem.__init__(self, color='#AA3377')
 
-        self.setFont(QFont('AnyStyle', 10))
+        self.setFont(_q_font(10))
         self.setZValue(2)  # To draw over RawTraceItems
 
         self.update_value()
@@ -1526,7 +1537,7 @@ class _BaseDialog(QDialog):
     def __init__(self, main, widget=None,
                  modal=False, name=None, title=None,
                  flags=Qt.Window | Qt.Tool):
-        super().__init__(main, flags=flags)
+        super().__init__(main, flags)
         self.main = main
         self.widget = widget
         self.mne = main.mne
@@ -1557,7 +1568,7 @@ class _BaseDialog(QDialog):
         if center:
             # center dialog
             qr = self.frameGeometry()
-            cp = QDesktopWidget().availableGeometry().center()
+            cp = _screen(self).availableGeometry().center()
             qr.moveCenter(cp)
             self.move(qr.topLeft())
         self.activateWindow()
@@ -1663,7 +1674,7 @@ class HelpDialog(_BaseDialog):
         # Show all keyboard-shortcuts in a Scroll-Area
         layout = QVBoxLayout()
         keyboard_label = QLabel('Keyboard Shortcuts')
-        keyboard_label.setFont(QFont('AnyStyle', 16, QFont.Bold))
+        keyboard_label.setFont(_q_font(16, bold=True))
         layout.addWidget(keyboard_label)
 
         scroll_area = QScrollArea()
@@ -1712,7 +1723,7 @@ class HelpDialog(_BaseDialog):
                       ('Right-click on channel name', rclick_name)]
 
         mouse_label = QLabel('Mouse Interaction')
-        mouse_label.setFont(QFont('AnyStyle', 16, QFont.Bold))
+        mouse_label.setFont(_q_font(16, bold=True))
         layout.addWidget(mouse_label)
         mouse_widget = QWidget()
         mouse_layout = QFormLayout()
@@ -1785,7 +1796,7 @@ class _ChannelFig(FigureCanvasQTAgg):
     def __init__(self, figure):
         self.figure = figure
         super().__init__(figure)
-        self.setFocusPolicy(Qt.StrongFocus | Qt.WheelFocus)
+        self.setFocusPolicy(Qt.FocusPolicy(Qt.StrongFocus | Qt.WheelFocus))
         self.setFocus()
         self._lasso_path = None
         # Only update when mouse is pressed
@@ -1826,7 +1837,7 @@ class SelectionDialog(_BaseDialog):
         # Create widget
         super().__init__(main, name='fig_selection',
                          title='Channel selection')
-        xpos = QApplication.desktop().screenGeometry().width() - 400
+        xpos = _screen(self).geometry().width() - 400
         self.setGeometry(xpos, 100, 400, 800)
 
         layout = QVBoxLayout()
@@ -1993,9 +2004,9 @@ class SelectionDialog(_BaseDialog):
 class AnnotRegion(LinearRegionItem):
     """Graphics-Oobject for Annotations."""
 
-    regionChangeFinished = pyqtSignal(object)
-    gotSelected = pyqtSignal(object)
-    removeRequested = pyqtSignal(object)
+    regionChangeFinished = Signal(object)
+    gotSelected = Signal(object)
+    removeRequested = Signal(object)
 
     def __init__(self, mne, description, values):
         super().__init__(values=values, orientation='vertical',
@@ -2011,7 +2022,7 @@ class AnnotRegion(LinearRegionItem):
         self.selected = False
 
         self.label_item = TextItem(text=description, anchor=(0.5, 0.5))
-        self.label_item.setFont(QFont('AnyStyle', 10, QFont.Bold))
+        self.label_item.setFont(_q_font(10, bold=True))
         self.sigRegionChanged.connect(self.update_label_pos)
 
         self.update_color()
@@ -2522,14 +2533,21 @@ class BrowserView(GraphicsView):
         # Don't set GraphicsView.mouseEnabled to True,
         # we only want part of the functionality pyqtgraph offers here.
         super().mouseMoveEvent(ev)
-        self.sigSceneMouseMoved.emit(ev.pos())
+        self.sigSceneMouseMoved.emit(_mouse_event_position(ev))
+
+
+def _mouse_event_position(ev):
+    try:  # Qt6
+        return ev.position()
+    except AttributeError:
+        return ev.pos()
 
 
 class LoadThread(QThread):
     """A worker object for precomputing in a separate QThread."""
-    loadProgress = pyqtSignal(int)
-    processText = pyqtSignal(str)
-    loadingFinished = pyqtSignal()
+    loadProgress = Signal(int)
+    processText = Signal(str)
+    loadingFinished = Signal()
 
     def __init__(self, browser):
         super().__init__()
@@ -2611,7 +2629,7 @@ class LoadThread(QThread):
         del self.browser
 
 
-class _PGMetaClass(type(BrowserBase), type(QMainWindow)):
+class _PGMetaClass(type(QMainWindow), type(BrowserBase)):
     """Class is necessary to prevent a metaclass conflict.
 
     The conflict arises due to the different types of QMainWindow and
@@ -2637,20 +2655,31 @@ qsettings_params = {
 }
 
 
+def _screen(widget):
+    try:
+        # Qt 5.14+
+        return widget.screen()
+    except AttributeError:
+        # Top center of the widget
+        return QGuiApplication.screenAt(
+            widget.mapToGlobal(QPoint(widget.width() // 2, 0)))
+
+
 def _disconnect(sig):
     try:
         sig.disconnect()
-    except TypeError:  # if there are no connections, ignore it
+    except (TypeError, RuntimeError):  # if there are no connections, ignore it
         pass
 
 
 class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     """A PyQtGraph-backend for 2D data browsing."""
 
-    gotClosed = pyqtSignal()
+    gotClosed = Signal()
 
     def __init__(self, **kwargs):
         self.backend_name = 'pyqtgraph'
+        self._closed = False
 
         BrowserBase.__init__(self, **kwargs)
         QMainWindow.__init__(self)
@@ -2705,7 +2734,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.fig_settings = None
         # Stores decimated data
         self.mne.decim_data = None
-        self.mne.decim_times = None
         # Stores ypos for selection-mode
         self.mne.selection_ypos_dict = dict()
         # Parameters for precomputing
@@ -3902,14 +3930,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         data_picks_mask = np.in1d(self.mne.picks, self.mne.picks_data)
         self.mne.decim_data[data_picks_mask] = self.mne.decim
 
-        # Get decim_times
-        if self.mne.decim != 1:
-            # decim can vary by channel type,
-            # so compute different `times` vectors.
-            self.mne.decim_times = {decim_value: self.mne.times[::decim_value]
-                                    + self.mne.first_time for decim_value
-                                    in set(self.mne.decim_data)}
-
         # Apply clipping
         if self.mne.clipping == 'clamp':
             self.mne.data = np.clip(self.mne.data, -0.5, 0.5)
@@ -3923,10 +3943,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _get_zscore(self, data):
         # Reshape data to reasonable size for display
-        if QApplication.desktop() is None:
+        screen = _screen(self)
+        if screen is None:
             max_pixel_width = 3840  # default=UHD
         else:
-            max_pixel_width = QApplication.desktop().screenGeometry().width()
+            max_pixel_width = screen.geometry().width()
         collapse_by = data.shape[1] // max_pixel_width
         data = data[:, :max_pixel_width * collapse_by]
         if collapse_by > 0:
@@ -4280,7 +4301,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _get_widget_from_mpl(self, fig):
         canvas = FigureCanvasQTAgg(fig)
-        canvas.setFocusPolicy(Qt.StrongFocus | Qt.WheelFocus)
+        canvas.setFocusPolicy(Qt.FocusPolicy(Qt.StrongFocus | Qt.WheelFocus))
         canvas.setFocus()
         # Pass window title and fig_name on
         if hasattr(fig, 'fig_name'):
@@ -4596,6 +4617,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.gotClosed.emit()
         # Make sure it gets deleted after it was closed.
         self.deleteLater()
+        self._closed = True
 
     def _fake_click_on_toolbar_action(self, action_name, wait_after=500):
         """Trigger event associated with action 'action_name' in toolbar."""
@@ -4675,7 +4697,7 @@ def _setup_ipython(ipython=None):
 
 
 def _qt_init_icons():
-    from PyQt5.QtGui import QIcon
+    from qtpy.QtGui import QIcon
     icons_path = f"{Path(__file__).parent}/icons"
     QIcon.setThemeSearchPaths([icons_path])
     return icons_path

@@ -11,10 +11,11 @@ from time import perf_counter
 
 import numpy as np
 import pytest
-from PyQt5.QtCore import QTimer
-from PyQt5.QtWidgets import QApplication
+from qtpy.QtCore import QTimer
+from qtpy.QtWidgets import QApplication
 
 import mne
+from mne_qt_browser.figure import MNEQtBrowser
 
 bm_limit = 50
 bm_count = copy(bm_limit)
@@ -62,6 +63,8 @@ def _initiate_hscroll(pg_fig, store, request, timer):
     global vscroll_dir
     global h_last_time
     global v_last_time
+    assert isinstance(pg_fig, MNEQtBrowser)
+    assert not pg_fig._closed
     if bm_count > 0:
         bm_count -= 1
 
@@ -174,8 +177,8 @@ def _check_epochs_version():
 ])
 def test_scroll_speed_epochs_unicolor(raw_orig, benchmark_param, store,
                                       pg_backend, request):
-    from PyQt5.QtCore import QTimer
-    from PyQt5.QtWidgets import QApplication
+    from qtpy.QtCore import QTimer
+    from qtpy.QtWidgets import QApplication
     _check_epochs_version()
     _reinit_bm_values()
 
@@ -220,8 +223,8 @@ def test_scroll_speed_epochs_unicolor(raw_orig, benchmark_param, store,
 ])
 def test_scroll_speed_epochs_multicolor(raw_orig, benchmark_param, store,
                                         pg_backend, request):
-    from PyQt5.QtCore import QTimer
-    from PyQt5.QtWidgets import QApplication
+    from qtpy.QtCore import QTimer
+    from qtpy.QtWidgets import QApplication
     _check_epochs_version()
     _reinit_bm_values()
 

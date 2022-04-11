@@ -79,7 +79,7 @@ jobs:
           python -m pip install --upgrade pip
           git clone -b ${MNE_BRANCH} --single-branch --depth=1 https://github.com/mne-tools/mne-python.git ../mne-python
           python -m pip install -qe ../mne-python
-          python -m pip install -ve .${PIP_OPTION} -r requirements.txt -r requirements_testing.txt
+          python -m pip install -ve .${PIP_OPTION} -r requirements.txt -r requirements_testing.txt PyQt5
       - name: Downgrade pytest for mne==0.24
         run: python -m pip install pytest==6.2.5
         if: ${{ matrix.mne }} == 'maint/0.24'
@@ -115,12 +115,95 @@ jobs:
         run: mne sys_info
       - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/viz
         name: Run MNE-Tests
-      - run: pytest mne_qt_browser/tests/test_pg_specific.py
+      - run: pytest --error-for-skips mne_qt_browser/tests/test_pg_specific.py
         name: Run pyqtgraph-specific tests
       # These are slow on macOS, so skip them
       - run: pytest mne_qt_browser/tests/test_speed.py
         name: Run benchmarks
         if: runner.os != 'macOS'
+      - uses: codecov/codecov-action@v1
+        if: always()
+        name: 'Upload coverage to CodeCov'
+  qt:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu]
+        mne: [main]
+        opengl: ['[opengl]']
+        qt: [PyQt5, PyQt6, PySide2, PySide6]
+        python: ['3.10']
+        name: [matrix]
+        include:
+          - os: macos
+            mne: main
+            opengl: '[opengl]'
+            qt: PySide6
+            python: '3.10'
+          - os: windows
+            mne: main
+            opengl: '[opengl]'
+            qt: PySide6
+            python: '3.10'
+    name: ${{ matrix.qt }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}-latest
+    env:
+      MNE_LOGGING_LEVEL: 'warning'
+      MKL_NUM_THREADS: '1'
+      PYTHONUNBUFFERED: '1'
+      DISPLAY: ':99.0'
+      MNE_BRANCH: ${{ matrix.mne }}
+      PIP_OPTION: ${{ matrix.opengl }}
+      PYTHON_VERSION: ${{ matrix.python }}
+      QT_LIB: ${{ matrix.qt }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dependencies
+        run: |  # use MNE main to ensure test files are available
+          set -e
+          python -m pip install --upgrade pip
+          git clone -b ${MNE_BRANCH} --single-branch --depth=1 https://github.com/mne-tools/mne-python.git ../mne-python
+          python -m pip install -qe ../mne-python
+          python -m pip install -ve .${PIP_OPTION} -r requirements.txt -r requirements_testing.txt $QT_LIB
+      - shell: bash -el {0}
+        run: ./tools/get_testing_version.sh
+        name: 'Get testing version'
+        working-directory: ../mne-python
+      - uses: actions/cache@v2
+        with:
+          key: ${{ env.TESTING_VERSION }}
+          path: ~/mne_data
+        name: 'Cache testing data'
+      - run: python -c 'import mne; print(mne.datasets.testing.data_path(verbose=True))'
+        name: 'Download testing data'
+      - run: |
+          set -e
+          ./tools/setup_xvfb.sh
+          sudo apt install -yq libegl1
+        name: Setup xvfb on Linux
+        working-directory: ../mne-python
+        if: runner.os == 'Linux'
+      - name: Check Qt
+        run: |
+          mne sys_info -pd
+          echo ${QT_LIB}:
+          mne sys_info -pd | grep "^qtpy: .*{${QT_LIB}=.*}$"
+      - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/viz
+        name: Run MNE-Tests
+      - run: pytest --error-for-skips mne_qt_browser/tests/test_pg_specific.py
+        name: Run pyqtgraph-specific tests
+      # For some reason this dies on Linux PySide2. We can live without this
+      # case given our primary target moving forward is Qt6+
+      - run: pytest mne_qt_browser/tests/test_speed.py
+        name: Run benchmarks
+        if: runner.os != 'Linux' || matrix.qt != 'PySide2'
       - uses: codecov/codecov-action@v1
         if: always()
         name: 'Upload coverage to CodeCov'

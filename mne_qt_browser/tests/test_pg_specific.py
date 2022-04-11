@@ -4,7 +4,7 @@
 # License: BSD-3-Clause
 
 import numpy as np
-from PyQt5.QtTest import QTest
+from qtpy.QtTest import QTest
 
 
 def test_annotations_interactions(raw_orig, pg_backend):
