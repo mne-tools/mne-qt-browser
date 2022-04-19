@@ -1,3 +1,16 @@
+# -*- coding: utf-8 -*-
+"""Backports for MNE versions (mostly)."""
+
+# Author: Martin Schulz <dev@earthman-music.de>
+#
+# License: BSD-3-Clause
+
+from contextlib import contextmanager
+import platform
+import sys
+
+from mne.utils import logger
+
 ###############################################################################
 # MNE 1.0+
 try:
