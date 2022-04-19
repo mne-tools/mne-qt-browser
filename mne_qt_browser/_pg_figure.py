@@ -14,7 +14,6 @@ import sys
 from pathlib import Path
 from ast import literal_eval
 from collections import OrderedDict
-from contextlib import contextmanager
 from copy import copy
 from functools import partial
 from os.path import getsize
@@ -1538,6 +1537,14 @@ class _BaseDialog(QDialog):
             if self in self.mne.child_figs:
                 self.mne.child_figs.remove(self)
         event.accept()
+
+    # If this widget gets activated (e.g., the user clicks away from the
+    # browser but then returns to it by clicking in a selection window),
+    # the main window should be raised as well
+    def event(self, event):
+        if event.type() == QEvent.WindowActivate:
+            self.main.raise_()
+        return super().event(event)
 
 
 class SettingsDialog(_BaseDialog):
