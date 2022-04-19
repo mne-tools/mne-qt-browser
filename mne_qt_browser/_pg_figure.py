@@ -56,17 +56,7 @@ from mne.utils import (_to_rgb, logger, sizeof_fmt, warn, get_config,
                        _check_option)
 
 from . import _browser_instances
-
-try:
-    from pytestqt.exceptions import capture_exceptions
-except ImportError:
-    logger.debug('If pytest-qt is not installed, the errors from inside '
-                 'the Qt-loop will be occluded and it will be harder '
-                 'to trace back the cause.')
-
-    @contextmanager
-    def capture_exceptions():
-        yield []
+from ._fixes import capture_exceptions, _qt_raise_window, _init_mne_qtapp
 
 name = 'pyqtgraph'
 
@@ -75,64 +65,6 @@ name = 'pyqtgraph'
 # and hence doesn't match the order in the overview bar either. So we swap
 # grads and mags here.
 DATA_CH_TYPES_ORDER = ('grad', 'mag', *_DATA_CH_TYPES_ORDER_DEFAULT[2:])
-
-# This can be removed when mne==1.0 is released.
-try:
-    from mne.viz.backends._utils import _init_mne_qtapp
-except ImportError:
-    from mne.viz.backends._utils import _init_qt_resources
-
-    def _init_mne_qtapp(enable_icon=True, pg_app=False):
-        """Get QApplication-instance for MNE-Python.
-
-        Parameter
-        ---------
-        enable_icon: bool
-            If to set an MNE-icon for the app.
-        pg_app: bool
-            If to create the QApplication with pyqtgraph. For an until know
-            undiscovered reason the pyqtgraph-browser won't show without
-            mkQApp from pyqtgraph.
-
-        Returns
-        -------
-        app: ``qtpy.QtWidgets.QApplication``
-            Instance of QApplication.
-        """
-        from qtpy.QtWidgets import QApplication
-        from qtpy.QtGui import QIcon
-
-        app_name = 'MNE-Python'
-        organization_name = 'MNE'
-
-        # Fix from cbrnr/mnelab for app name in menu bar
-        if sys.platform.startswith("darwin"):
-            try:
-                # set bundle name on macOS (app name shown in the menu bar)
-                from Foundation import NSBundle
-                bundle = NSBundle.mainBundle()
-                info = (bundle.localizedInfoDictionary()
-                        or bundle.infoDictionary())
-                info["CFBundleName"] = app_name
-            except ModuleNotFoundError:
-                pass
-
-        if pg_app:
-            from pyqtgraph import mkQApp
-            app = mkQApp(app_name)
-        else:
-            app = (QApplication.instance()
-                   or QApplication(sys.argv or [app_name]))
-            app.setApplicationName(app_name)
-        app.setOrganizationName(organization_name)
-
-        if enable_icon:
-            # Set icon
-            _init_qt_resources()
-            kind = 'bigsur-' if platform.mac_ver()[0] >= '10.16' else ''
-            app.setWindowIcon(QIcon(f":/mne-{kind}icon.png"))
-
-        return app
 
 
 # Mostly chosen manually from
@@ -216,6 +148,7 @@ def propagate_to_children(method):
 
 
 def _safe_splash(meth):
+    @functools.wraps(meth)
     def func(self, *args, **kwargs):
         try:
             meth(self, *args, **kwargs)
@@ -224,6 +157,11 @@ def _safe_splash(meth):
                 self.mne.splash.close()
             except Exception:
                 pass
+            finally:
+                try:
+                    del self.mne.splash
+                except Exception:
+                    pass
     return func
 
 
@@ -1586,7 +1524,6 @@ class _BaseDialog(QDialog):
             cp = _screen(self).availableGeometry().center()
             qr.moveCenter(cp)
             self.move(qr.topLeft())
-        self.activateWindow()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
@@ -2737,6 +2674,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             QIcon.setThemeName('dark')
         else:
             QIcon.setThemeName('light')
+
+        # control raising with _qt_raise_window
+        self.setAttribute(Qt.WA_ShowWithoutActivating, True)
 
         # Initialize attributes which are only used by pyqtgraph, not by
         # matplotlib and add them to MNEBrowseParams.
@@ -4584,17 +4524,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def show(self):
         # Set raise_window like matplotlib if possible
         super().show()
-        try:
-            from matplotlib import rcParams
-            raise_window = rcParams['figure.raise_window']
-        except ImportError:
-            raise_window = True
-        if raise_window:
-            self.activateWindow()
-            self.raise_()
-        if getattr(self.mne, 'splash', None):
-            self.mne.splash.close()
-            del self.mne.splash
+        _qt_raise_window(self)
 
     def _close_event(self, fig=None):
         """Force calling of the MPL figure close event."""
