@@ -1497,6 +1497,7 @@ class _BaseDialog(QDialog):
         self.modal = modal
 
         self.setAttribute(Qt.WA_DeleteOnClose, True)
+        self.setAttribute(Qt.WA_MacAlwaysShowToolWindow, True)
 
         self.mne.child_figs.append(self)
 
@@ -2684,7 +2685,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # control raising with _qt_raise_window
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
-        self.setAttribute(Qt.WA_MacAlwaysShowToolWindow, True)
 
         # Initialize attributes which are only used by pyqtgraph, not by
         # matplotlib and add them to MNEBrowseParams.
