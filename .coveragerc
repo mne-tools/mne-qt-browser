@@ -1,0 +1,7 @@
+[run]
+branch = True
+source = mne_qt_browser
+omit =
+    */setup.py
+    */mne_qt_browser/_fixes.py
+    */mne_qt_browser/conftest.py
