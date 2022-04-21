@@ -1497,7 +1497,6 @@ class _BaseDialog(QDialog):
         self.modal = modal
 
         self.setAttribute(Qt.WA_DeleteOnClose, True)
-        self.setAttribute(Qt.WA_MacAlwaysShowToolWindow, True)
 
         self.mne.child_figs.append(self)
 
