@@ -1367,12 +1367,12 @@ def _q_font(point_size, bold=False):
 class EventLine(InfiniteLine):
     """Displays Events inside Trace-Plot"""
 
-    def __init__(self, pos, id, color):
+    def __init__(self, pos, label, color):
         super().__init__(pos, pen=color, movable=False,
-                         label=str(id), labelOpts={'position': 0.98,
-                                                   'color': color,
-                                                   'anchors': [(0, 0.5),
-                                                               (0, 0.5)]})
+                         label=str(label), labelOpts={'position': 0.98,
+                                                      'color': color,
+                                                      'anchors': [(0, 0.5),
+                                                                  (0, 0.5)]})
         self.label.setFont(_q_font(10, bold=True))
         self.setZValue(0)
 
@@ -2858,7 +2858,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             for ev_time, ev_id in zip(self.mne.event_times,
                                       self.mne.event_nums):
                 color = self.mne.event_color_dict[ev_id]
-                event_line = EventLine(ev_time, ev_id, color)
+                label = self.mne.event_id_rev.get(ev_id, ev_id)
+                event_line = EventLine(ev_time, label, color)
                 self.mne.event_lines.append(event_line)
 
                 if 0 < ev_time < self.mne.duration:
