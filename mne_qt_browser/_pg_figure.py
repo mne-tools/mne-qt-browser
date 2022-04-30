@@ -3248,7 +3248,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             },
             'escape': {
                 'qt_key': Qt.Key_Escape,
-                'slot': [self.close],
+                'slot': [self._check_close],
                 'description': ['Close']
             },
             # Just for testing
@@ -4543,6 +4543,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 pass  # pragma: no cover
         else:
             fig.close()
+
+    def _check_close(self):
+        """Close annotations-mode before closing the browser."""
+        if self.mne.annotation_mode:
+            self._toggle_annotation_fig()
+        else:
+            self.close()
 
     def closeEvent(self, event):
         """Customize close event."""
