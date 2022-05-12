@@ -791,7 +791,7 @@ class OverviewBar(QGraphicsView):
         self.bg_pxmp = None
         self.bg_pxmp_item = None
         # Set minimum Size to 1/10 of display size
-        min_h = int(_screen(self).geometry().height() / 10)
+        min_h = int(_screen_geometry(self).height() / 10)
         self.setMinimumSize(1, 1)
         self.setFixedHeight(min_h)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -1521,7 +1521,7 @@ class _BaseDialog(QDialog):
         if center:
             # center dialog
             qr = self.frameGeometry()
-            cp = _screen(self).availableGeometry().center()
+            cp = _screen_geometry(self).center()
             qr.moveCenter(cp)
             self.move(qr.topLeft())
 
@@ -1797,7 +1797,9 @@ class SelectionDialog(_BaseDialog):
         # Create widget
         super().__init__(main, name='fig_selection',
                          title='Channel selection')
-        xpos = _screen(self).geometry().width() - 400
+        geo = _screen_geometry(self)
+        # Position selection dialog at right border of active screen
+        xpos = geo.x() + geo.width() - 400
         self.setGeometry(xpos, 100, 400, 800)
 
         layout = QVBoxLayout()
@@ -2615,14 +2617,19 @@ qsettings_params = {
 }
 
 
-def _screen(widget):
+def _screen_geometry(widget):
     try:
         # Qt 5.14+
-        return widget.screen()
+        return widget.screen().geometry()
     except AttributeError:
         # Top center of the widget
-        return QGuiApplication.screenAt(
+        screen = QGuiApplication.screenAt(
             widget.mapToGlobal(QPoint(widget.width() // 2, 0)))
+        if screen is None:
+            screen = QGuiApplication.primaryScreen()
+        geometry = screen.geometry()
+
+        return geometry
 
 
 def _disconnect(sig):
@@ -3921,11 +3928,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _get_zscore(self, data):
         # Reshape data to reasonable size for display
-        screen = _screen(self)
-        if screen is None:
+        screen_geometry = _screen_geometry(self)
+        if screen_geometry is None:
             max_pixel_width = 3840  # default=UHD
         else:
-            max_pixel_width = screen.geometry().width()
+            max_pixel_width = screen_geometry.width()
         collapse_by = data.shape[1] // max_pixel_width
         data = data[:, :max_pixel_width * collapse_by]
         if collapse_by > 0:
