@@ -2625,10 +2625,8 @@ def _screen_geometry(widget):
         screen = QGuiApplication.screenAt(
             widget.mapToGlobal(QPoint(widget.width() // 2, 0)))
         if screen is None:
-            desktop = QApplication.desktop()
-            geometry = desktop.screenGeometry(desktop.screenNumber(widget))
-        else:
-            geometry = screen.geometry()
+            screen = QGuiApplication.primaryScreen()
+        geometry = screen.geometry()
 
         return geometry
 
