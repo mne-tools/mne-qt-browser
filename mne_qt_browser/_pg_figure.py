@@ -1753,8 +1753,9 @@ class ProjDialog(_BaseDialog):
 
 
 class _ChannelFig(FigureCanvasQTAgg):
-    def __init__(self, figure):
+    def __init__(self, figure, mne):
         self.figure = figure
+        self.mne = mne
         super().__init__(figure)
         self.setFocusPolicy(Qt.FocusPolicy(Qt.StrongFocus | Qt.WheelFocus))
         self.setFocus()
@@ -1818,7 +1819,7 @@ class SelectionDialog(_BaseDialog):
             # MNE <= 0.24
             self.channel_fig.canvas.mpl_connect(
                 'lasso_event', self._set_custom_selection)
-        self.channel_widget = _ChannelFig(self.channel_fig)
+        self.channel_widget = _ChannelFig(self.channel_fig, self.mne)
         layout.addWidget(self.channel_widget)
 
         selections_dict = self.mne.ch_selections
