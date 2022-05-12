@@ -1796,7 +1796,9 @@ class SelectionDialog(_BaseDialog):
         # Create widget
         super().__init__(main, name='fig_selection',
                          title='Channel selection')
-        xpos = _screen_geometry(self).width() - 400
+        geo = _screen_geometry(self)
+        # Position selection dialog at right border of active screen
+        xpos = geo.x() + geo.width() - 400
         self.setGeometry(xpos, 100, 400, 800)
 
         layout = QVBoxLayout()
