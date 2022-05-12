@@ -790,7 +790,7 @@ class OverviewBar(QGraphicsView):
         self.bg_pxmp = None
         self.bg_pxmp_item = None
         # Set minimum Size to 1/10 of display size
-        min_h = int(_screen(self).geometry().height() / 10)
+        min_h = int(_screen(self).screenGeometry().height() / 10)
         self.setMinimumSize(1, 1)
         self.setFixedHeight(min_h)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -1520,7 +1520,7 @@ class _BaseDialog(QDialog):
         if center:
             # center dialog
             qr = self.frameGeometry()
-            cp = _screen(self).availableGeometry().center()
+            cp = _screen(self).screenGeometry().center()
             qr.moveCenter(cp)
             self.move(qr.topLeft())
 
@@ -1796,7 +1796,7 @@ class SelectionDialog(_BaseDialog):
         # Create widget
         super().__init__(main, name='fig_selection',
                          title='Channel selection')
-        xpos = _screen(self).geometry().width() - 400
+        xpos = _screen(self).screenGeometry().width() - 400
         self.setGeometry(xpos, 100, 400, 800)
 
         layout = QVBoxLayout()
@@ -2620,8 +2620,12 @@ def _screen(widget):
         return widget.screen()
     except AttributeError:
         # Top center of the widget
-        return QGuiApplication.screenAt(
+        screen = QGuiApplication.screenAt(
             widget.mapToGlobal(QPoint(widget.width() // 2, 0)))
+        if screen is None:
+            screen = QApplication.desktop()
+
+        return screen
 
 
 def _disconnect(sig):
@@ -3924,7 +3928,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if screen is None:
             max_pixel_width = 3840  # default=UHD
         else:
-            max_pixel_width = screen.geometry().width()
+            max_pixel_width = screen.screenGeometry().width()
         collapse_by = data.shape[1] // max_pixel_width
         data = data[:, :max_pixel_width * collapse_by]
         if collapse_by > 0:
