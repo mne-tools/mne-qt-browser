@@ -712,8 +712,9 @@ class TimeScrollBar(BaseScrollBar):
                                 * self.step_factor))
 
     def _update_scroll_sensitivity(self):
+        old_step_factor = self.step_factor
         self.update_duration()
-        self.update_value(self.value() / self.step_factor)
+        self.update_value(self.value() / old_step_factor)
 
     def keyPressEvent(self, event):
         """Customize key press events."""
