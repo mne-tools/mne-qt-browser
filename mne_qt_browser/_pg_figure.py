@@ -4711,11 +4711,15 @@ def _init_browser(**kwargs):
     menu_bar = browser.menuBar()
 
     file_menu = menu_bar.addMenu('&File')
-    file_menu.addAction('&About', lambda: print('about'))
     file_menu.addAction('&Preferences', lambda: print('prefs'))
 
     view_menu = menu_bar.addMenu('&View')
-    view_menu.addAction('Print', lambda: print('hi'))
+    view_menu.addAction('Zoom in', lambda: print('zoom in'))
+    view_menu.addAction('Zoom out', lambda: print('zoom out'))
+
+    help_menu = menu_bar.addMenu('&Help')
+    help_menu.addAction('&About', lambda: print('about'))
+    help_menu.addAction('Help', lambda: print('help'))
 
     return browser
 
