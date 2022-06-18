@@ -1381,8 +1381,9 @@ class EventLine(InfiniteLine):
 class Crosshair(InfiniteLine):
     """Continously updating marker inside the Trace-Plot."""
 
-    def __init__(self):
+    def __init__(self, mne):
         super().__init__(angle=90, movable=False, pen='g')
+        self.mne = mne
         self.y = 1
 
     def set_data(self, x, y):
@@ -3534,7 +3535,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 if (0 <= x <= self.mne.xmax and
                         0 <= y <= self.mne.ymax):
                     if not self.mne.crosshair:
-                        self.mne.crosshair = Crosshair()
+                        self.mne.crosshair = Crosshair(self.mne)
                         self.mne.plt.addItem(self.mne.crosshair,
                                              ignoreBounds=True)
 
