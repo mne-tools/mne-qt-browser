@@ -4698,9 +4698,24 @@ def _init_browser(**kwargs):
     if kwargs.get('splash', False):
         app_kwargs['splash'] = 'Initializing mne-qt-browser...'
     out = _init_mne_qtapp(pg_app=True, **app_kwargs)
+
     if 'splash' in app_kwargs:
-        kwargs['splash'] = out[1]  # returned as second element
+        app, kwargs['splash'] = out
+    else:
+        app = out
+    del out
+
     browser = MNEQtBrowser(**kwargs)
+
+    # Add a menu
+    menu_bar = browser.menuBar()
+
+    file_menu = menu_bar.addMenu('&File')
+    file_menu.addAction('&About', lambda: print('about'))
+    file_menu.addAction('&Preferences', lambda: print('prefs'))
+
+    view_menu = menu_bar.addMenu('&View')
+    view_menu.addAction('Print', lambda: print('hi'))
 
     return browser
 
