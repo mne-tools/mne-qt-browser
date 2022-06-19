@@ -3367,42 +3367,68 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         tool_button_style = Qt.ToolButtonIconOnly
         self.mne.toolbar.setToolButtonStyle(tool_button_style)
 
-        adecr_time = QAction(QIcon.fromTheme("less_time"), "- Time", parent=self)
-        adecr_time.triggered.connect(_methpartial(self.change_duration, step=-0.2))
+        adecr_time = QAction(
+            icon=QIcon.fromTheme("less_time"),
+            text='Show fewer time points',
+            parent=self
+        )
+        adecr_time.triggered.connect(_methpartial(self.change_duration, -0.2))
         self.mne.toolbar.addAction(adecr_time)
-        aincr_time = QAction(QIcon.fromTheme("more_time"), "+ Time", parent=self)
-        aincr_time.triggered.connect(_methpartial(self.change_duration, step=0.25))
+        aincr_time = QAction(
+            icon=QIcon.fromTheme("more_time"),
+            text='Show more time points',
+            parent=self
+        )
+        aincr_time.triggered.connect(_methpartial(self.change_duration, 0.25))
         self.mne.toolbar.addAction(aincr_time)
         self.mne.toolbar.addSeparator()
 
         adecr_nchan = QAction(
-            QIcon.fromTheme("less_channels"), "- Channels", parent=self
+            icon=QIcon.fromTheme("less_channels"),
+            text='Show fewer channels',
+            parent=self
         )
-        adecr_nchan.triggered.connect(_methpartial(self.change_nchan, step=-10))
+        adecr_nchan.triggered.connect(_methpartial(self.change_nchan, -10))
         self.mne.toolbar.addAction(adecr_nchan)
         aincr_nchan = QAction(
-            QIcon.fromTheme("more_channels"), "+ Channels", parent=self
+            icon=QIcon.fromTheme("more_channels"),
+            text='Show more channels',
+            parent=self
         )
-        aincr_nchan.triggered.connect(_methpartial(self.change_nchan, step=10))
+        aincr_nchan.triggered.connect(_methpartial(self.change_nchan, 10))
         self.mne.toolbar.addAction(aincr_nchan)
         self.mne.toolbar.addSeparator()
 
-        adecr_nchan = QAction(QIcon.fromTheme("zoom_out"), "Zoom out", parent=self)
-        adecr_nchan.triggered.connect(_methpartial(self.scale_all, step=4 / 5))
+        adecr_nchan = QAction(
+            icon=QIcon.fromTheme("zoom_out"),
+            text='Reduce amplitude',
+            parent=self
+        )
+        adecr_nchan.triggered.connect(_methpartial(self.scale_all, 4 / 5))
         self.mne.toolbar.addAction(adecr_nchan)
-        aincr_nchan = QAction(QIcon.fromTheme("zoom_in"), "Zoom in", parent=self)
-        aincr_nchan.triggered.connect(_methpartial(self.scale_all, step=5 / 4))
+        aincr_nchan = QAction(
+            icon=QIcon.fromTheme("zoom_in"),
+            text='Increase amplitude',
+            parent=self
+        )
+        aincr_nchan.triggered.connect(_methpartial(self.scale_all, 5 / 4))
         self.mne.toolbar.addAction(aincr_nchan)
         self.mne.toolbar.addSeparator()
 
         if not self.mne.is_epochs:
             atoggle_annot = QAction(
-                QIcon.fromTheme("annotations"), "Annotations", parent=self
+                icon=QIcon.fromTheme("annotations"),
+                text='Toggle annotations mode',
+                parent=self
             )
             atoggle_annot.triggered.connect(self._toggle_annotation_fig)
             self.mne.toolbar.addAction(atoggle_annot)
 
-        atoggle_proj = QAction(QIcon.fromTheme("ssp"), "SSP", parent=self)
+        atoggle_proj = QAction(
+            icon=QIcon.fromTheme("ssp"),
+            text='Show projectors',
+            parent=self
+        )
         atoggle_proj.triggered.connect(self._toggle_proj_fig)
         self.mne.toolbar.addAction(atoggle_proj)
 
@@ -3583,31 +3609,55 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 "parameter": [5 / 4],
                 "description": ["Increase Scale"],
             },
+<<<<<<< HEAD
             "a": {
                 "qt_key": Qt.Key_A,
                 "slot": [self._toggle_annotation_fig, self._toggle_annotations],
                 "modifier": [None, "Shift"],
                 "description": ["Toggle Annotation-Tool", "Toggle Annotations visible"],
+=======
+            'a': {
+                'qt_key': Qt.Key_A,
+                'slot': [self._toggle_annotation_fig,
+                         self._toggle_annotations],
+                'modifier': [None, 'Shift'],
+                'description': ['Toggle Annotation Tool',
+                                'Toggle Annotations visible']
+>>>>>>> 14294a2 (Improve toolbar tooltips)
             },
             "b": {
                 "qt_key": Qt.Key_B,
                 "slot": [self._toggle_butterfly],
                 "description": ["Toggle Butterfly"],
             },
+<<<<<<< HEAD
             "d": {
                 "qt_key": Qt.Key_D,
                 "slot": [self._toggle_dc],
                 "description": ["Toggle DC-Correction"],
+=======
+            'd': {
+                'qt_key': Qt.Key_D,
+                'slot': [self._toggle_dc],
+                'description': ['Toggle DC Correction']
+>>>>>>> 14294a2 (Improve toolbar tooltips)
             },
             "e": {
                 "qt_key": Qt.Key_E,
                 "slot": [self._toggle_events],
                 "description": ["Toggle Events visible"],
             },
+<<<<<<< HEAD
             "h": {
                 "qt_key": Qt.Key_H,
                 "slot": [self._toggle_epoch_histogram],
                 "description": ["Toggle Epoch-Histogram"],
+=======
+            'h': {
+                'qt_key': Qt.Key_H,
+                'slot': [self._toggle_epoch_histogram],
+                'description': ['Toggle Epochs Histogram']
+>>>>>>> 14294a2 (Improve toolbar tooltips)
             },
             "j": {
                 "qt_key": Qt.Key_J,
@@ -3620,6 +3670,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 "slot": [self._toggle_antialiasing],
                 "description": ["Toggle Antialiasing"],
             },
+<<<<<<< HEAD
             "o": {
                 "qt_key": Qt.Key_O,
                 "slot": [self._toggle_overview_bar],
@@ -3629,6 +3680,17 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 "qt_key": Qt.Key_T,
                 "slot": [self._toggle_time_format],
                 "description": ["Toggle Time-Format"],
+=======
+            'o': {
+                'qt_key': Qt.Key_O,
+                'slot': [self._toggle_overview_bar],
+                'description': ['Toggle Overview Bar']
+            },
+            't': {
+                'qt_key': Qt.Key_T,
+                'slot': [self._toggle_time_format],
+                'description': ['Toggle Time Format']
+>>>>>>> 14294a2 (Improve toolbar tooltips)
             },
             "s": {
                 "qt_key": Qt.Key_S,
@@ -3645,20 +3707,34 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 "slot": [self._toggle_crosshair],
                 "description": ["Toggle Crosshair"],
             },
+<<<<<<< HEAD
             "z": {
                 "qt_key": Qt.Key_Z,
                 "slot": [self._toggle_zenmode],
                 "description": ["Toggle Zen-Mode"],
+=======
+            'z': {
+                'qt_key': Qt.Key_Z,
+                'slot': [self._toggle_zenmode],
+                'description': ['Toggle Zen Mode']
+>>>>>>> 14294a2 (Improve toolbar tooltips)
             },
             "?": {
                 "qt_key": Qt.Key_Question,
                 "slot": [self._toggle_help_fig],
                 "description": ["Show Help"],
             },
+<<<<<<< HEAD
             "f11": {
                 "qt_key": Qt.Key_F11,
                 "slot": [self._toggle_fullscreen],
                 "description": ["Toggle Full-Screen"],
+=======
+            'f11': {
+                'qt_key': Qt.Key_F11,
+                'slot': [self._toggle_fullscreen],
+                'description': ['Toggle Fullscreen']
+>>>>>>> 14294a2 (Improve toolbar tooltips)
             },
             "escape": {
                 "qt_key": Qt.Key_Escape,
