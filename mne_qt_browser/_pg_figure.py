@@ -2889,7 +2889,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if self.mne.use_opengl is None:  # default: opt-in
             # OpenGL needs to be enabled on macOS
             # (https://github.com/mne-tools/mne-qt-browser/issues/53)
-            default = 'true' if sys.platform == 'darwin' else ''
+            default = 'true' if platform.system() == 'Darwin' else ''
             config_val = get_config(opengl_key, default).lower()
             self.mne.use_opengl = (config_val == 'true')
 
@@ -2901,7 +2901,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 # it can lead to segfaults. If a user really knows what they
                 # are doing, they can pass use_opengl=False (or set
                 # MNE_BROWSER_USE_OPENGL=false)
-                if sys.platform == 'darwin':
+                if platform.system() == 'Darwin':
                     raise RuntimeError(
                         'Plotting on macOS without OpenGL may be unstable! '
                         'We recommend installing PyOpenGL, but it could not '
@@ -3061,17 +3061,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         button.setMenu(self.mne.overview_menu)
         button.setPopupMode(QToolButton.InstantPopup)
         self.mne.toolbar.addWidget(button)
-
-        self.mne.toolbar.addSeparator()
-
-        asettings = QAction(QIcon.fromTheme("settings"), 'Settings',
-                            parent=self)
-        asettings.triggered.connect(self._toggle_settings_fig)
-        self.mne.toolbar.addAction(asettings)
-
-        ahelp = QAction(QIcon.fromTheme("help"), 'Help', parent=self)
-        ahelp.triggered.connect(self._toggle_help_fig)
-        self.mne.toolbar.addAction(ahelp)
 
         # Set Start-Range (after all necessary elements are initialized)
         self.mne.plt.setXRange(self.mne.t_start,
@@ -4711,15 +4700,54 @@ def _init_browser(**kwargs):
     menu_bar = browser.menuBar()
 
     file_menu = menu_bar.addMenu('&File')
-    file_menu.addAction('&Preferences', lambda: print('prefs'))
+    file_menu.addAction(
+        '&Preferences' if platform.system() == 'Darwin' else '&Settings',
+        browser._toggle_settings_fig
+    )
 
     view_menu = menu_bar.addMenu('&View')
-    view_menu.addAction('Zoom in', lambda: print('zoom in'))
-    view_menu.addAction('Zoom out', lambda: print('zoom out'))
+    # view_menu.addAction('Zoom in', lambda: print('zoom in'))
+    # view_menu.addAction('Zoom out', lambda: print('zoom out'))
+    view_menu.addAction(
+        'Toggle butterfly mode',
+        browser._toggle_butterfly,
+        shortcut=browser.mne.keyboard_shortcuts['b']['qt_key']
+    )
+    view_menu.addSeparator()
+    view_menu.addAction(
+        'Show fewer time points',
+        partial(browser.change_duration, -0.2),
+        shortcut=browser.mne.keyboard_shortcuts['home']['qt_key']
+    )
+    view_menu.addAction(
+        'Show more time points',
+        partial(browser.change_duration, +0.2),
+        shortcut=browser.mne.keyboard_shortcuts['end']['qt_key']
+    )
+    view_menu.addSeparator()
+    view_menu.addAction(
+        'Show fewer channels',
+        partial(browser.change_nchan, -10),
+        shortcut=browser.mne.keyboard_shortcuts['pageup']['qt_key']
+    )
+    view_menu.addAction(
+        'Show more channels',
+        partial(browser.change_nchan, +10),
+        shortcut=browser.mne.keyboard_shortcuts['pagedown']['qt_key']
+    )
+    if platform.system() == 'Darwin':
+        # insert before auto-added fullscreen toggle
+        # XXX doesn't seem to work
+        view_menu.addSeparator()
+
 
     help_menu = menu_bar.addMenu('&Help')
     help_menu.addAction('&About', lambda: print('about'))
-    help_menu.addAction('Help', lambda: print('help'))
+    help_menu.addAction(
+        'Show keyboard shortcuts',
+        browser._toggle_help_fig,
+        shortcut=browser.mne.keyboard_shortcuts['?']['qt_key']
+    )
 
     return browser
 
