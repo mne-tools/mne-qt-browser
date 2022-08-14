@@ -1233,8 +1233,6 @@ class RawViewBox(ViewBox):
                                                     description=description,
                                                     values=(self._drag_start,
                                                             drag_stop))
-                    self.mne.plt.addItem(self._drag_region)
-                    self.mne.plt.addItem(self._drag_region.label_item)
                 elif event.isFinish():
                     drag_stop = self.mapSceneToView(event.scenePos()).x()
                     self._drag_region.setRegion((self._drag_start, drag_stop))
@@ -1368,14 +1366,17 @@ def _q_font(point_size, bold=False):
 class EventLine(InfiniteLine):
     """Displays Events inside Trace-Plot"""
 
-    def __init__(self, pos, label, color):
+    def __init__(self, mne, pos, label, color):
         super().__init__(pos, pen=color, movable=False,
                          label=str(label), labelOpts={'position': 0.98,
                                                       'color': color,
                                                       'anchors': [(0, 0.5),
                                                                   (0, 0.5)]})
+        self.mne = mne
         self.label.setFont(_q_font(10, bold=True))
         self.setZValue(0)
+
+        self.mne.plt.addItem(self)
 
 
 class Crosshair(InfiniteLine):
@@ -1990,6 +1991,9 @@ class AnnotRegion(LinearRegionItem):
         self.sigRegionChanged.connect(self.update_label_pos)
 
         self.update_color()
+
+        self.mne.plt.addItem(self)
+        self.mne.plt.addItem(self.label_item)
 
     def _region_changed(self):
         self.regionChangeFinished.emit(self)
@@ -2869,9 +2873,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                                       self.mne.event_nums):
                 color = self.mne.event_color_dict[ev_id]
                 label = self.mne.event_id_rev.get(ev_id, ev_id)
-                event_line = EventLine(ev_time, label, color)
+                event_line = EventLine(self.mne, ev_time, label, color)
                 self.mne.event_lines.append(event_line)
-                self.mne.plt.addItem(event_line)
         else:
             self.mne.events_visible = False
 
@@ -3925,8 +3928,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                                  values=(plot_onset, plot_onset + duration))
         # Add region to list and plot
         self.mne.regions.append(region)
-        self.mne.plt.addItem(region)
-        self.mne.plt.addItem(region.label_item)
 
         # Connect signals of region
         region.regionChangeFinished.connect(self._region_changed)
