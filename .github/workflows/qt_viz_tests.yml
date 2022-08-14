@@ -100,7 +100,9 @@ jobs:
           powershell gl-ci-helpers/appveyor/install_opengl.ps1
         name: Setup OpenGL on Windows
         if: runner.os == 'Windows'
-      - run: ./tools/setup_xvfb.sh
+      - run: |
+          curl --remote-name https://raw.githubusercontent.com/mne-tools/mne-python/main/tools/setup_xvfb.sh
+          bash setup_xvfb.sh
         name: Setup xvfb on Linux
         working-directory: ../mne-python
         if: runner.os == 'Linux'
