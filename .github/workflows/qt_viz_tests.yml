@@ -102,7 +102,7 @@ jobs:
         if: runner.os == 'Windows'
       - run: |
           curl --remote-name https://raw.githubusercontent.com/mne-tools/mne-python/main/tools/setup_xvfb.sh
-          bash setup_svfb.sh
+          bash setup_xvfb.sh
         name: Setup xvfb on Linux
         working-directory: ../mne-python
         if: runner.os == 'Linux'
