@@ -2871,9 +2871,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 label = self.mne.event_id_rev.get(ev_id, ev_id)
                 event_line = EventLine(ev_time, label, color)
                 self.mne.event_lines.append(event_line)
-
-                if 0 < ev_time < self.mne.duration:
-                    self.mne.plt.addItem(event_line)
+                self.mne.plt.addItem(event_line)
         else:
             self.mne.events_visible = False
 
@@ -3607,13 +3605,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         self._redraw(update_data=True)
 
-        # Update annotations
-        if not self.mne.is_epochs:
-            self._update_annotations_xrange(xrange)
-
-        # Update Events
-        self._update_events_xrange(xrange)
-
         # Update Time-Bar
         self.mne.ax_hscroll.update_value(xrange[0])
 
@@ -3622,47 +3613,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Update Scalebars
         self._update_scalebar_x_positions()
-
-    def _update_events_xrange(self, xrange):
-        """Add or remove event-lines depending on view-range.
-
-        This has proven to be more performant (and scalable)
-        than adding all event-lines to plt(the Scene)
-        and letting pyqtgraph/Qt handle it.
-        """
-        if self.mne.events_visible:
-            for ev_line in self.mne.event_lines:
-                if xrange[0] < ev_line.pos().x() < xrange[1]:
-                    if ev_line not in self.mne.plt.items:
-                        self.mne.plt.addItem(ev_line)
-                else:
-                    if ev_line in self.mne.plt.items:
-                        self.mne.plt.removeItem(ev_line)
-
-    def _update_annotations_xrange(self, xrange):
-        """Add or remove annotation-regions depending on view-range.
-
-        This has proven to be more performant (and scalable)
-        than adding all annotations to plt(the Scene)
-        and letting pyqtgraph/Qt handle it.
-        """
-        if self.mne.annotations_visible:
-            for region in self.mne.regions:
-                if self.mne.visible_annotations[region.description]:
-                    rmin, rmax = region.getRegion()
-                    xmin, xmax = xrange
-                    comparisons = [rmin < xmin,
-                                   rmin < xmax,
-                                   rmax < xmin,
-                                   rmax < xmax]
-                    if all(comparisons) or not any(comparisons):
-                        if region in self.mne.plt.items:
-                            self.mne.plt.removeItem(region)
-                            self.mne.plt.removeItem(region.label_item)
-                    else:
-                        if region not in self.mne.plt.items:
-                            self.mne.plt.addItem(region)
-                            self.mne.plt.addItem(region.label_item)
 
     def _yrange_changed(self, _, yrange):
         if not self.mne.butterfly:
@@ -3973,17 +3923,16 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if not region:
             region = AnnotRegion(self.mne, description=description,
                                  values=(plot_onset, plot_onset + duration))
-        if (any([self.mne.t_start < v < self.mne.t_start + self.mne.duration
-                 for v in [plot_onset, plot_onset + duration]]) and
-                region not in self.mne.plt.items):
-            self.mne.plt.addItem(region)
-            self.mne.plt.addItem(region.label_item)
+        # Add region to list and plot
+        self.mne.regions.append(region)
+        self.mne.plt.addItem(region)
+        self.mne.plt.addItem(region.label_item)
+
+        # Connect signals of region
         region.regionChangeFinished.connect(self._region_changed)
         region.gotSelected.connect(self._region_selected)
         region.removeRequested.connect(self._remove_region)
         self.mne.viewbox.sigYRangeChanged.connect(region.update_label_pos)
-        self.mne.regions.append(region)
-
         region.update_label_pos()
 
     def _remove_region(self, region, from_annot=True):
@@ -4108,17 +4057,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.visible_annotations[descr] = visible
         self._update_regions_visible()
 
-        # Update Plot
-        if visible:
-            self._update_annotations_xrange((self.mne.t_start,
-                                             self.mne.t_start +
-                                             self.mne.duration))
-        else:
-            for region in [r for r in self.mne.regions
-                           if r in self.mne.plt.items]:
-                self.mne.plt.removeItem(region)
-                self.mne.plt.removeItem(region.label_item)
-
     def _toggle_annotations(self):
         self.mne.annotations_visible = not self.mne.annotations_visible
         self._set_annotations_visible(self.mne.annotations_visible)
@@ -4231,15 +4169,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         for event_line in self.mne.event_lines:
             event_line.setVisible(visible)
 
-        # Update Plot
-        if visible:
-            self._update_events_xrange((self.mne.t_start,
-                                        self.mne.t_start +
-                                        self.mne.duration))
-        else:
-            for event_line in [evl for evl in self.mne.event_lines
-                               if evl in self.mne.plt.items]:
-                self.mne.plt.removeItem(event_line)
         self.mne.overview_bar.update_events()
 
     def _toggle_events(self):
