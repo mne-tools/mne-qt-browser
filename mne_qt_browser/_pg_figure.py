@@ -1059,7 +1059,14 @@ class OverviewBar(QGraphicsView):
 
     def mouseMoveEvent(self, event):
         """Customize mouse move events."""
-        self._set_range_from_pos(event.pos())
+        # This temporarily circumvents a bug, which only appears on windows
+        # and when pyqt>=5.14.2 is installed from conda-forge.
+        # It leads to receiving mouseMoveEvents all the time when the Mouse
+        # is moved through the OverviewBar, even when now MouseBUtton is
+        # pressed. Dragging the mouse on OverviewBar is then
+        # not possible anymore.
+        if not sys.platform.startswith("win32"):
+            self._set_range_from_pos(event.pos())
 
     def _fit_bg_img(self):
         # Remove previous item from scene
