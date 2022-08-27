@@ -1065,7 +1065,7 @@ class OverviewBar(QGraphicsView):
         # is moved through the OverviewBar, even when now MouseBUtton is
         # pressed. Dragging the mouse on OverviewBar is then
         # not possible anymore.
-        if not sys.platform.startswith("win32"):
+        if not platform.system() == 'Windows':
             self._set_range_from_pos(event.pos())
 
     def _fit_bg_img(self):
@@ -2897,7 +2897,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if self.mne.use_opengl is None:  # default: opt-in
             # OpenGL needs to be enabled on macOS
             # (https://github.com/mne-tools/mne-qt-browser/issues/53)
-            default = 'true' if sys.platform == 'darwin' else ''
+            default = 'true' if platform.system() == 'Darwin' else ''
             config_val = get_config(opengl_key, default).lower()
             self.mne.use_opengl = (config_val == 'true')
 
@@ -2909,7 +2909,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 # it can lead to segfaults. If a user really knows what they
                 # are doing, they can pass use_opengl=False (or set
                 # MNE_BROWSER_USE_OPENGL=false)
-                if sys.platform == 'darwin':
+                if platform.system() == 'Darwin':
                     raise RuntimeError(
                         'Plotting on macOS without OpenGL may be unstable! '
                         'We recommend installing PyOpenGL, but it could not '
