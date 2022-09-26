@@ -1977,10 +1977,9 @@ class SelectionDialog(_BaseDialog):
             self.channel_fig.lasso.callbacks.clear()
         for chkbx in self.chkbxs.values():
             _disconnect(chkbx.clicked, allow_error=True)
-        if hasattr(self, 'main'):
-            main = self.weakmain()
-            if main is not None:
-                main.close()
+        main = self.weakmain()
+        if main is not None:
+            main.close()
 
 
 class AnnotRegion(LinearRegionItem):
