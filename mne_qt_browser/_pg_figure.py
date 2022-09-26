@@ -15,7 +15,6 @@ from pathlib import Path
 from ast import literal_eval
 from collections import OrderedDict
 from copy import copy
-from functools import partial
 from weakref import WeakMethod
 from os.path import getsize
 
@@ -1599,8 +1598,7 @@ class SettingsDialog(_BaseDialog):
         self.ds_method_cmbx.addItems(['subsample', 'mean', 'peak'])
         self.ds_method_cmbx.currentTextChanged.connect(
             _methpartial(self._value_changed, value_name='ds_method'))
-        self.ds_method_cmbx.setCurrentText(
-                self.mne.ds_method)
+        self.ds_method_cmbx.setCurrentText(self.mne.ds_method)
         layout.addRow('ds_method', self.ds_method_cmbx)
 
         self.scroll_sensitivity_slider = QSlider(Qt.Horizontal)
@@ -2321,9 +2319,10 @@ class AnnotationDock(QDockWidget):
         if ans == QMessageBox.Yes:
             self._remove_description(rm_description)
 
+    def _set_visible_region(self, state, *, description):
+        self.mne.visible_annotations[description] = bool(state)
+
     def _select_annotations(self):
-        def _set_visible_region(state, description):
-            self.mne.visible_annotations[description] = bool(state)
 
         def _select_all():
             for chkbx in chkbxs:
@@ -2346,8 +2345,8 @@ class AnnotationDock(QDockWidget):
         for des in self.mne.visible_annotations:
             chkbx = QCheckBox(des)
             chkbx.setChecked(self.mne.visible_annotations[des])
-            chkbx.stateChanged.connect(partial(_set_visible_region,
-                                               description=des))
+            chkbx.stateChanged.connect(
+                _methpartial(self._set_visible_region, description=des))
             chkbxs.append(chkbx)
             scroll_layout.addWidget(chkbx)
 
