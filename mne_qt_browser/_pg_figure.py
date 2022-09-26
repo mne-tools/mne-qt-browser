@@ -2654,12 +2654,8 @@ def _methpartial(meth, /, **kwargs):
     def call(*args_):
         meth_ = meth()
         if meth_ is not None:
-            try:
-                return meth_(*args_, **kwargs)
-            except Exception:
-                print(*args_)
-                print(kwargs)
-                raise
+            return meth_(*args_, **kwargs)
+
     return call
 
 
