@@ -16,6 +16,7 @@ from pathlib import Path
 from ast import literal_eval
 from collections import OrderedDict
 from copy import copy
+from functools import partial
 from os.path import getsize
 
 import numpy as np
@@ -2141,7 +2142,7 @@ def _select_all(chkbxs):
         chkbx.setChecked(True)
 
 
-def _clear_all(chekbxs):
+def _clear_all(chkbxs):
     for chkbx in chkbxs:
         chkbx.setChecked(False)
 
@@ -2251,7 +2252,8 @@ class AnnotationDock(QDockWidget):
             ed_region.update_description(new_des)
         # Update containers with annotation-attributes
         self.mne.new_annotation_labels.remove(old_des)
-        self.mne.new_annotation_labels = self.weakmain()._get_annotation_labels()
+        self.mne.new_annotation_labels = \
+            self.weakmain()._get_annotation_labels()
         self.mne.visible_annotations[new_des] = \
             self.mne.visible_annotations.pop(old_des)
         self.mne.annotation_segment_colors[new_des] = \
@@ -2266,7 +2268,8 @@ class AnnotationDock(QDockWidget):
     def _edit_description_selected(self, new_des):
         """Update description only of selected region."""
         old_des = self.mne.selected_region.description
-        idx = self.weakmain()._get_onset_idx(self.mne.selected_region.getRegion()[0])
+        idx = self.weakmain()._get_onset_idx(
+            self.mne.selected_region.getRegion()[0])
         # Update regions & annotations
         self.mne.inst.annotations.description[idx] = new_des
         self.mne.selected_region.update_description(new_des)
@@ -2367,12 +2370,11 @@ class AnnotationDock(QDockWidget):
         bt_layout = QGridLayout()
 
         all_bt = QPushButton('All')
-        from functools import partial
-        #all_bt.clicked.connect(partial(_select_all, chkbxs=chekbxs))
+        all_bt.clicked.connect(partial(_select_all, chkbxs=chekbxs))
         bt_layout.addWidget(all_bt, 0, 0)
 
         clear_bt = QPushButton('Clear')
-        #clear_bt.clicked.connect(partial(_clear_all, chkbxs=chkbxs))
+        clear_bt.clicked.connect(partial(_clear_all, chkbxs=chkbxs))
         bt_layout.addWidget(clear_bt, 0, 1)
 
         ok_bt = QPushButton('Ok')
