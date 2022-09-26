@@ -1970,9 +1970,7 @@ class SelectionDialog(_BaseDialog):
             # MNE >= 1.0
             self.channel_fig.lasso.callbacks.clear()
         for chkbx in self.chkbxs.values():
-            print(chkbx.text())
-            print('*' * 80)
-            _disconnect(chkbx.clicked)
+            _disconnect(chkbx.clicked, allow_error=True)
         if hasattr(self, 'main'):
             self.main.close()
 
