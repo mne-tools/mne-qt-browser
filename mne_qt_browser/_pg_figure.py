@@ -1970,6 +1970,8 @@ class SelectionDialog(_BaseDialog):
             # MNE >= 1.0
             self.channel_fig.lasso.callbacks.clear()
         for chkbx in self.chkbxs.values():
+            print(chkbx.text())
+            print('*' * 80)
             _disconnect(chkbx.clicked)
         if hasattr(self, 'main'):
             self.main.close()
@@ -2647,7 +2649,7 @@ def _screen_geometry(widget):
         return geometry
 
 
-def _methpartial(meth, /, **kwargs):
+def _methpartial(meth, **kwargs):
     """Use WeakMethod to create a partial method."""
     meth = WeakMethod(meth)
 
