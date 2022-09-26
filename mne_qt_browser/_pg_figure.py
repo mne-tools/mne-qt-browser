@@ -16,6 +16,7 @@ from ast import literal_eval
 from collections import OrderedDict
 from copy import copy
 from functools import partial
+from weakref import WeakMethod
 from os.path import getsize
 
 import numpy as np
@@ -1575,7 +1576,7 @@ class SettingsDialog(_BaseDialog):
         self.downsampling_box.setMinimum(0)
         self.downsampling_box.setSpecialValueText('Auto')
         self.downsampling_box.valueChanged.connect(partial(
-            self._value_changed, value_name='downsampling'))
+            WeakMethod(self._value_changed), value_name='downsampling'))
         self.downsampling_box.setValue(0 if self.mne.downsampling == 'auto'
                                        else self.mne.downsampling)
         layout.addRow('downsampling', self.downsampling_box)
@@ -1596,8 +1597,8 @@ class SettingsDialog(_BaseDialog):
                 'pyqtgraph)</i><br>'
                 'Default is "peak".')
         self.ds_method_cmbx.addItems(['subsample', 'mean', 'peak'])
-        self.ds_method_cmbx.currentTextChanged.connect(partial(
-                self._value_changed, value_name='ds_method'))
+        self.ds_method_cmbx.currentTextChanged.connect(
+            partial(WeakMethod(self._value_changed), value_name='ds_method'))
         self.ds_method_cmbx.setCurrentText(
                 self.mne.ds_method)
         layout.addRow('ds_method', self.ds_method_cmbx)
@@ -1608,8 +1609,9 @@ class SettingsDialog(_BaseDialog):
         self.scroll_sensitivity_slider.setToolTip('Set the sensitivity of '
                                                   'the scrolling in '
                                                   'horizontal direction.')
-        self.scroll_sensitivity_slider.valueChanged.connect(partial(
-            self._value_changed, value_name='scroll_sensitivity'))
+        self.scroll_sensitivity_slider.valueChanged.connect(
+            partial(WeakMethod(self._value_changed),
+                    value_name='scroll_sensitivity'))
         # Set default
         self.scroll_sensitivity_slider.setValue(self.mne.scroll_sensitivity)
         layout.addRow('horizontal scroll sensitivity',
@@ -1734,7 +1736,8 @@ class ProjDialog(_BaseDialog):
         for idx, label in enumerate(labels):
             chkbx = QCheckBox(label)
             chkbx.setChecked(bool(self.mne.projs_on[idx]))
-            chkbx.clicked.connect(partial(self._proj_changed, idx=idx))
+            chkbx.clicked.connect(
+                partial(WeakMethod(self._proj_changed), idx=idx))
             if self.mne.projs_active[idx]:
                 chkbx.setEnabled(False)
             self.checkboxes.append(chkbx)
@@ -1837,7 +1840,8 @@ class SelectionDialog(_BaseDialog):
         self.chkbxs = OrderedDict()
         for label in selections_dict:
             chkbx = QCheckBox(label)
-            chkbx.clicked.connect(partial(self._chkbx_changed, label))
+            chkbx.clicked.connect(
+                partial(WeakMethod(self._chkbx_changed), label))
             self.chkbxs[label] = chkbx
             layout.addWidget(chkbx)
 
@@ -2645,11 +2649,12 @@ def _screen_geometry(widget):
         return geometry
 
 
-def _disconnect(sig):
+def _disconnect(sig, *, allow_error=False):
     try:
         sig.disconnect()
     except (TypeError, RuntimeError):  # if there are no connections, ignore it
-        pass
+        if not allow_error:
+            raise
 
 
 class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
@@ -2981,31 +2986,37 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         adecr_time = QAction(
             QIcon.fromTheme("less_time"), '- Time', parent=self)
-        adecr_time.triggered.connect(partial(self.change_duration, -0.2))
+        adecr_time.triggered.connect(
+            partial(WeakMethod(self.change_duration), -0.2))
         self.mne.toolbar.addAction(adecr_time)
         aincr_time = QAction(
             QIcon.fromTheme("more_time"), '+ Time', parent=self)
-        aincr_time.triggered.connect(partial(self.change_duration, 0.25))
+        aincr_time.triggered.connect(
+            partial(WeakMethod(self.change_duration), 0.25))
         self.mne.toolbar.addAction(aincr_time)
         self.mne.toolbar.addSeparator()
 
         adecr_nchan = QAction(
             QIcon.fromTheme("less_channels"), '- Channels', parent=self)
-        adecr_nchan.triggered.connect(partial(self.change_nchan, -10))
+        adecr_nchan.triggered.connect(
+            partial(WeakMethod(self.change_nchan), -10))
         self.mne.toolbar.addAction(adecr_nchan)
         aincr_nchan = QAction(
             QIcon.fromTheme("more_channels"), '+ Channels', parent=self)
-        aincr_nchan.triggered.connect(partial(self.change_nchan, 10))
+        aincr_nchan.triggered.connect(
+            partial(WeakMethod(self.change_nchan), 10))
         self.mne.toolbar.addAction(aincr_nchan)
         self.mne.toolbar.addSeparator()
 
         adecr_nchan = QAction(
             QIcon.fromTheme("zoom_out"), 'Zoom out', parent=self)
-        adecr_nchan.triggered.connect(partial(self.scale_all, 4 / 5))
+        adecr_nchan.triggered.connect(
+            partial(WeakMethod(self.scale_all), 4 / 5))
         self.mne.toolbar.addAction(adecr_nchan)
         aincr_nchan = QAction(
             QIcon.fromTheme("zoom_in"), 'Zoom in', parent=self)
-        aincr_nchan.triggered.connect(partial(self.scale_all, 5 / 4))
+        aincr_nchan.triggered.connect(
+            partial(WeakMethod(self.scale_all), 5 / 4))
         self.mne.toolbar.addAction(aincr_nchan)
         self.mne.toolbar.addSeparator()
 
@@ -4510,7 +4521,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 _disconnect(self.mne.plt.sigYRangeChanged)
             if hasattr(self.mne, 'toolbar'):
                 for action in self.mne.toolbar.actions():
-                    _disconnect(action.triggered)
+                    allow_error = action.text() == ''
+                    _disconnect(action.triggered, allow_error=allow_error)
             # Save settings going into QSettings.
             for qsetting in qsettings_params:
                 value = getattr(self.mne, qsetting)
