@@ -78,7 +78,7 @@ jobs:
           set -e
           python -m pip install --upgrade pip
           # git clone -b ${MNE_BRANCH} --single-branch --depth=1 --branch main https://github.com/mne-tools/mne-python.git ../mne-python
-          git clone -b ${MNE_BRANCH} --single-branch --depth=1 --branch weak https://github.com/larsoner/mne-python.git ../mne-python
+          git clone -b ${MNE_BRANCH} --single-branch --depth=1 --branch check https://github.com/larsoner/mne-python.git ../mne-python
           python -m pip install -qe ../mne-python
           python -m pip install -ve .${PIP_OPTION} -r requirements.txt -r requirements_testing.txt PyQt5
       - name: Downgrade pytest for mne==0.24
