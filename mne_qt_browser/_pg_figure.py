@@ -1575,8 +1575,8 @@ class SettingsDialog(_BaseDialog):
                                          ' Default is 1.')
         self.downsampling_box.setMinimum(0)
         self.downsampling_box.setSpecialValueText('Auto')
-        self.downsampling_box.valueChanged.connect(partial(
-            WeakMethod(self._value_changed), value_name='downsampling'))
+        self.downsampling_box.valueChanged.connect(_methpartial(
+            self._value_changed, value_name='downsampling'))
         self.downsampling_box.setValue(0 if self.mne.downsampling == 'auto'
                                        else self.mne.downsampling)
         layout.addRow('downsampling', self.downsampling_box)
@@ -1598,7 +1598,7 @@ class SettingsDialog(_BaseDialog):
                 'Default is "peak".')
         self.ds_method_cmbx.addItems(['subsample', 'mean', 'peak'])
         self.ds_method_cmbx.currentTextChanged.connect(
-            partial(WeakMethod(self._value_changed), value_name='ds_method'))
+            _methpartial(self._value_changed, value_name='ds_method'))
         self.ds_method_cmbx.setCurrentText(
                 self.mne.ds_method)
         layout.addRow('ds_method', self.ds_method_cmbx)
@@ -1610,8 +1610,7 @@ class SettingsDialog(_BaseDialog):
                                                   'the scrolling in '
                                                   'horizontal direction.')
         self.scroll_sensitivity_slider.valueChanged.connect(
-            partial(WeakMethod(self._value_changed),
-                    value_name='scroll_sensitivity'))
+            _methpartial(self._value_changed, value_name='scroll_sensitivity'))
         # Set default
         self.scroll_sensitivity_slider.setValue(self.mne.scroll_sensitivity)
         layout.addRow('horizontal scroll sensitivity',
@@ -1736,8 +1735,7 @@ class ProjDialog(_BaseDialog):
         for idx, label in enumerate(labels):
             chkbx = QCheckBox(label)
             chkbx.setChecked(bool(self.mne.projs_on[idx]))
-            chkbx.clicked.connect(
-                partial(WeakMethod(self._proj_changed), idx=idx))
+            chkbx.clicked.connect(_methpartial(self._proj_changed, idx=idx))
             if self.mne.projs_active[idx]:
                 chkbx.setEnabled(False)
             self.checkboxes.append(chkbx)
@@ -1841,7 +1839,7 @@ class SelectionDialog(_BaseDialog):
         for label in selections_dict:
             chkbx = QCheckBox(label)
             chkbx.clicked.connect(
-                partial(WeakMethod(self._chkbx_changed), label))
+                _methpartial(self._chkbx_changed, label=label))
             self.chkbxs[label] = chkbx
             layout.addWidget(chkbx)
 
@@ -2649,6 +2647,22 @@ def _screen_geometry(widget):
         return geometry
 
 
+def _methpartial(meth, /, **kwargs):
+    """Use WeakMethod to create a partial method."""
+    meth = WeakMethod(meth)
+
+    def call(*args_):
+        meth_ = meth()
+        if meth_ is not None:
+            try:
+                return meth_(*args_, **kwargs)
+            except Exception:
+                print(*args_)
+                print(kwargs)
+                raise
+    return call
+
+
 def _disconnect(sig, *, allow_error=False):
     try:
         sig.disconnect()
@@ -2987,36 +3001,36 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         adecr_time = QAction(
             QIcon.fromTheme("less_time"), '- Time', parent=self)
         adecr_time.triggered.connect(
-            partial(WeakMethod(self.change_duration), -0.2))
+            _methpartial(self.change_duration, step=-0.2))
         self.mne.toolbar.addAction(adecr_time)
         aincr_time = QAction(
             QIcon.fromTheme("more_time"), '+ Time', parent=self)
         aincr_time.triggered.connect(
-            partial(WeakMethod(self.change_duration), 0.25))
+            _methpartial(self.change_duration, step=0.25))
         self.mne.toolbar.addAction(aincr_time)
         self.mne.toolbar.addSeparator()
 
         adecr_nchan = QAction(
             QIcon.fromTheme("less_channels"), '- Channels', parent=self)
         adecr_nchan.triggered.connect(
-            partial(WeakMethod(self.change_nchan), -10))
+            _methpartial(self.change_nchan, step=-10))
         self.mne.toolbar.addAction(adecr_nchan)
         aincr_nchan = QAction(
             QIcon.fromTheme("more_channels"), '+ Channels', parent=self)
         aincr_nchan.triggered.connect(
-            partial(WeakMethod(self.change_nchan), 10))
+            _methpartial(self.change_nchan, step=10))
         self.mne.toolbar.addAction(aincr_nchan)
         self.mne.toolbar.addSeparator()
 
         adecr_nchan = QAction(
             QIcon.fromTheme("zoom_out"), 'Zoom out', parent=self)
         adecr_nchan.triggered.connect(
-            partial(WeakMethod(self.scale_all), 4 / 5))
+            _methpartial(self.scale_all, step=4 / 5))
         self.mne.toolbar.addAction(adecr_nchan)
         aincr_nchan = QAction(
             QIcon.fromTheme("zoom_in"), 'Zoom in', parent=self)
         aincr_nchan.triggered.connect(
-            partial(WeakMethod(self.scale_all), 5 / 4))
+            _methpartial(self.scale_all, step=5 / 4))
         self.mne.toolbar.addAction(aincr_nchan)
         self.mne.toolbar.addSeparator()
 
@@ -3148,6 +3162,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             'home': {
                 'alias': dur_keys[0],
                 'qt_key': Qt.Key_Home,
+                'kw': 'step',
                 'slot': [self.change_duration],
                 'parameter': [-0.2],
                 'description': [f'Decrease duration ({hscroll_type})']
@@ -3155,6 +3170,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             'end': {
                 'alias': dur_keys[1],
                 'qt_key': Qt.Key_End,
+                'kw': 'step',
                 'slot': [self.change_duration],
                 'parameter': [0.25],
                 'description': [f'Increase duration ({hscroll_type})']
@@ -3163,6 +3179,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'alias': ch_keys[0],
                 'qt_key': Qt.Key_PageDown,
                 'modifier': [None, 'Shift'],
+                'kw': 'step',
                 'slot': [self.change_nchan],
                 'parameter': [-1, -10],
                 'description': ['Decrease shown channels (1)',
@@ -3172,6 +3189,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'alias': ch_keys[1],
                 'qt_key': Qt.Key_PageUp,
                 'modifier': [None, 'Shift'],
+                'kw': 'step',
                 'slot': [self.change_nchan],
                 'parameter': [1, 10],
                 'description': ['Increase shown channels (1)',
@@ -3180,18 +3198,21 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             '-': {
                 'qt_key': Qt.Key_Minus,
                 'slot': [self.scale_all],
+                'kw': 'step',
                 'parameter': [4 / 5],
                 'description': ['Decrease Scale']
             },
             '+': {
                 'qt_key': Qt.Key_Plus,
                 'slot': [self.scale_all],
+                'kw': 'step',
                 'parameter': [5 / 4],
                 'description': ['Increase Scale']
             },
             '=': {
                 'qt_key': Qt.Key_Equal,
                 'slot': [self.scale_all],
+                'kw': 'step',
                 'parameter': [5 / 4],
                 'description': ['Increase Scale']
             },
@@ -3362,7 +3383,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if not self.mne.overview_bar.isVisible():
             self._toggle_overview_bar()
 
-    def scale_all(self, step):
+    def scale_all(self, checked=False, *, step):
         """Scale all traces by multiplying with step."""
         self.mne.scale_factor *= step
 
@@ -3429,7 +3450,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
             self.mne.plt.setYRange(ymin, ymax, padding=0)
 
-    def change_duration(self, step):
+    def change_duration(self, checked=False, *, step):
         """Change duration by step."""
         xmin, xmax = self.mne.viewbox.viewRange()[0]
 
@@ -3461,7 +3482,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.ax_hscroll.update_duration()
         self.mne.plt.setXRange(xmin, xmax, padding=0)
 
-    def change_nchan(self, step):
+    def change_nchan(self, checked=False, *, step):
         """Change number of channels by step."""
         if not self.mne.butterfly:
             if step == '+full':
@@ -4333,7 +4354,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 if 'parameter' in key_dict:
                     param_idx = (mod_idx if mod_idx <
                                  len(key_dict['parameter']) else 0)
-                    slot(key_dict['parameter'][param_idx])
+                    val = key_dict['parameter'][param_idx]
+                    if 'kw' in key_dict:
+                        slot(**{kw: val})
+                    else:
+                        slot(val)
                 else:
                     slot()
 
