@@ -4352,7 +4352,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                                  len(key_dict['parameter']) else 0)
                     val = key_dict['parameter'][param_idx]
                     if 'kw' in key_dict:
-                        slot(**{kw: val})
+                        slot(**{key_dict['kw']: val})
                     else:
                         slot(val)
                 else:
