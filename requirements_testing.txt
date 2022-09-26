@@ -7,3 +7,4 @@ tqdm
 sklearn  # for testing ICA
 pytest-harvest
 pytest-error-for-skips
+https://github.com/sphinx-gallery/sphinx-gallery.git  # for testing scrapers
