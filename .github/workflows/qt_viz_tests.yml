@@ -199,7 +199,7 @@ jobs:
           mne sys_info -pd
           echo ${QT_LIB}:
           mne sys_info -pd | grep "^qtpy: .*{${QT_LIB}=.*}$"
-      - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/viz
+      - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/viz ../mne-python/mne/report
         name: Run MNE-Tests
       - run: pytest --error-for-skips mne_qt_browser/tests/test_pg_specific.py
         name: Run pyqtgraph-specific tests
