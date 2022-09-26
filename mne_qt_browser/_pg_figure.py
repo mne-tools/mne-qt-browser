@@ -2370,7 +2370,7 @@ class AnnotationDock(QDockWidget):
         bt_layout = QGridLayout()
 
         all_bt = QPushButton('All')
-        all_bt.clicked.connect(partial(_select_all, chkbxs=chekbxs))
+        all_bt.clicked.connect(partial(_select_all, chkbxs=chkbxs))
         bt_layout.addWidget(all_bt, 0, 0)
 
         clear_bt = QPushButton('Clear')
@@ -2385,6 +2385,8 @@ class AnnotationDock(QDockWidget):
 
         select_dlg.setLayout(layout)
         select_dlg.exec()
+        all_bt.clicked.disconnect()
+        clear_bt.clicked.disconnect()
 
         self.weakmain()._update_regions_visible()
 
