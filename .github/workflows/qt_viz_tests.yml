@@ -77,7 +77,7 @@ jobs:
         run: |  # use MNE main to ensure test files are available
           set -e
           python -m pip install --upgrade pip
-          git clone -b ${MNE_BRANCH} --single-branch --depth=1 https://github.com/mne-tools/mne-python.git ../mne-python
+          git clone -b ${MNE_BRANCH} --single-branch --depth=1 --branch main https://github.com/mne-tools/mne-python.git ../mne-python
           python -m pip install -qe ../mne-python
           python -m pip install -ve .${PIP_OPTION} -r requirements.txt -r requirements_testing.txt PyQt5
       - name: Downgrade pytest for mne==0.24
@@ -115,7 +115,7 @@ jobs:
         if: runner.os == 'Linux' && contains(matrix.opengl, 'opengl')
       - name: Show system information
         run: mne sys_info
-      - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/viz
+      - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/viz ../mne-python/mne/report
         name: Run MNE-Tests
       - run: pytest --error-for-skips mne_qt_browser/tests/test_pg_specific.py
         name: Run pyqtgraph-specific tests
@@ -171,7 +171,7 @@ jobs:
         run: |  # use MNE main to ensure test files are available
           set -e
           python -m pip install --upgrade pip
-          git clone -b ${MNE_BRANCH} --single-branch --depth=1 https://github.com/mne-tools/mne-python.git ../mne-python
+          git clone -b ${MNE_BRANCH} --single-branch --depth=1 --branch main https://github.com/mne-tools/mne-python.git ../mne-python
           python -m pip install -qe ../mne-python
           python -m pip install -ve .${PIP_OPTION} -r requirements.txt -r requirements_testing.txt $QT_LIB
       - shell: bash -el {0}
@@ -197,7 +197,7 @@ jobs:
           mne sys_info -pd
           echo ${QT_LIB}:
           mne sys_info -pd | grep "^qtpy: .*{${QT_LIB}=.*}$"
-      - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/viz
+      - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/viz ../mne-python/mne/report
         name: Run MNE-Tests
       - run: pytest --error-for-skips mne_qt_browser/tests/test_pg_specific.py
         name: Run pyqtgraph-specific tests

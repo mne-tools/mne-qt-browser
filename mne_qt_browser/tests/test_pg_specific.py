@@ -207,7 +207,9 @@ def test_pg_toolbar_time_plus_minus(raw_orig, pg_backend):
 
     min_duration = 3 * np.diff(fig.mne.inst.times[:2])[0]  # hard code.
     xmin, xmax = fig.mne.viewbox.viewRange()[0]
-    while xmax - xmin > min_duration:
+    for _ in range(100):
+        if xmax - xmin <= min_duration:
+            break
         fig._fake_click_on_toolbar_action('- Time', wait_after=20)
         xmin, xmax = fig.mne.viewbox.viewRange()[0]
     assert xmax - xmin == min_duration
@@ -219,7 +221,9 @@ def test_pg_toolbar_time_plus_minus(raw_orig, pg_backend):
     assert xmax_new - (xmax + (xmax - xmin * step)) < eps
 
     xmin, xmax = fig.mne.viewbox.viewRange()[0]
-    while xmax + fig.mne.duration * step < fig.mne.xmax:
+    for _ in range(100):
+        if xmax + fig.mne.duration * step >= fig.mne.xmax:
+            break
         fig._fake_click_on_toolbar_action('+ Time', wait_after=20)
         xmin, xmax = fig.mne.viewbox.viewRange()[0]
 
@@ -266,7 +270,9 @@ def test_pg_toolbar_channels_plus_minus(raw_orig, pg_backend):
     if fig.mne.butterfly is True:
         fig._fake_keypress('b')  # toggle butterfly off
 
-    while ymax - ymin > 2:
+    for _ in range(10):
+        if ymax - ymin <= 2:
+            break
         fig._fake_click_on_toolbar_action('- Channels', wait_after=40)
         ymin, ymax = fig.mne.viewbox.viewRange()[1]
     assert ymax - ymin == 2

@@ -11,6 +11,7 @@ import gc
 import math
 import platform
 import sys
+import weakref
 from pathlib import Path
 from ast import literal_eval
 from collections import OrderedDict
@@ -169,8 +170,9 @@ class DataTrace(PlotCurveItem):
 
     def __init__(self, main, ch_idx, child_idx=None, parent_trace=None):
         super().__init__()
-        self.main = main
+        self.weakmain = weakref.ref(main)
         self.mne = main.mne
+        del main
 
         # Set clickable with small area around trace to make clicking easier.
         self.setClickable(True, 12)
@@ -255,7 +257,7 @@ class DataTrace(PlotCurveItem):
                 # Add child traces if necessary
                 if trace_diff > 0:
                     for cix in range(n_childs, n_childs + trace_diff):
-                        child = DataTrace(self.main, self.ch_idx,
+                        child = DataTrace(self.weakmain(), self.ch_idx,
                                           child_idx=cix, parent_trace=self)
                         self.child_traces.append(child)
                 elif trace_diff < 0:
@@ -370,7 +372,7 @@ class DataTrace(PlotCurveItem):
         """Toggle bad status."""
         # Toggle bad epoch
         if self.mne.is_epochs and x is not None:
-            epoch_idx, color = self.main._toggle_bad_epoch(x)
+            epoch_idx, color = self.weakmain()._toggle_bad_epoch(x)
 
             # Update epoch color
             if color != 'none':
@@ -402,8 +404,8 @@ class DataTrace(PlotCurveItem):
 
         # Toggle bad channel
         else:
-            bad_color, pick, marked_bad = self.main._toggle_bad_channel(
-                    self.range_idx)
+            bad_color, pick, marked_bad = self.weakmain()._toggle_bad_channel(
+                self.range_idx)
 
             # Update line color status
             self.isbad = not self.isbad
@@ -429,7 +431,7 @@ class DataTrace(PlotCurveItem):
                 self.update_data()
 
             # Update channel-axis
-            self.main._update_yaxis_labels()
+            self.weakmain()._update_yaxis_labels()
 
             # Update overview-bar
             self.mne.overview_bar.update_bad_channels()
@@ -526,8 +528,9 @@ class ChannelAxis(AxisItem):
     """The Y-Axis displaying the channel-names."""
 
     def __init__(self, main):
-        self.main = main
+        self.weakmain = weakref.ref(main)
         self.mne = main.mne
+        del main
         self.ch_texts = OrderedDict()
         super().__init__(orientation='left')
         self.style['autoReduceTextSpace'] = False
@@ -543,7 +546,8 @@ class ChannelAxis(AxisItem):
         """Customize strings of axis values."""
         # Get channel-names
         if self.mne.butterfly and self.mne.fig_selection is not None:
-            tick_strings = list(self.main._make_butterfly_selections_dict())
+            tick_strings = list(
+                self.weakmain()._make_butterfly_selections_dict())
         elif self.mne.butterfly:
             _, ixs, _ = np.intersect1d(DATA_CH_TYPES_ORDER,
                                        self.mne.ch_types, return_indices=True)
@@ -599,7 +603,7 @@ class ChannelAxis(AxisItem):
             if event.button() == Qt.LeftButton:
                 trace.toggle_bad()
             elif event.button() == Qt.RightButton:
-                self.main._create_ch_context_fig(trace.range_idx)
+                self.weakmain()._create_ch_context_fig(trace.range_idx)
 
     def get_labels(self):
         """Get labels for testing."""
@@ -785,8 +789,9 @@ class OverviewBar(QGraphicsView):
         self._scene = QGraphicsScene()
         super().__init__(self._scene)
         assert self.scene() is self._scene
-        self.main = main
+        self.weakmain = weakref.ref(main)
         self.mne = main.mne
+        del main
         self.bg_img = None
         self.bg_pxmp = None
         self.bg_pxmp_item = None
@@ -1210,7 +1215,7 @@ class OverviewBar(QGraphicsView):
         return x, y
 
     def keyPressEvent(self, event):
-        self.main.keyPressEvent(event)
+        self.weakmain().keyPressEvent(event)
 
 
 class RawViewBox(ViewBox):
@@ -1219,8 +1224,9 @@ class RawViewBox(ViewBox):
     def __init__(self, main):
         super().__init__(invertY=True)
         self.enableAutoRange(enable=False, x=False, y=False)
-        self.main = main
+        self.weakmain = weakref.ref(main)
         self.mne = main.mne
+        del main
         self._drag_start = None
         self._drag_region = None
 
@@ -1269,10 +1275,11 @@ class RawViewBox(ViewBox):
                         self._drag_region.setRegion((min(merge_values),
                                                      max(merge_values)))
                     for rm_region in rm_regions:
-                        self.main._remove_region(rm_region, from_annot=False)
-                    self.main._add_region(plot_onset, duration,
-                                          self.mne.current_description,
-                                          self._drag_region)
+                        self.weakmain()._remove_region(
+                            rm_region, from_annot=False)
+                    self.weakmain()._add_region(
+                        plot_onset, duration, self.mne.current_description,
+                        self._drag_region)
                     self._drag_region.select(True)
 
                     # Update Overview-Bar
@@ -1282,10 +1289,10 @@ class RawViewBox(ViewBox):
                     self._drag_region.setRegion((self._drag_start, x_to))
 
             elif event.isFinish():
-                self.main.message_box(text='No description!',
-                                      info_text='No description is given, '
-                                                'add one!',
-                                      icon=QMessageBox.Warning)
+                self.weakmain().message_box(
+                    text='No description!',
+                    info_text='No description is given, add one!',
+                    icon=QMessageBox.Warning)
 
     def mouseClickEvent(self, event):
         """Customize mouse click events."""
@@ -1293,22 +1300,22 @@ class RawViewBox(ViewBox):
         # super().mouseClickEvent(event)
         if not self.mne.annotation_mode:
             if event.button() == Qt.LeftButton:
-                self.main._add_vline(self.mapSceneToView(
+                self.weakmain()._add_vline(self.mapSceneToView(
                         event.scenePos()).x())
             elif event.button() == Qt.RightButton:
-                self.main._remove_vline()
+                self.weakmain()._remove_vline()
 
     def wheelEvent(self, ev, axis=None):
         """Customize mouse wheel/trackpad-scroll events."""
         ev.accept()
         scroll = -1 * ev.delta() / 120
         if ev.orientation() == Qt.Horizontal:
-            self.main.hscroll(scroll * 10)
+            self.weakmain().hscroll(scroll * 10)
         elif ev.orientation() == Qt.Vertical:
-            self.main.vscroll(scroll)
+            self.weakmain().vscroll(scroll)
 
     def keyPressEvent(self, event):
-        self.main.keyPressEvent(event)
+        self.weakmain().keyPressEvent(event)
 
 
 class VLineLabel(InfLineLabel):
@@ -1500,9 +1507,10 @@ class _BaseDialog(QDialog):
                  modal=False, name=None, title=None,
                  flags=Qt.Window | Qt.Tool):
         super().__init__(main, flags)
-        self.main = main
+        self.weakmain = weakref.ref(main)
         self.widget = widget
         self.mne = main.mne
+        del main
         self.name = name
         self.modal = modal
 
@@ -1553,7 +1561,7 @@ class _BaseDialog(QDialog):
     # the main window should be raised as well
     def event(self, event):
         if event.type() == QEvent.WindowActivate:
-            self.main.raise_()
+            self.weakmain().raise_()
         return super().event(event)
 
 
@@ -1574,7 +1582,7 @@ class SettingsDialog(_BaseDialog):
                                          ' Default is 1.')
         self.downsampling_box.setMinimum(0)
         self.downsampling_box.setSpecialValueText('Auto')
-        self.downsampling_box.valueChanged.connect(partial(
+        self.downsampling_box.valueChanged.connect(_methpartial(
             self._value_changed, value_name='downsampling'))
         self.downsampling_box.setValue(0 if self.mne.downsampling == 'auto'
                                        else self.mne.downsampling)
@@ -1596,10 +1604,9 @@ class SettingsDialog(_BaseDialog):
                 'pyqtgraph)</i><br>'
                 'Default is "peak".')
         self.ds_method_cmbx.addItems(['subsample', 'mean', 'peak'])
-        self.ds_method_cmbx.currentTextChanged.connect(partial(
-                self._value_changed, value_name='ds_method'))
-        self.ds_method_cmbx.setCurrentText(
-                self.mne.ds_method)
+        self.ds_method_cmbx.currentTextChanged.connect(
+            _methpartial(self._value_changed, value_name='ds_method'))
+        self.ds_method_cmbx.setCurrentText(self.mne.ds_method)
         layout.addRow('ds_method', self.ds_method_cmbx)
 
         self.scroll_sensitivity_slider = QSlider(Qt.Horizontal)
@@ -1608,8 +1615,8 @@ class SettingsDialog(_BaseDialog):
         self.scroll_sensitivity_slider.setToolTip('Set the sensitivity of '
                                                   'the scrolling in '
                                                   'horizontal direction.')
-        self.scroll_sensitivity_slider.valueChanged.connect(partial(
-            self._value_changed, value_name='scroll_sensitivity'))
+        self.scroll_sensitivity_slider.valueChanged.connect(
+            _methpartial(self._value_changed, value_name='scroll_sensitivity'))
         # Set default
         self.scroll_sensitivity_slider.setValue(self.mne.scroll_sensitivity)
         layout.addRow('horizontal scroll sensitivity',
@@ -1631,7 +1638,7 @@ class SettingsDialog(_BaseDialog):
         if value_name == 'scroll_sensitivity':
             self.mne.ax_hscroll._update_scroll_sensitivity()
         else:
-            self.main._redraw()
+            self.weakmain()._redraw()
 
 
 class HelpDialog(_BaseDialog):
@@ -1669,7 +1676,7 @@ class HelpDialog(_BaseDialog):
         layout.addWidget(scroll_area)
 
         # Additional help for mouse interaction
-        inst = self.main.mne.instance_type
+        inst = self.mne.instance_type
         is_raw = inst == 'raw'
         is_epo = inst == 'epochs'
         is_ica = inst == 'ica'
@@ -1734,7 +1741,7 @@ class ProjDialog(_BaseDialog):
         for idx, label in enumerate(labels):
             chkbx = QCheckBox(label)
             chkbx.setChecked(bool(self.mne.projs_on[idx]))
-            chkbx.clicked.connect(partial(self._proj_changed, idx=idx))
+            chkbx.clicked.connect(_methpartial(self._proj_changed, idx=idx))
             if self.mne.projs_active[idx]:
                 chkbx.setEnabled(False)
             self.checkboxes.append(chkbx)
@@ -1750,11 +1757,11 @@ class ProjDialog(_BaseDialog):
         # Only change if proj wasn't already applied.
         if not self.mne.projs_active[idx]:
             self.mne.projs_on[idx] = state
-            self.main._apply_update_projectors()
+            self.weakmain()._apply_update_projectors()
 
     def toggle_all(self):
         """Toggle all projectors."""
-        self.main._apply_update_projectors(toggle_all=True)
+        self.weakmain()._apply_update_projectors(toggle_all=True)
 
         # Update all checkboxes
         for idx, chkbx in enumerate(self.checkboxes):
@@ -1837,7 +1844,8 @@ class SelectionDialog(_BaseDialog):
         self.chkbxs = OrderedDict()
         for label in selections_dict:
             chkbx = QCheckBox(label)
-            chkbx.clicked.connect(partial(self._chkbx_changed, label))
+            chkbx.clicked.connect(
+                _methpartial(self._chkbx_changed, label=label))
             self.chkbxs[label] = chkbx
             layout.addWidget(chkbx)
 
@@ -1863,7 +1871,7 @@ class SelectionDialog(_BaseDialog):
     def _chkbx_changed(self, label):
         # Disable butterfly if checkbox is clicked
         if self.mne.butterfly:
-            self.main._set_butterfly(False)
+            self.weakmain()._set_butterfly(False)
         # Disable other checkboxes
         for chkbx in self.chkbxs.values():
             chkbx.setChecked(False)
@@ -1968,9 +1976,10 @@ class SelectionDialog(_BaseDialog):
             # MNE >= 1.0
             self.channel_fig.lasso.callbacks.clear()
         for chkbx in self.chkbxs.values():
-            _disconnect(chkbx.clicked)
-        if hasattr(self, 'main'):
-            self.main.close()
+            _disconnect(chkbx.clicked, allow_error=True)
+        main = self.weakmain()
+        if main is not None:
+            main.close()
 
 
 class AnnotRegion(LinearRegionItem):
@@ -2127,13 +2136,24 @@ class _AnnotEditDialog(_BaseDialog):
             self.close()
 
 
+def _select_all(chkbxs):
+    for chkbx in chkbxs:
+        chkbx.setChecked(True)
+
+
+def _clear_all(chkbxs):
+    for chkbx in chkbxs:
+        chkbx.setChecked(False)
+
+
 class AnnotationDock(QDockWidget):
     """Dock-Window for Management of annotations."""
 
     def __init__(self, main):
         super().__init__('Annotations')
-        self.main = main
+        self.weakmain = weakref.ref(main)
         self.mne = main.mne
+        del main
         self._init_ui()
 
         self.setFeatures(QDockWidget.DockWidgetMovable |
@@ -2206,7 +2226,7 @@ class AnnotationDock(QDockWidget):
     def _add_description(self, new_description):
         self.mne.new_annotation_labels.append(new_description)
         self.mne.visible_annotations[new_description] = True
-        self.main._setup_annotation_colors()
+        self.weakmain()._setup_annotation_colors()
         self._add_description_to_cmbx(new_description)
         self.mne.current_description = new_description
         self.description_cmbx.setCurrentText(new_description)
@@ -2226,19 +2246,20 @@ class AnnotationDock(QDockWidget):
                         if r.description == old_des]
         # Update regions & annotations
         for ed_region in edit_regions:
-            idx = self.main._get_onset_idx(ed_region.getRegion()[0])
+            idx = self.weakmain()._get_onset_idx(ed_region.getRegion()[0])
             self.mne.inst.annotations.description[idx] = new_des
             ed_region.update_description(new_des)
         # Update containers with annotation-attributes
         self.mne.new_annotation_labels.remove(old_des)
-        self.mne.new_annotation_labels = self.main._get_annotation_labels()
+        self.mne.new_annotation_labels = \
+            self.weakmain()._get_annotation_labels()
         self.mne.visible_annotations[new_des] = \
             self.mne.visible_annotations.pop(old_des)
         self.mne.annotation_segment_colors[new_des] = \
             self.mne.annotation_segment_colors.pop(old_des)
 
         # Update related widgets
-        self.main._setup_annotation_colors()
+        self.weakmain()._setup_annotation_colors()
         self._update_regions_colors()
         self._update_description_cmbx()
         self.mne.overview_bar.update_annotations()
@@ -2246,7 +2267,8 @@ class AnnotationDock(QDockWidget):
     def _edit_description_selected(self, new_des):
         """Update description only of selected region."""
         old_des = self.mne.selected_region.description
-        idx = self.main._get_onset_idx(self.mne.selected_region.getRegion()[0])
+        idx = self.weakmain()._get_onset_idx(
+            self.mne.selected_region.getRegion()[0])
         # Update regions & annotations
         self.mne.inst.annotations.description[idx] = new_des
         self.mne.selected_region.update_description(new_des)
@@ -2262,7 +2284,7 @@ class AnnotationDock(QDockWidget):
                 self.mne.annotation_segment_colors.pop(old_des)
 
         # Update related widgets
-        self.main._setup_annotation_colors()
+        self.weakmain()._setup_annotation_colors()
         self._update_regions_colors()
         self._update_description_cmbx()
         self.mne.overview_bar.update_annotations()
@@ -2271,10 +2293,10 @@ class AnnotationDock(QDockWidget):
         if len(self.mne.inst.annotations.description) > 0:
             _AnnotEditDialog(self)
         else:
-            self.main.message_box(text='No Annotations!',
-                                  info_text='There are no annotations '
-                                            'yet to edit!',
-                                  icon=QMessageBox.Information)
+            self.weakmain().message_box(
+                text='No Annotations!',
+                info_text='There are no annotations yet to edit!',
+                icon=QMessageBox.Information)
 
     def _remove_description(self, rm_description):
         # Remove regions
@@ -2309,28 +2331,19 @@ class AnnotationDock(QDockWidget):
                         f'"{rm_description}".\n' \
                         f'Do you really want to remove them?'
             buttons = QMessageBox.Yes | QMessageBox.No
-            ans = self.main.message_box(text=text, info_text=info_text,
-                                        buttons=buttons,
-                                        default_button=QMessageBox.Yes,
-                                        icon=QMessageBox.Question)
+            ans = self.weakmain().message_box(
+                text=text, info_text=info_text, buttons=buttons,
+                default_button=QMessageBox.Yes, icon=QMessageBox.Question)
         else:
             ans = QMessageBox.Yes
 
         if ans == QMessageBox.Yes:
             self._remove_description(rm_description)
 
+    def _set_visible_region(self, state, *, description):
+        self.mne.visible_annotations[description] = bool(state)
+
     def _select_annotations(self):
-        def _set_visible_region(state, description):
-            self.mne.visible_annotations[description] = bool(state)
-
-        def _select_all():
-            for chkbx in chkbxs:
-                chkbx.setChecked(True)
-
-        def _clear_all():
-            for chkbx in chkbxs:
-                chkbx.setChecked(False)
-
         select_dlg = QDialog(self)
         chkbxs = list()
         layout = QVBoxLayout()
@@ -2344,8 +2357,8 @@ class AnnotationDock(QDockWidget):
         for des in self.mne.visible_annotations:
             chkbx = QCheckBox(des)
             chkbx.setChecked(self.mne.visible_annotations[des])
-            chkbx.stateChanged.connect(partial(_set_visible_region,
-                                               description=des))
+            chkbx.stateChanged.connect(
+                _methpartial(self._set_visible_region, description=des))
             chkbxs.append(chkbx)
             scroll_layout.addWidget(chkbx)
 
@@ -2356,11 +2369,11 @@ class AnnotationDock(QDockWidget):
         bt_layout = QGridLayout()
 
         all_bt = QPushButton('All')
-        all_bt.clicked.connect(_select_all)
+        all_bt.clicked.connect(partial(_select_all, chkbxs=chkbxs))
         bt_layout.addWidget(all_bt, 0, 0)
 
         clear_bt = QPushButton('Clear')
-        clear_bt.clicked.connect(_clear_all)
+        clear_bt.clicked.connect(partial(_clear_all, chkbxs=chkbxs))
         bt_layout.addWidget(clear_bt, 0, 1)
 
         ok_bt = QPushButton('Ok')
@@ -2371,8 +2384,10 @@ class AnnotationDock(QDockWidget):
 
         select_dlg.setLayout(layout)
         select_dlg.exec()
+        all_bt.clicked.disconnect()
+        clear_bt.clicked.disconnect()
 
-        self.main._update_regions_visible()
+        self.weakmain()._update_regions_visible()
 
     def _description_changed(self, descr_idx):
         new_descr = self.description_cmbx.itemText(descr_idx)
@@ -2386,11 +2401,10 @@ class AnnotationDock(QDockWidget):
             if start < stop:
                 sel_region.setRegion((start, stop))
             else:
-                self.main.message_box(text='Invalid value!',
-                                      info_text='Start can\'t be bigger or '
-                                                'equal to Stop!',
-                                      icon=QMessageBox.Critical,
-                                      modal=False)
+                self.weakmain().message_box(
+                    text='Invalid value!',
+                    info_text='Start can\'t be bigger or equal to Stop!',
+                    icon=QMessageBox.Critical, modal=False)
                 self.start_bx.setValue(sel_region.getRegion()[0])
 
     def _stop_changed(self):
@@ -2401,10 +2415,10 @@ class AnnotationDock(QDockWidget):
             if start < stop:
                 sel_region.setRegion((start, stop))
             else:
-                self.main.message_box(text='Invalid value!',
-                                      info_text='Stop can\'t be smaller or '
-                                                'equal to Start!',
-                                      icon=QMessageBox.Critical)
+                self.weakmain().message_box(
+                    text='Invalid value!',
+                    info_text='Stop can\'t be smaller or equal to Start!',
+                    icon=QMessageBox.Critical)
                 self.stop_bx.setValue(sel_region.getRegion()[1])
 
     def _set_color(self):
@@ -2433,7 +2447,7 @@ class AnnotationDock(QDockWidget):
 
     def _update_description_cmbx(self):
         self.description_cmbx.clear()
-        descriptions = self.main._get_annotation_labels()
+        descriptions = self.weakmain()._get_annotation_labels()
         for description in descriptions:
             self._add_description_to_cmbx(description)
         self.description_cmbx.setCurrentText(self.mne.current_description)
@@ -2477,9 +2491,9 @@ class AnnotationDock(QDockWidget):
                     '<h3>Remove Description</h3>' \
                     'You can remove all annotations of the currently '\
                     'selected kind with the button "Remove description".'
-        self.main.message_box(text='Annotations-Help',
-                              info_text=info_text,
-                              icon=QMessageBox.Information)
+        self.weakmain().message_box(
+            text='Annotations-Help', info_text=info_text,
+            icon=QMessageBox.Information)
 
 
 class BrowserView(GraphicsView):
@@ -2526,11 +2540,13 @@ class LoadThread(QThread):
 
     def __init__(self, browser):
         super().__init__()
-        self.browser = browser
+        self.weakbrowser = weakref.ref(browser)
         self.mne = browser.mne
         self.loadProgress.connect(self.mne.load_progressbar.setValue)
-        self.processText.connect(self.browser._show_process)
-        self.loadingFinished.connect(self.browser._precompute_finished)
+        self.processText.connect(
+            _methpartial(browser._show_process))
+        self.loadingFinished.connect(
+            _methpartial(browser._precompute_finished))
 
     def run(self):
         """Load and process data in a separate QThread."""
@@ -2547,6 +2563,7 @@ class LoadThread(QThread):
             times = None
         n_chunks = min(10, len(self.mne.inst))
         chunk_size = len(self.mne.inst) // n_chunks
+        browser = self.weakbrowser()
         for n in range(n_chunks):
             start = n * chunk_size
             if n == n_chunks - 1:
@@ -2562,7 +2579,7 @@ class LoadThread(QThread):
                             self.mne.inst.get_data(item=item), axis=-1)
             # Load raw
             else:
-                data_chunk, times_chunk = self.browser._load_data(start, stop)
+                data_chunk, times_chunk = browser._load_data(start, stop)
                 if times is None:
                     times = times_chunk
                 else:
@@ -2579,7 +2596,7 @@ class LoadThread(QThread):
         # Deactive remove dc because it will be removed for visible range
         stashed_remove_dc = self.mne.remove_dc
         self.mne.remove_dc = False
-        data = self.browser._process_data(data, 0, len(data), picks, self)
+        data = browser._process_data(data, 0, len(data), picks, self)
         self.mne.remove_dc = stashed_remove_dc
 
         self.mne.global_data = data
@@ -2587,7 +2604,8 @@ class LoadThread(QThread):
 
         # Calculate Z-Scores
         self.processText.emit('Calculating Z-Scores...')
-        self.browser._get_zscore(data)
+        browser._get_zscore(data)
+        del browser
 
         self.loadingFinished.emit()
 
@@ -2601,7 +2619,7 @@ class LoadThread(QThread):
         _disconnect(self.processText)
         _disconnect(self.loadingFinished)
         del self.mne
-        del self.browser
+        del self.weakbrowser
 
 
 class _PGMetaClass(type(QMainWindow), type(BrowserBase)):
@@ -2645,11 +2663,24 @@ def _screen_geometry(widget):
         return geometry
 
 
-def _disconnect(sig):
+def _methpartial(meth, **kwargs):
+    """Use WeakMethod to create a partial method."""
+    meth = weakref.WeakMethod(meth)
+
+    def call(*args_, **kwargs_):
+        meth_ = meth()
+        if meth_ is not None:
+            return meth_(*args_, **kwargs, **kwargs_)
+
+    return call
+
+
+def _disconnect(sig, *, allow_error=False):
     try:
         sig.disconnect()
     except (TypeError, RuntimeError):  # if there are no connections, ignore it
-        pass
+        if not allow_error:
+            raise
 
 
 class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
@@ -2684,14 +2715,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         QApplication.processEvents()  # needs to happen for the theme to be set
 
         # HiDPI stuff
-        pixel_ratio = self.devicePixelRatio()
-        logger.debug(f'Desktop pixel ratio: {pixel_ratio:0.3f}')
-
-        def _hidpi_mkPen(*args, **kwargs):
-            kwargs['width'] = pixel_ratio * kwargs.get('width', 1.)
-            return mkPen(*args, **kwargs)
-
-        self.mne.mkPen = _hidpi_mkPen
+        self._pixel_ratio = self.devicePixelRatio()
+        logger.debug(f'Desktop pixel ratio: {self._pixel_ratio:0.3f}')
+        self.mne.mkPen = _methpartial(self._hidpi_mkPen)
 
         bgcolor = self.palette().color(self.backgroundRole()).getRgbF()[:3]
         self.mne.dark = cspace_convert(bgcolor, 'sRGB1', 'CIELab')[0] < 50
@@ -2981,31 +3007,37 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         adecr_time = QAction(
             QIcon.fromTheme("less_time"), '- Time', parent=self)
-        adecr_time.triggered.connect(partial(self.change_duration, -0.2))
+        adecr_time.triggered.connect(
+            _methpartial(self.change_duration, step=-0.2))
         self.mne.toolbar.addAction(adecr_time)
         aincr_time = QAction(
             QIcon.fromTheme("more_time"), '+ Time', parent=self)
-        aincr_time.triggered.connect(partial(self.change_duration, 0.25))
+        aincr_time.triggered.connect(
+            _methpartial(self.change_duration, step=0.25))
         self.mne.toolbar.addAction(aincr_time)
         self.mne.toolbar.addSeparator()
 
         adecr_nchan = QAction(
             QIcon.fromTheme("less_channels"), '- Channels', parent=self)
-        adecr_nchan.triggered.connect(partial(self.change_nchan, -10))
+        adecr_nchan.triggered.connect(
+            _methpartial(self.change_nchan, step=-10))
         self.mne.toolbar.addAction(adecr_nchan)
         aincr_nchan = QAction(
             QIcon.fromTheme("more_channels"), '+ Channels', parent=self)
-        aincr_nchan.triggered.connect(partial(self.change_nchan, 10))
+        aincr_nchan.triggered.connect(
+            _methpartial(self.change_nchan, step=10))
         self.mne.toolbar.addAction(aincr_nchan)
         self.mne.toolbar.addSeparator()
 
         adecr_nchan = QAction(
             QIcon.fromTheme("zoom_out"), 'Zoom out', parent=self)
-        adecr_nchan.triggered.connect(partial(self.scale_all, 4 / 5))
+        adecr_nchan.triggered.connect(
+            _methpartial(self.scale_all, step=4 / 5))
         self.mne.toolbar.addAction(adecr_nchan)
         aincr_nchan = QAction(
             QIcon.fromTheme("zoom_in"), 'Zoom in', parent=self)
-        aincr_nchan.triggered.connect(partial(self.scale_all, 5 / 4))
+        aincr_nchan.triggered.connect(
+            _methpartial(self.scale_all, step=5 / 4))
         self.mne.toolbar.addAction(aincr_nchan)
         self.mne.toolbar.addSeparator()
 
@@ -3051,9 +3083,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             menu.addAction(action)
             group.addAction(action)
             radio.clicked.connect(
-                lambda *args, key=key, **kwargs: (
-                    menu.close(),
-                    self._overview_mode_changed(new_mode=key)))
+                _methpartial(
+                    self._overview_radio_clicked, menu=menu, new_mode=key))
         menu.addSeparator()
         visible = QAction('Visible', parent=menu)
         menu.addAction(visible)
@@ -3137,6 +3168,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             'home': {
                 'alias': dur_keys[0],
                 'qt_key': Qt.Key_Home,
+                'kw': 'step',
                 'slot': [self.change_duration],
                 'parameter': [-0.2],
                 'description': [f'Decrease duration ({hscroll_type})']
@@ -3144,6 +3176,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             'end': {
                 'alias': dur_keys[1],
                 'qt_key': Qt.Key_End,
+                'kw': 'step',
                 'slot': [self.change_duration],
                 'parameter': [0.25],
                 'description': [f'Increase duration ({hscroll_type})']
@@ -3152,6 +3185,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'alias': ch_keys[0],
                 'qt_key': Qt.Key_PageDown,
                 'modifier': [None, 'Shift'],
+                'kw': 'step',
                 'slot': [self.change_nchan],
                 'parameter': [-1, -10],
                 'description': ['Decrease shown channels (1)',
@@ -3161,6 +3195,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'alias': ch_keys[1],
                 'qt_key': Qt.Key_PageUp,
                 'modifier': [None, 'Shift'],
+                'kw': 'step',
                 'slot': [self.change_nchan],
                 'parameter': [1, 10],
                 'description': ['Increase shown channels (1)',
@@ -3169,18 +3204,21 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             '-': {
                 'qt_key': Qt.Key_Minus,
                 'slot': [self.scale_all],
+                'kw': 'step',
                 'parameter': [4 / 5],
                 'description': ['Decrease Scale']
             },
             '+': {
                 'qt_key': Qt.Key_Plus,
                 'slot': [self.scale_all],
+                'kw': 'step',
                 'parameter': [5 / 4],
                 'description': ['Increase Scale']
             },
             '=': {
                 'qt_key': Qt.Key_Equal,
                 'slot': [self.scale_all],
+                'kw': 'step',
                 'parameter': [5 / 4],
                 'description': ['Increase Scale']
             },
@@ -3282,6 +3320,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # Disable time format toggling
             del self.mne.keyboard_shortcuts['t']
 
+    def _hidpi_mkPen(self, *args, **kwargs):
+        kwargs['width'] = self._pixel_ratio * kwargs.get('width', 1.)
+        return mkPen(*args, **kwargs)
+
     def _update_yaxis_labels(self):
         self.mne.channel_axis.repaint()
 
@@ -3351,7 +3393,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if not self.mne.overview_bar.isVisible():
             self._toggle_overview_bar()
 
-    def scale_all(self, step):
+    def _overview_radio_clicked(self, *, menu, new_mode):
+        menu.close()
+        self._overview_mode_changed(new_mode=new_mode)
+
+    def scale_all(self, checked=False, *, step):
         """Scale all traces by multiplying with step."""
         self.mne.scale_factor *= step
 
@@ -3418,7 +3464,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
             self.mne.plt.setYRange(ymin, ymax, padding=0)
 
-    def change_duration(self, step):
+    def change_duration(self, checked=False, *, step):
         """Change duration by step."""
         xmin, xmax = self.mne.viewbox.viewRange()[0]
 
@@ -3450,7 +3496,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.ax_hscroll.update_duration()
         self.mne.plt.setXRange(xmin, xmax, padding=0)
 
-    def change_nchan(self, step):
+    def change_nchan(self, checked=False, *, step):
         """Change number of channels by step."""
         if not self.mne.butterfly:
             if step == '+full':
@@ -4322,7 +4368,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 if 'parameter' in key_dict:
                     param_idx = (mod_idx if mod_idx <
                                  len(key_dict['parameter']) else 0)
-                    slot(key_dict['parameter'][param_idx])
+                    val = key_dict['parameter'][param_idx]
+                    if 'kw' in key_dict:
+                        slot(**{key_dict['kw']: val})
+                    else:
+                        slot(val)
                 else:
                     slot()
 
@@ -4510,12 +4560,14 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 _disconnect(self.mne.plt.sigYRangeChanged)
             if hasattr(self.mne, 'toolbar'):
                 for action in self.mne.toolbar.actions():
-                    _disconnect(action.triggered)
+                    allow_error = action.text() == ''
+                    _disconnect(action.triggered, allow_error=allow_error)
             # Save settings going into QSettings.
             for qsetting in qsettings_params:
                 value = getattr(self.mne, qsetting)
                 QSettings().setValue(qsetting, value)
-            for attr in ('keyboard_shortcuts', 'traces', 'plt', 'toolbar'):
+            for attr in ('keyboard_shortcuts', 'traces', 'plt', 'toolbar',
+                         'fig_annotation'):
                 if hasattr(self.mne, attr):
                     delattr(self.mne, attr)
             if hasattr(self.mne, 'child_figs'):
