@@ -4,7 +4,7 @@ scipy
 matplotlib
 qtpy
 scooby
-mne>=0.24
+mne>=1.0
 pyqtgraph>=0.12.3
 colorspacious
 pyopengl; platform_system=="Darwin"
