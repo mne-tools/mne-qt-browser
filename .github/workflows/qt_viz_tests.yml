@@ -13,9 +13,9 @@ jobs:
   flake:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: 3.9
       - name: Install dependencies
@@ -68,9 +68,9 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install dependencies
@@ -84,7 +84,7 @@ jobs:
         run: ./tools/get_testing_version.sh
         name: 'Get testing version'
         working-directory: ../mne-python
-      - uses: actions/cache@v2
+      - uses: actions/cache@v3
         with:
           key: ${{ env.TESTING_VERSION }}
           path: ~/mne_data
@@ -159,9 +159,9 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install dependencies
@@ -175,7 +175,7 @@ jobs:
         run: ./tools/get_testing_version.sh
         name: 'Get testing version'
         working-directory: ../mne-python
-      - uses: actions/cache@v2
+      - uses: actions/cache@v3
         with:
           key: ${{ env.TESTING_VERSION }}
           path: ~/mne_data
