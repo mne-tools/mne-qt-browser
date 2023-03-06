@@ -13,7 +13,7 @@ for the plotting.
 Development started as a [2021's Google Summer of Code Project](https://github.com/marsipu/gsoc2021).
 
 ## Installation
-Install **full MNE-Python** with the instructions provided [here](https://mne.tools/stable/install/mne_python.html#d-plotting-and-source-analysis) or install **minimal MNE-Python >= 1.0** with
+Install **full MNE-Python version 1.0 or greater** with the instructions provided [here](https://mne.tools/stable/install/mne_python.html#d-plotting-and-source-analysis) or install **minimal MNE-Python** with
 ### pip
 ```
 pip install "mne>=1.0" matplotlib mne-qt-browser
