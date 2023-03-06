@@ -4,7 +4,7 @@ pytest-cov
 pytest-timeout
 pooch
 tqdm
-sklearn  # for testing ICA
+scikit-learn  # for testing ICA
 pytest-harvest
 pytest-error-for-skips
 https://github.com/sphinx-gallery/sphinx-gallery/zipball/master  # for testing scrapers

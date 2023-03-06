@@ -129,13 +129,6 @@ def test_scroll_speed_raw(raw_orig, benchmark_param, store,
     _Benchmark(fig, app, store, request)
 
 
-def _check_epochs_version():
-    import mne
-    from packaging.version import parse
-    if parse(mne.__version__) <= parse('0.24.1'):
-        pytest.skip('Epochs-Test were skipped because of mne <= 0.24.1!')
-
-
 @pytest.mark.benchmark
 @pytest.mark.parametrize('benchmark_param', [
     pytest.param({'use_opengl': False, 'precompute': False},
@@ -150,8 +143,6 @@ def _check_epochs_version():
 ])
 def test_scroll_speed_epochs_unicolor(raw_orig, benchmark_param, store,
                                       pg_backend, request):
-    _check_epochs_version()
-
     app = QApplication.instance()
     if app is None:
         app = QApplication(sys.argv)
@@ -182,8 +173,6 @@ def test_scroll_speed_epochs_unicolor(raw_orig, benchmark_param, store,
 def test_scroll_speed_epochs_multicolor(raw_orig, benchmark_param, store,
                                         pg_backend, request):
     from qtpy.QtWidgets import QApplication
-    _check_epochs_version()
-
     app = QApplication.instance()
     if app is None:
         app = QApplication(sys.argv)

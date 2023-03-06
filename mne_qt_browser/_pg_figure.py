@@ -1828,13 +1828,7 @@ class SelectionDialog(_BaseDialog):
                                         ch_type='all', title='',
                                         ch_groups=self.mne.group_by, axes=ax,
                                         show=False)[0]
-        if hasattr(self.channel_fig.lasso, 'callbacks'):
-            # MNE >= 1.0
-            self.channel_fig.lasso.callbacks.append(self._set_custom_selection)
-        else:
-            # MNE <= 0.24
-            self.channel_fig.canvas.mpl_connect(
-                'lasso_event', self._set_custom_selection)
+        self.channel_fig.lasso.callbacks.append(self._set_custom_selection)
         self.channel_widget = _ChannelFig(self.channel_fig, self.mne)
         layout.addWidget(self.channel_widget)
 
