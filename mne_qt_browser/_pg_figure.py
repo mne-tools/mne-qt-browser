@@ -1861,7 +1861,17 @@ class SelectionDialog(_BaseDialog):  # noqa: D101
         self.setLayout(layout)
         self.show(center=False)
 
-    def _chkbx_changed(self, checked, label):
+    def _chkbx_changed(self, checked, label=None):
+        # _chkbx_changed is called either directly (with checked=None) or
+        # through _methpartial with a Qt signal. The signal includes the bool
+        # argument 'checked'.
+        # Old versions of MNE-python tests will call this function directly
+        # without the checked argument _chkbx_changed(label), thus it has to be
+        # wrap in case only one argument is provided to retain compatibility
+        # of the tests between new/old versions of mne-qt-browser and
+        # mne-python.
+        if label is None:
+            label = checked
         # Disable butterfly if checkbox is clicked
         if self.mne.butterfly:
             self.weakmain()._set_butterfly(False)
