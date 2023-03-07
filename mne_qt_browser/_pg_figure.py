@@ -4500,10 +4500,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self._fake_click((x, y), fig=self.mne.view, button=button,
                              xform='none')
 
-    def _update_trace_offsets(self):
-        """legacy method for mne<1.0"""
-        pass
-
     def _resize_by_factor(self, factor):
         pass
 
