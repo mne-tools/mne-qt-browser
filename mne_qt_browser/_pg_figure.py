@@ -747,7 +747,7 @@ class ChannelScrollBar(BaseScrollBar):
         if not self.external_change:
             if self.mne.fig_selection:
                 label = list(self.mne.ch_selections.keys())[value]
-                self.mne.fig_selection._chkbx_changed(label)
+                self.mne.fig_selection._chkbx_changed(None, label)
             elif not self.mne.butterfly:
                 value = min(value, self.mne.ymax - self.mne.n_channels)
                 self.mne.plt.setYRange(value, value + self.mne.n_channels + 1,
@@ -1837,7 +1837,7 @@ class SelectionDialog(_BaseDialog):
 
         self.chkbxs = OrderedDict()
         for label in selections_dict:
-            chkbx = QCheckBox(label)
+            chkbx = QRadioButton(label)
             chkbx.clicked.connect(
                 _methpartial(self._chkbx_changed, label=label))
             self.chkbxs[label] = chkbx
@@ -1862,13 +1862,10 @@ class SelectionDialog(_BaseDialog):
         self.setLayout(layout)
         self.show(center=False)
 
-    def _chkbx_changed(self, label):
+    def _chkbx_changed(self, checked, label):
         # Disable butterfly if checkbox is clicked
         if self.mne.butterfly:
             self.weakmain()._set_butterfly(False)
-        # Disable other checkboxes
-        for chkbx in self.chkbxs.values():
-            chkbx.setChecked(False)
         if (label == 'Custom' and
                 not len(self.mne.ch_selections['Custom'])):
             label = self.mne.old_selection
@@ -1915,7 +1912,7 @@ class SelectionDialog(_BaseDialog):
         inds = np.in1d(self.mne.ch_names, chs)
         self.mne.ch_selections['Custom'] = inds.nonzero()[0]
         if any(inds):
-            self._chkbx_changed('Custom')
+            self._chkbx_changed(None, 'Custom')
 
     def _update_highlighted_sensors(self):
         inds = np.in1d(self.mne.fig_selection.channel_fig.lasso.ch_names,
@@ -1952,7 +1949,7 @@ class SelectionDialog(_BaseDialog):
         new_idx = np.clip(name_idx + step,
                           0, len(self.mne.ch_selections) - 1)
         new_label = list(self.mne.ch_selections.keys())[new_idx]
-        self._chkbx_changed(new_label)
+        self._chkbx_changed(None, new_label)
 
     def _scroll_to_idx(self, idx):
         all_values = list()
@@ -1962,7 +1959,7 @@ class SelectionDialog(_BaseDialog):
             if idx < len(all_values):
                 label = key
                 break
-        self._chkbx_changed(label)
+        self._chkbx_changed(None, label)
 
     def closeEvent(self, event):
         super().closeEvent(event)
