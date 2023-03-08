@@ -97,7 +97,7 @@ _dark_dict = {
 
 
 def _get_color(color_spec, invert=False):
-    """Wraps mkColor to accept all possible matplotlib color-specifiers."""
+    """Wrap mkColor to accept all possible matplotlib color-specifiers."""
     orig_spec = color_spec
     try:
         # Convert matplotlib color-names if possible
@@ -132,7 +132,7 @@ def _get_color(color_spec, invert=False):
     return color
 
 
-def propagate_to_children(method):
+def propagate_to_children(method):  # noqa: D103
     @functools.wraps(method)
     def wrapper(*args, **kwargs):
         propagate = kwargs.pop('propagate', True)
@@ -228,7 +228,7 @@ class DataTrace(PlotCurveItem):
         self.mne.plt.addItem(self)
 
     @propagate_to_children
-    def remove(self):
+    def remove(self):  # noqa: D102
         self.mne.plt.removeItem(self)
         # Only for parent trace
         if self.parent_trace is None:
@@ -238,7 +238,6 @@ class DataTrace(PlotCurveItem):
     @propagate_to_children
     def update_color(self):
         """Update the color of the trace."""
-
         # Epochs
         if self.mne.is_epochs:
             # Add child traces if shown trace needs to have multiple colors
@@ -283,12 +282,12 @@ class DataTrace(PlotCurveItem):
         self.setPen(self.mne.mkPen(_get_color(self.color, self.mne.dark)))
 
     @propagate_to_children
-    def update_range_idx(self):
+    def update_range_idx(self):  # noqa: D401
         """Should be updated when view-range or ch_idx changes."""
         self.range_idx = np.argwhere(self.mne.picks == self.ch_idx)[0][0]
 
     @propagate_to_children
-    def update_ypos(self):
+    def update_ypos(self):  # noqa: D401
         """Should be updated when butterfly is toggled or ch_idx changes."""
         if self.mne.butterfly and self.mne.fig_selection is not None:
             self.ypos = self.mne.selection_ypos_dict[self.ch_idx]
@@ -301,7 +300,7 @@ class DataTrace(PlotCurveItem):
             self.ypos = self.range_idx + self.mne.ch_start + 1
 
     @propagate_to_children
-    def update_scale(self):
+    def update_scale(self):  # noqa: D102
         transform = QTransform()
         transform.scale(1., self.mne.scale_factor)
         self.setTransform(transform)
@@ -311,7 +310,7 @@ class DataTrace(PlotCurveItem):
 
     @propagate_to_children
     def set_ch_idx(self, ch_idx):
-        """Sets the channel index and all deriving indices."""
+        """Set the channel index and all deriving indices."""
         # The ch_idx is the index of the channel represented by this trace
         # in the channel-order from the unchanged instance (which also picks
         # refer to).
@@ -747,7 +746,7 @@ class ChannelScrollBar(BaseScrollBar):
         if not self.external_change:
             if self.mne.fig_selection:
                 label = list(self.mne.ch_selections.keys())[value]
-                self.mne.fig_selection._chkbx_changed(label)
+                self.mne.fig_selection._chkbx_changed(None, label)
             elif not self.mne.butterfly:
                 value = min(value, self.mne.ymax - self.mne.n_channels)
                 self.mne.plt.setYRange(value, value + self.mne.n_channels + 1,
@@ -864,7 +863,7 @@ class OverviewBar(QGraphicsView):
                 self.scene().removeItem(self.bad_line_dict[ch_name])
                 self.bad_line_dict.pop(ch_name)
 
-    def update_bad_epochs(self):
+    def update_bad_epochs(self):  # noqa: D102
         bad_set = set(self.mne.bad_epochs)
         rect_set = set(self.bad_epoch_rect_dict.keys())
 
@@ -1214,7 +1213,7 @@ class OverviewBar(QGraphicsView):
 
         return x, y
 
-    def keyPressEvent(self, event):
+    def keyPressEvent(self, event):  # noqa: D102
         self.weakmain().keyPressEvent(event)
 
 
@@ -1314,7 +1313,7 @@ class RawViewBox(ViewBox):
         elif ev.orientation() == Qt.Vertical:
             self.weakmain().vscroll(scroll)
 
-    def keyPressEvent(self, event):
+    def keyPressEvent(self, event):  # noqa: D102
         self.weakmain().keyPressEvent(event)
 
 
@@ -1378,7 +1377,7 @@ def _q_font(point_size, bold=False):
 
 
 class EventLine(InfiniteLine):
-    """Displays Events inside Trace-Plot"""
+    """Displays Events inside Trace-Plot."""
 
     def __init__(self, mne, pos, label, color):
         super().__init__(pos, pen=color, movable=False,
@@ -1406,14 +1405,14 @@ class Crosshair(InfiniteLine):
         self.setPos(x)
         self.y = y
 
-    def paint(self, p, *args):
+    def paint(self, p, *args):  # noqa: D102
         super().paint(p, *args)
 
         p.setPen(self.mne.mkPen('r', width=4))
         p.drawPoint(Point(self.y, 0))
 
 
-class BaseScaleBar:
+class BaseScaleBar:  # noqa: D101
     def __init__(self, mne, ch_type):
         self.mne = mne
         self.ch_type = ch_type
@@ -1459,7 +1458,7 @@ class BaseScaleBar:
             self.setVisible(False)
 
 
-class ScaleBarText(BaseScaleBar, TextItem):
+class ScaleBarText(BaseScaleBar, TextItem):  # noqa: D101
     def __init__(self, mne, ch_type):
         BaseScaleBar.__init__(self, mne, ch_type)
         TextItem.__init__(self, color='#AA3377')
@@ -1484,7 +1483,7 @@ class ScaleBarText(BaseScaleBar, TextItem):
         self.setPos(x, y)
 
 
-class ScaleBar(BaseScaleBar, QGraphicsLineItem):
+class ScaleBar(BaseScaleBar, QGraphicsLineItem):  # noqa: D101
     def __init__(self, mne, ch_type):
         BaseScaleBar.__init__(self, mne, ch_type)
         QGraphicsLineItem.__init__(self)
@@ -1624,7 +1623,7 @@ class SettingsDialog(_BaseDialog):
         self.setLayout(layout)
         self.show()
 
-    def closeEvent(self, event):
+    def closeEvent(self, event):  # noqa: D102
         _disconnect(self.ds_method_cmbx.currentTextChanged)
         _disconnect(self.scroll_sensitivity_slider.valueChanged)
         super().closeEvent(event)
@@ -1809,7 +1808,7 @@ class _ChannelFig(FigureCanvasQTAgg):
         event.ignore()
 
 
-class SelectionDialog(_BaseDialog):
+class SelectionDialog(_BaseDialog):  # noqa: D101
     def __init__(self, main):
         # Create widget
         super().__init__(main, name='fig_selection',
@@ -1837,7 +1836,7 @@ class SelectionDialog(_BaseDialog):
 
         self.chkbxs = OrderedDict()
         for label in selections_dict:
-            chkbx = QCheckBox(label)
+            chkbx = QRadioButton(label)
             chkbx.clicked.connect(
                 _methpartial(self._chkbx_changed, label=label))
             self.chkbxs[label] = chkbx
@@ -1862,13 +1861,20 @@ class SelectionDialog(_BaseDialog):
         self.setLayout(layout)
         self.show(center=False)
 
-    def _chkbx_changed(self, label):
+    def _chkbx_changed(self, checked=True, label=None):
+        # _chkbx_changed is called either directly (with checked=None) or
+        # through _methpartial with a Qt signal. The signal includes the bool
+        # argument 'checked'.
+        # Old versions of MNE-python tests will call this function directly
+        # without the checked argument _chkbx_changed(label), thus it has to be
+        # wrap in case only one argument is provided to retain compatibility
+        # of the tests between new/old versions of mne-qt-browser and
+        # mne-python.
+        if label is None:
+            label = checked
         # Disable butterfly if checkbox is clicked
         if self.mne.butterfly:
             self.weakmain()._set_butterfly(False)
-        # Disable other checkboxes
-        for chkbx in self.chkbxs.values():
-            chkbx.setChecked(False)
         if (label == 'Custom' and
                 not len(self.mne.ch_selections['Custom'])):
             label = self.mne.old_selection
@@ -1915,7 +1921,7 @@ class SelectionDialog(_BaseDialog):
         inds = np.in1d(self.mne.ch_names, chs)
         self.mne.ch_selections['Custom'] = inds.nonzero()[0]
         if any(inds):
-            self._chkbx_changed('Custom')
+            self._chkbx_changed(None, 'Custom')
 
     def _update_highlighted_sensors(self):
         inds = np.in1d(self.mne.fig_selection.channel_fig.lasso.ch_names,
@@ -1952,7 +1958,7 @@ class SelectionDialog(_BaseDialog):
         new_idx = np.clip(name_idx + step,
                           0, len(self.mne.ch_selections) - 1)
         new_label = list(self.mne.ch_selections.keys())[new_idx]
-        self._chkbx_changed(new_label)
+        self._chkbx_changed(None, new_label)
 
     def _scroll_to_idx(self, idx):
         all_values = list()
@@ -1962,9 +1968,9 @@ class SelectionDialog(_BaseDialog):
             if idx < len(all_values):
                 label = key
                 break
-        self._chkbx_changed(label)
+        self._chkbx_changed(None, label)
 
-    def closeEvent(self, event):
+    def closeEvent(self, event):  # noqa: D102
         super().closeEvent(event)
         if hasattr(self.channel_fig.lasso, 'callbacks'):
             # MNE >= 1.0
@@ -2528,6 +2534,7 @@ def _mouse_event_position(ev):
 
 class LoadThread(QThread):
     """A worker object for precomputing in a separate QThread."""
+
     loadProgress = Signal(int)
     processText = Signal(str)
     loadingFinished = Signal()
@@ -2603,7 +2610,7 @@ class LoadThread(QThread):
 
         self.loadingFinished.emit()
 
-    def clean(self):
+    def clean(self):  # noqa: D102
         if self.isRunning():
             wait_time = 10  # max. waiting time in seconds
             logger.info('Waiting for Loading-Thread to finish... '
@@ -3323,6 +3330,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _add_scalebars(self):
         """Add scalebars for all channel-types.
+
         (scene handles showing them in when in view
         range)
         """
@@ -3387,7 +3395,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if not self.mne.overview_bar.isVisible():
             self._toggle_overview_bar()
 
-    def _overview_radio_clicked(self, *, menu, new_mode):
+    def _overview_radio_clicked(self, checked, *, menu, new_mode):
         menu.close()
         self._overview_mode_changed(new_mode=new_mode)
 
@@ -4310,7 +4318,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             SelectionDialog(self)
 
     def message_box(self, text, info_text=None, buttons=None,
-                    default_button=None, icon=None, modal=True):
+                    default_button=None, icon=None, modal=True):  # noqa: D102
         self.msg_box.setText(f'<font size="+2"><b>{text}</b></font>')
         if info_text is not None:
             self.msg_box.setInformativeText(info_text)
@@ -4502,10 +4510,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self._fake_click((x, y), fig=self.mne.view, button=button,
                              xform='none')
 
-    def _update_trace_offsets(self):
-        """legacy method for mne<1.0"""
-        pass
-
     def _resize_by_factor(self, factor):
         pass
 
@@ -4520,7 +4524,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def _get_scale_bar_texts(self):
         return tuple(t.toPlainText() for t in self.mne.scalebar_texts.values())
 
-    def show(self):
+    def show(self):  # noqa: D102
         # Set raise_window like matplotlib if possible
         super().show()
         _qt_raise_window(self)
@@ -4688,5 +4692,5 @@ def _init_browser(**kwargs):
     return browser
 
 
-class PyQtGraphBrowser(MNEQtBrowser):
+class PyQtGraphBrowser(MNEQtBrowser):  # noqa: D101
     pass  # just for backward compat with MNE 1.0 scraping
