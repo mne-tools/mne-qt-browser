@@ -1861,7 +1861,7 @@ class SelectionDialog(_BaseDialog):  # noqa: D101
         self.setLayout(layout)
         self.show(center=False)
 
-    def _chkbx_changed(self, checked, label=None):
+    def _chkbx_changed(self, checked=True, label=None):
         # _chkbx_changed is called either directly (with checked=None) or
         # through _methpartial with a Qt signal. The signal includes the bool
         # argument 'checked'.
