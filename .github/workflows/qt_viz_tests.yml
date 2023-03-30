@@ -150,7 +150,6 @@ jobs:
       MNE_LOGGING_LEVEL: 'warning'
       MKL_NUM_THREADS: '1'
       PYTHONUNBUFFERED: '1'
-      DISPLAY: ':99.0'
       MNE_BRANCH: ${{ matrix.mne }}
       PIP_OPTION: ${{ matrix.opengl }}
       PYTHON_VERSION: ${{ matrix.python }}
@@ -182,13 +181,9 @@ jobs:
         name: 'Cache testing data'
       - run: python -c 'import mne; print(mne.datasets.testing.data_path(verbose=True))'
         name: 'Download testing data'
-      - run: |
-          set -e
-          ./tools/setup_xvfb.sh
-          sudo apt install -yq libegl1
-        name: Setup xvfb on Linux
-        working-directory: ../mne-python
-        if: runner.os == 'Linux'
+      - uses: pyvista/setup-headless-display-action@v2
+        with:
+          qt: true
       - name: Check Qt
         run: |
           mne sys_info -pd
