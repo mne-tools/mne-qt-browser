@@ -184,9 +184,6 @@ jobs:
       - uses: pyvista/setup-headless-display-action@v2
         with:
           qt: true
-      - run: pip install "pyqtgraph>=0.12.3,<0.13"
-        name: Install old PyQtGraph for PySide2
-        if: matrix.qt == 'PySide2'
       - name: Check Qt
         run: |
           mne sys_info -pd
