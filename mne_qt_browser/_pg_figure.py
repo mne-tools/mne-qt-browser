@@ -96,6 +96,7 @@ _dark_dict = {
 }
 
 
+@functools.lru_cache(maxsize=100)
 def _get_color(color_spec, invert=False):
     """Wrap mkColor to accept all possible matplotlib color-specifiers."""
     orig_spec = color_spec
@@ -2008,8 +2009,8 @@ class AnnotRegion(LinearRegionItem):
 
         self.update_color()
 
-        self.mne.plt.addItem(self)
-        self.mne.plt.addItem(self.label_item)
+        self.mne.plt.addItem(self, ignoreBounds=True)
+        self.mne.plt.addItem(self.label_item, ignoreBounds=True)
 
     def _region_changed(self):
         self.regionChangeFinished.emit(self)
