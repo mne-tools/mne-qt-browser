@@ -96,16 +96,21 @@ _dark_dict = {
 }
 
 
-@functools.lru_cache(maxsize=100)
 def _get_color(color_spec, invert=False):
     """Wrap mkColor to accept all possible matplotlib color-specifiers."""
+    if isinstance(color_spec, np.ndarray):
+        color_spec = tuple(color_spec)
+    return _get_color_cached(color_spec=color_spec, invert=invert)
+
+
+@functools.lru_cache(maxsize=100)
+def _get_color_cached(*, color_spec, invert):
     orig_spec = color_spec
     try:
         # Convert matplotlib color-names if possible
         color_spec = _to_rgb(color_spec, alpha=True)
     except ValueError:
         pass
-
     # Convert tuples of floats from 0-1 to 0-255 for pyqtgraph
     if (isinstance(color_spec, tuple) and
             all([i <= 1 for i in color_spec])):
