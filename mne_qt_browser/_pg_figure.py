@@ -596,7 +596,7 @@ class ChannelAxis(AxisItem):
             y_values = np.asarray(list(self.ch_texts.values()))[:, 1, :]
             y_diff = np.abs(y_values - ypos)
             ch_idx = int(np.argmin(y_diff, axis=0)[0])
-            ch_name = list(self.ch_texts.keys())[ch_idx]
+            ch_name = list(self.ch_texts)[ch_idx]
             trace = [tr for tr in self.mne.traces
                      if tr.ch_name == ch_name][0]
             if event.button() == Qt.LeftButton:
@@ -745,7 +745,7 @@ class ChannelScrollBar(BaseScrollBar):
     def _channel_changed(self, value):
         if not self.external_change:
             if self.mne.fig_selection:
-                label = list(self.mne.ch_selections.keys())[value]
+                label = list(self.mne.ch_selections)[value]
                 self.mne.fig_selection._chkbx_changed(None, label)
             elif not self.mne.butterfly:
                 value = min(value, self.mne.ymax - self.mne.n_channels)
@@ -845,7 +845,7 @@ class OverviewBar(QGraphicsView):
     def update_bad_channels(self):
         """Update representation of bad channels."""
         bad_set = set(self.mne.info['bads'])
-        line_set = set(self.bad_line_dict.keys())
+        line_set = set(self.bad_line_dict)
 
         add_chs = bad_set.difference(line_set)
         rm_chs = line_set.difference(bad_set)
@@ -911,7 +911,7 @@ class OverviewBar(QGraphicsView):
         # Exclude non-visible annotations
         annot_set = set([annot['onset'] for annot in annotations if
                          self.mne.visible_annotations[annot['description']]])
-        rect_set = set(self.annotations_rect_dict.keys())
+        rect_set = set(self.annotations_rect_dict)
 
         add_onsets = annot_set.difference(rect_set)
         rm_onsets = rect_set.difference(annot_set)
@@ -1842,7 +1842,7 @@ class SelectionDialog(_BaseDialog):  # noqa: D101
             self.chkbxs[label] = chkbx
             layout.addWidget(chkbx)
 
-        self.mne.old_selection = list(selections_dict.keys())[0]
+        self.mne.old_selection = list(selections_dict)[0]
         self.chkbxs[self.mne.old_selection].setChecked(True)
 
         self._update_highlighted_sensors()
@@ -1907,7 +1907,7 @@ class SelectionDialog(_BaseDialog):  # noqa: D101
                                padding=0)
 
         # Update scrollbar
-        label_idx = list(self.mne.ch_selections.keys()).index(label)
+        label_idx = list(self.mne.ch_selections).index(label)
         self.mne.ax_vscroll.update_value(label_idx)
 
         # Update all y-positions, because channels can appear in multiple
@@ -1953,16 +1953,16 @@ class SelectionDialog(_BaseDialog):  # noqa: D101
         self._update_highlighted_sensors()
 
     def _scroll_selection(self, step):
-        name_idx = list(self.mne.ch_selections.keys()).index(
+        name_idx = list(self.mne.ch_selections).index(
                 self.mne.old_selection)
         new_idx = np.clip(name_idx + step,
                           0, len(self.mne.ch_selections) - 1)
-        new_label = list(self.mne.ch_selections.keys())[new_idx]
+        new_label = list(self.mne.ch_selections)[new_idx]
         self._chkbx_changed(None, new_label)
 
     def _scroll_to_idx(self, idx):
         all_values = list()
-        label = list(self.mne.ch_selections.keys())[0]
+        label = list(self.mne.ch_selections)[0]
         for key, values in self.mne.ch_selections.items():
             all_values = np.concatenate([all_values, values])
             if idx < len(all_values):
