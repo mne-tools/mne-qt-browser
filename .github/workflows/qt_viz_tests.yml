@@ -131,7 +131,7 @@ jobs:
         mne: [main]
         opengl: ['[opengl]']
         qt: [PyQt5, PyQt6, PySide2, PySide6]
-        python: ['3.11']
+        python: ['3.10']  # When going to 3.11, PySide2 should be removed or special-cased
         name: [matrix]
         include:
           - os: macos
