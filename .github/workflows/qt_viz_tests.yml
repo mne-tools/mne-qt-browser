@@ -186,6 +186,7 @@ jobs:
           qt: true
       - run: sudo apt install -yq libegl1
         name: Install EGL
+        if: runner.os == 'Linux'
       - name: Check Qt
         run: |
           mne sys_info -pd
