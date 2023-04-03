@@ -947,8 +947,8 @@ class OverviewBar(QGraphicsView):
 
         # Remove onsets
         for rm_onset in rm_onsets:
-            self.scene().removeItem(self.annotations_rect_dict[rm_onset]
-                                    ['rect'])
+            self.scene().removeItem(
+                self.annotations_rect_dict[rm_onset]['rect'])
             self.annotations_rect_dict.pop(rm_onset)
 
         # Changes
@@ -1284,7 +1284,7 @@ class RawViewBox(ViewBox):
                             rm_region, from_annot=False)
                     self.weakmain()._add_region(
                         plot_onset, duration, self.mne.current_description,
-                        self._drag_region)
+                        region=self._drag_region)
                     self._drag_region.select(True)
 
                     # Update Overview-Bar
@@ -3678,6 +3678,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Update Scalebars
         self._update_scalebar_x_positions()
 
+        # Update annotations
+        self._update_regions_visible()
+
     def _yrange_changed(self, _, yrange):
         if not self.mne.butterfly:
             if not self.mne.fig_selection:
@@ -3983,7 +3986,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     # ANNOTATIONS
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-    def _add_region(self, plot_onset, duration, description, region=None):
+    def _add_region(self, plot_onset, duration, description, *, region=None):
         if not region:
             region = AnnotRegion(self.mne, description=description,
                                  values=(plot_onset, plot_onset + duration))
@@ -3996,6 +3999,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         region.removeRequested.connect(self._remove_region)
         self.mne.viewbox.sigYRangeChanged.connect(region.update_label_pos)
         region.update_label_pos()
+        return region
 
     def _remove_region(self, region, from_annot=True):
         # Remove from shown regions
@@ -4078,7 +4082,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             plot_onset = _sync_onset(self.mne.inst, annot['onset'])
             duration = annot['duration']
             description = annot['description']
-            self._add_region(plot_onset, duration, description)
+            region = self._add_region(plot_onset, duration, description)
+            region.update_visible(False)
 
         # Initialize showing annotation widgets
         self._change_annot_mode()
@@ -4109,9 +4114,14 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self._change_annot_mode()
 
     def _update_regions_visible(self):
+        if self.mne.is_epochs:
+            return
+        start = self.mne.t_start
+        stop = start + self.mne.duration
         for region in self.mne.regions:
-            region.update_visible(
-                    self.mne.visible_annotations[region.description])
+            if self.mne.visible_annotations[region.description]:
+                rgn = region.getRegion()
+                region.update_visible(rgn[0] <= stop and rgn[1] >= start)
         self.mne.overview_bar.update_annotations()
 
     def _set_annotations_visible(self, visible):
