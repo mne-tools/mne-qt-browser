@@ -4123,7 +4123,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         for region in self.mne.regions:
             if self.mne.visible_annotations[region.description]:
                 rgn = region.getRegion()
-                region.update_visible(rgn[0] <= stop and rgn[1] >= start)
+                # Avoid NumPy bool here
+                region.update_visible(bool(rgn[0] <= stop and rgn[1] >= start))
         self.mne.overview_bar.update_annotations()
 
     def _set_annotations_visible(self, visible):
