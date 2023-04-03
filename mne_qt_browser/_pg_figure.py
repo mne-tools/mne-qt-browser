@@ -23,7 +23,7 @@ import numpy as np
 from qtpy.QtCore import (QEvent, QThread, Qt, Signal, QRectF, QLineF,
                          QPointF, QPoint, QSettings)
 from qtpy.QtGui import (QFont, QIcon, QPixmap, QTransform, QGuiApplication,
-                        QMouseEvent, QImage, QPainter, QPainterPath)
+                        QMouseEvent, QImage, QPainter, QPainterPath, QColor)
 from qtpy.QtTest import QTest
 from qtpy.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
                             QDockWidget, QDoubleSpinBox, QFormLayout,
@@ -100,7 +100,9 @@ def _get_color(color_spec, invert=False):
     """Wrap mkColor to accept all possible matplotlib color-specifiers."""
     if isinstance(color_spec, np.ndarray):
         color_spec = tuple(color_spec)
-    return _get_color_cached(color_spec=color_spec, invert=invert)
+    # We have to pass to QColor here to make a copy because we should be able
+    # to .setAlpha(...) etc. on it and this would otherwise affect the cache.
+    return QColor(_get_color_cached(color_spec=color_spec, invert=invert))
 
 
 @functools.lru_cache(maxsize=100)
