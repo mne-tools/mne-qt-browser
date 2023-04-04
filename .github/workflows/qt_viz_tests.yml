@@ -193,6 +193,8 @@ jobs:
       - run: sudo apt install -yq libegl1
         name: Install EGL
         if: runner.os == 'Linux'
+      - name: Start Qt on its own
+        run: LD_DEBUG=libs python -c "from ${QT_LIB}.QtWidgets import QApplication, QWidget; app = QApplication([]); import matplotlib; matplotlib.use('QtAgg'); import matplotlib.pyplot as plt; plt.figure()"
       - name: Check Qt
         run: |
           mne sys_info -pd
