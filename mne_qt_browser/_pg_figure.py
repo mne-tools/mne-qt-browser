@@ -113,6 +113,7 @@ def _get_color_cached(*, color_spec, invert):
         color_spec = _to_rgb(color_spec, alpha=True)
     except ValueError:
         pass
+
     # Convert tuples of floats from 0-1 to 0-255 for pyqtgraph
     if (isinstance(color_spec, tuple) and
             all([i <= 1 for i in color_spec])):
@@ -4005,8 +4006,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _remove_region(self, region, from_annot=True):
         # Remove from shown regions
-        if region.label_item in self.mne.viewbox.addedItems:
-            self.mne.viewbox.removeItem(region.label_item)
+        if region.label_item in self.mne.plt.items:
+            self.mne.plt.removeItem(region.label_item)
         if region in self.mne.plt.items:
             self.mne.plt.removeItem(region)
 
