@@ -187,6 +187,8 @@ jobs:
       - run: sudo apt install -yq libegl1
         name: Install EGL
         if: runner.os == 'Linux'
+      - run: LD_DEBUG=libs mne sys_info
+        if: matrix.qt == 'PySide6'
       - name: Check Qt
         run: |
           mne sys_info -pd
