@@ -181,16 +181,12 @@ jobs:
         name: 'Cache testing data'
       - run: python -c 'import mne; print(mne.datasets.testing.data_path(verbose=True))'
         name: 'Download testing data'
-      - uses: pyvista/setup-headless-display-action@v2
+      - uses: pyvista/setup-headless-display-action@main
         with:
           qt: true
       - run: sudo apt install -yq libegl1
         name: Install EGL
         if: runner.os == 'Linux'
-      - run: |
-          sudo apt install libxcb-cursor0
-          LD_DEBUG=libs python -c "from PySide6.QtWidgets import QApplication, QWidget; app = QApplication([]); import matplotlib; matplotlib.use('QtAgg'); import matplotlib.pyplot as plt; plt.figure()"
-        if: matrix.qt == 'PySide6'
       - name: Check Qt
         run: |
           mne sys_info -pd
