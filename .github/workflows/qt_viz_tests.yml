@@ -188,7 +188,7 @@ jobs:
         name: Install EGL
         if: runner.os == 'Linux'
       - run: |
-          sudo apt install xcb-util-cursor
+          sudo apt install libxcb-cursor0
           LD_DEBUG=libs python -c "from PySide6.QtWidgets import QApplication, QWidget; app = QApplication([]); import matplotlib; matplotlib.use('QtAgg'); import matplotlib.pyplot as plt; plt.figure()"
         if: matrix.qt == 'PySide6'
       - name: Check Qt
