@@ -60,7 +60,6 @@ jobs:
       MNE_LOGGING_LEVEL: 'warning'
       MKL_NUM_THREADS: '1'
       PYTHONUNBUFFERED: '1'
-      DISPLAY: ':99.0'
       MNE_BRANCH: ${{ matrix.mne }}
       PYTHON_VERSION: ${{ matrix.python }}
     defaults:
