@@ -82,7 +82,7 @@ jobs:
           python -m pip install -qe ../mne-python
           if [[ "${{ matrix.opengl }}" == "opengl" ]]; then
             PIP_OPTION="[opengl,tests]"
-          else:
+          else
             PIP_OPTION="[tests]"
           fi
           python -m pip install -ve .${PIP_OPTION} PyQt5
@@ -184,7 +184,7 @@ jobs:
           fi
           if [[ "${{ matrix.opengl }}" == "opengl" ]]; then
             PIP_OPTION="[opengl,tests]"
-          else:
+          else
             PIP_OPTION="[tests]"
           fi
           python -m pip install -ve .${PIP_OPTION} ${QT_LIB_INSTALL}
