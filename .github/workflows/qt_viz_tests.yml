@@ -100,10 +100,7 @@ jobs:
       - uses: pyvista/setup-headless-display-action@main
         with:
           qt: true
-      - run: |
-          set -e
-          sudo apt install mesa-utils
-          glxinfo | grep enderer
+      - run: glxinfo | grep enderer
         name: Check OpenGL
         working-directory: ../mne-python
         if: runner.os == 'Linux' && contains(matrix.opengl, 'opengl')
@@ -193,9 +190,6 @@ jobs:
       - uses: pyvista/setup-headless-display-action@main
         with:
           qt: true
-      - run: sudo apt install -yq libegl1
-        name: Install EGL
-        if: runner.os == 'Linux'
       - name: Start Qt on its own
         run: LD_DEBUG=libs python -c "from ${QT_LIB}.QtWidgets import QApplication, QWidget; app = QApplication([]); import matplotlib; matplotlib.use('QtAgg'); import matplotlib.pyplot as plt; plt.figure()"
       - name: Check Qt
