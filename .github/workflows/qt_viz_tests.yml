@@ -97,18 +97,9 @@ jobs:
         name: 'Cache testing data'
       - run: python -c 'import mne; print(mne.datasets.testing.data_path(verbose=True))'
         name: 'Download testing data'
-      - run: |
-          set -e
-          git clone --depth 1 https://github.com/pyvista/gl-ci-helpers.git
-          powershell gl-ci-helpers/appveyor/install_opengl.ps1
-        name: Setup OpenGL on Windows
-        if: runner.os == 'Windows'
-      - run: |
-          curl --remote-name https://raw.githubusercontent.com/mne-tools/mne-python/main/tools/setup_xvfb.sh
-          bash setup_xvfb.sh
-        name: Setup xvfb on Linux
-        working-directory: ../mne-python
-        if: runner.os == 'Linux'
+      - uses: pyvista/setup-headless-display-action@main
+        with:
+          qt: true
       - run: |
           set -e
           sudo apt install mesa-utils
