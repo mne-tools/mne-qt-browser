@@ -34,6 +34,16 @@ dynamic = ["version"]
 opengl = [
     "pyopengl",
 ]
+tests = [
+    "pytest",
+    "pytest-qt",
+    "pytest-cov",
+    "pytest-timeout",
+    "scikit-learn",
+    "pytest-harvest",
+    "pytest-error-for-skips",
+    "sphinx-gallery",
+]
 
 [project.urls]
 homepage = "https://mne.tools/mne-bids-pipeline"
@@ -41,7 +51,7 @@ repository = "https://github.com/mne-tools/mne-bids-pipeline"
 changelog = "http://github.com/mne-tools/mne-qt-browser/releases"
 
 [build-system]
-requires = ["setuptools>=45", "setuptools_scm[toml]>=6.2", "wheel"]
+requires = ["setuptools>=65", "setuptools_scm[toml]>=6.2", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]

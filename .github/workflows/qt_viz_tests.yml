@@ -30,13 +30,13 @@ jobs:
       matrix:
         os: [ubuntu, windows, macos]
         mne: [main, maint/1.3]
-        opengl: ['[opengl]']
+        opengl: ['opengl']
         python: ['3.11']
         name: [matrix]
         include:
           - os: ubuntu
             mne: main
-            opengl: '[opengl]'
+            opengl: 'opengl'
             python: '3.8'
             name: old 3.8
           - os: ubuntu
@@ -51,7 +51,7 @@ jobs:
             name: no opengl
           - os: ubuntu
             mne: maint/1.0
-            opengl: '[opengl]'
+            opengl: 'opengl'
             python: '3.9'
             name: old
     name: pytest ${{ matrix.name }} / ${{ matrix.os }} / MNE ${{ matrix.mne }}
@@ -62,13 +62,14 @@ jobs:
       PYTHONUNBUFFERED: '1'
       DISPLAY: ':99.0'
       MNE_BRANCH: ${{ matrix.mne }}
-      PIP_OPTION: ${{ matrix.opengl }}
       PYTHON_VERSION: ${{ matrix.python }}
     defaults:
       run:
         shell: bash
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -79,7 +80,12 @@ jobs:
           python -m pip install --upgrade pip
           git clone -b ${MNE_BRANCH} --single-branch --branch main https://github.com/mne-tools/mne-python.git ../mne-python
           python -m pip install -qe ../mne-python
-          python -m pip install -ve .${PIP_OPTION} -r requirements_testing.txt PyQt5
+          if [[ "${{ matrix.opengl }}" == "opengl" ]]; then
+            PIP_OPTION="[opengl,tests]"
+          else:
+            PIP_OPTION="[tests]"
+          fi
+          python -m pip install -ve .${PIP_OPTION} PyQt5
       - shell: bash -el {0}
         run: ./tools/get_testing_version.sh
         name: 'Get testing version'
@@ -129,19 +135,19 @@ jobs:
       matrix:
         os: [ubuntu]
         mne: [main]
-        opengl: ['[opengl]']
+        opengl: [opengl]
         qt: [PyQt5, PyQt6, PySide2, PySide6]
         python: ['3.10']  # When going to 3.11, PySide2 should be removed or special-cased
         name: [matrix]
         include:
           - os: macos
             mne: main
-            opengl: '[opengl]'
+            opengl: 'opengl'
             qt: PySide6
             python: '3.11'
           - os: windows
             mne: main
-            opengl: '[opengl]'
+            opengl: 'opengl'
             qt: PySide6
             python: '3.11'
     name: ${{ matrix.qt }} / ${{ matrix.os }}
@@ -151,7 +157,6 @@ jobs:
       MKL_NUM_THREADS: '1'
       PYTHONUNBUFFERED: '1'
       MNE_BRANCH: ${{ matrix.mne }}
-      PIP_OPTION: ${{ matrix.opengl }}
       PYTHON_VERSION: ${{ matrix.python }}
       QT_LIB: ${{ matrix.qt }}
     defaults:
@@ -159,6 +164,8 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -175,7 +182,12 @@ jobs:
           else
             QT_LIB_INSTALL="$QT_LIB"
           fi
-          python -m pip install -ve .${PIP_OPTION} -r requirements_testing.txt $QT_LIB_INSTALL
+          if [[ "${{ matrix.opengl }}" == "opengl" ]]; then
+            PIP_OPTION="[opengl,tests]"
+          else:
+            PIP_OPTION="[tests]"
+          fi
+          python -m pip install -ve .${PIP_OPTION} ${QT_LIB_INSTALL}
       - shell: bash -el {0}
         run: ./tools/get_testing_version.sh
         name: 'Get testing version'
