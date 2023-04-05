@@ -23,7 +23,7 @@ import numpy as np
 from qtpy.QtCore import (QEvent, QThread, Qt, Signal, QRectF, QLineF,
                          QPointF, QPoint, QSettings)
 from qtpy.QtGui import (QFont, QIcon, QPixmap, QTransform, QGuiApplication,
-                        QMouseEvent, QImage, QPainter, QPainterPath)
+                        QMouseEvent, QImage, QPainter, QPainterPath, QColor)
 from qtpy.QtTest import QTest
 from qtpy.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
                             QDockWidget, QDoubleSpinBox, QFormLayout,
@@ -98,6 +98,15 @@ _dark_dict = {
 
 def _get_color(color_spec, invert=False):
     """Wrap mkColor to accept all possible matplotlib color-specifiers."""
+    if isinstance(color_spec, np.ndarray):
+        color_spec = tuple(color_spec)
+    # We have to pass to QColor here to make a copy because we should be able
+    # to .setAlpha(...) etc. on it and this would otherwise affect the cache.
+    return QColor(_get_color_cached(color_spec=color_spec, invert=invert))
+
+
+@functools.lru_cache(maxsize=100)
+def _get_color_cached(*, color_spec, invert):
     orig_spec = color_spec
     try:
         # Convert matplotlib color-names if possible
@@ -596,7 +605,7 @@ class ChannelAxis(AxisItem):
             y_values = np.asarray(list(self.ch_texts.values()))[:, 1, :]
             y_diff = np.abs(y_values - ypos)
             ch_idx = int(np.argmin(y_diff, axis=0)[0])
-            ch_name = list(self.ch_texts.keys())[ch_idx]
+            ch_name = list(self.ch_texts)[ch_idx]
             trace = [tr for tr in self.mne.traces
                      if tr.ch_name == ch_name][0]
             if event.button() == Qt.LeftButton:
@@ -745,7 +754,7 @@ class ChannelScrollBar(BaseScrollBar):
     def _channel_changed(self, value):
         if not self.external_change:
             if self.mne.fig_selection:
-                label = list(self.mne.ch_selections.keys())[value]
+                label = list(self.mne.ch_selections)[value]
                 self.mne.fig_selection._chkbx_changed(None, label)
             elif not self.mne.butterfly:
                 value = min(value, self.mne.ymax - self.mne.n_channels)
@@ -845,7 +854,7 @@ class OverviewBar(QGraphicsView):
     def update_bad_channels(self):
         """Update representation of bad channels."""
         bad_set = set(self.mne.info['bads'])
-        line_set = set(self.bad_line_dict.keys())
+        line_set = set(self.bad_line_dict)
 
         add_chs = bad_set.difference(line_set)
         rm_chs = line_set.difference(bad_set)
@@ -911,7 +920,7 @@ class OverviewBar(QGraphicsView):
         # Exclude non-visible annotations
         annot_set = set([annot['onset'] for annot in annotations if
                          self.mne.visible_annotations[annot['description']]])
-        rect_set = set(self.annotations_rect_dict.keys())
+        rect_set = set(self.annotations_rect_dict)
 
         add_onsets = annot_set.difference(rect_set)
         rm_onsets = rect_set.difference(annot_set)
@@ -941,8 +950,8 @@ class OverviewBar(QGraphicsView):
 
         # Remove onsets
         for rm_onset in rm_onsets:
-            self.scene().removeItem(self.annotations_rect_dict[rm_onset]
-                                    ['rect'])
+            self.scene().removeItem(
+                self.annotations_rect_dict[rm_onset]['rect'])
             self.annotations_rect_dict.pop(rm_onset)
 
         # Changes
@@ -1278,7 +1287,7 @@ class RawViewBox(ViewBox):
                             rm_region, from_annot=False)
                     self.weakmain()._add_region(
                         plot_onset, duration, self.mne.current_description,
-                        self._drag_region)
+                        region=self._drag_region)
                     self._drag_region.select(True)
 
                     # Update Overview-Bar
@@ -1842,7 +1851,7 @@ class SelectionDialog(_BaseDialog):  # noqa: D101
             self.chkbxs[label] = chkbx
             layout.addWidget(chkbx)
 
-        self.mne.old_selection = list(selections_dict.keys())[0]
+        self.mne.old_selection = list(selections_dict)[0]
         self.chkbxs[self.mne.old_selection].setChecked(True)
 
         self._update_highlighted_sensors()
@@ -1907,7 +1916,7 @@ class SelectionDialog(_BaseDialog):  # noqa: D101
                                padding=0)
 
         # Update scrollbar
-        label_idx = list(self.mne.ch_selections.keys()).index(label)
+        label_idx = list(self.mne.ch_selections).index(label)
         self.mne.ax_vscroll.update_value(label_idx)
 
         # Update all y-positions, because channels can appear in multiple
@@ -1953,16 +1962,16 @@ class SelectionDialog(_BaseDialog):  # noqa: D101
         self._update_highlighted_sensors()
 
     def _scroll_selection(self, step):
-        name_idx = list(self.mne.ch_selections.keys()).index(
+        name_idx = list(self.mne.ch_selections).index(
                 self.mne.old_selection)
         new_idx = np.clip(name_idx + step,
                           0, len(self.mne.ch_selections) - 1)
-        new_label = list(self.mne.ch_selections.keys())[new_idx]
+        new_label = list(self.mne.ch_selections)[new_idx]
         self._chkbx_changed(None, new_label)
 
     def _scroll_to_idx(self, idx):
         all_values = list()
-        label = list(self.mne.ch_selections.keys())[0]
+        label = list(self.mne.ch_selections)[0]
         for key, values in self.mne.ch_selections.items():
             all_values = np.concatenate([all_values, values])
             if idx < len(all_values):
@@ -2008,8 +2017,8 @@ class AnnotRegion(LinearRegionItem):
 
         self.update_color()
 
-        self.mne.plt.addItem(self)
-        self.mne.plt.addItem(self.label_item)
+        self.mne.plt.addItem(self, ignoreBounds=True)
+        self.mne.plt.addItem(self.label_item, ignoreBounds=True)
 
     def _region_changed(self):
         self.regionChangeFinished.emit(self)
@@ -3672,6 +3681,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Update Scalebars
         self._update_scalebar_x_positions()
 
+        # Update annotations
+        self._update_regions_visible()
+
     def _yrange_changed(self, _, yrange):
         if not self.mne.butterfly:
             if not self.mne.fig_selection:
@@ -3977,7 +3989,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     # ANNOTATIONS
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-    def _add_region(self, plot_onset, duration, description, region=None):
+    def _add_region(self, plot_onset, duration, description, *, region=None):
         if not region:
             region = AnnotRegion(self.mne, description=description,
                                  values=(plot_onset, plot_onset + duration))
@@ -3990,11 +4002,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         region.removeRequested.connect(self._remove_region)
         self.mne.viewbox.sigYRangeChanged.connect(region.update_label_pos)
         region.update_label_pos()
+        return region
 
     def _remove_region(self, region, from_annot=True):
         # Remove from shown regions
-        if region.label_item in self.mne.viewbox.addedItems:
-            self.mne.viewbox.removeItem(region.label_item)
+        if region.label_item in self.mne.plt.items:
+            self.mne.plt.removeItem(region.label_item)
         if region in self.mne.plt.items:
             self.mne.plt.removeItem(region)
 
@@ -4072,7 +4085,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             plot_onset = _sync_onset(self.mne.inst, annot['onset'])
             duration = annot['duration']
             description = annot['description']
-            self._add_region(plot_onset, duration, description)
+            region = self._add_region(plot_onset, duration, description)
+            region.update_visible(False)
 
         # Initialize showing annotation widgets
         self._change_annot_mode()
@@ -4103,9 +4117,18 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self._change_annot_mode()
 
     def _update_regions_visible(self):
+        if self.mne.is_epochs:
+            return
+        start = self.mne.t_start
+        stop = start + self.mne.duration
         for region in self.mne.regions:
-            region.update_visible(
-                    self.mne.visible_annotations[region.description])
+            if self.mne.visible_annotations[region.description]:
+                rgn = region.getRegion()
+                # Avoid NumPy bool here
+                visible = bool(rgn[0] <= stop and rgn[1] >= start)
+            else:
+                visible = False
+            region.update_visible(visible)
         self.mne.overview_bar.update_annotations()
 
     def _set_annotations_visible(self, visible):
