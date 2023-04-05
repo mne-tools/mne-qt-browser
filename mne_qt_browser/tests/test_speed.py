@@ -117,12 +117,12 @@ class _Benchmark:
     pytest.param({}, id='defaults'),
 ])
 def test_scroll_speed_raw(raw_orig, benchmark_param, store,
-                          pg_backend, request):
+                          pg_backend, request, qapp):
     """Test the speed of a parameter."""
     # Remove spaces and get params with values
     fig = raw_orig.plot(duration=5, n_channels=40,
                         show=False, block=False, **benchmark_param)
-    _Benchmark(fig, app, store, request)
+    _Benchmark(fig, qapp, store, request)
 
 
 @pytest.mark.benchmark
@@ -138,7 +138,7 @@ def test_scroll_speed_raw(raw_orig, benchmark_param, store,
     pytest.param({}, id='defaults'),
 ])
 def test_scroll_speed_epochs_unicolor(raw_orig, benchmark_param, store,
-                                      pg_backend, request):
+                                      pg_backend, request, qapp):
     events = np.full((50, 3), [0, 0, 1])
     events[:, 0] = np.arange(0, len(raw_orig), len(raw_orig) / 50) \
         + raw_orig.first_samp
@@ -147,7 +147,7 @@ def test_scroll_speed_epochs_unicolor(raw_orig, benchmark_param, store,
     epochs.info._unlocked = True
 
     fig = epochs.plot(show=False, block=False, **benchmark_param)
-    _Benchmark(fig, app, store, request)
+    _Benchmark(fig, qapp, store, request)
 
 
 @pytest.mark.benchmark
@@ -163,7 +163,7 @@ def test_scroll_speed_epochs_unicolor(raw_orig, benchmark_param, store,
     pytest.param({}, id='defaults'),
 ])
 def test_scroll_speed_epochs_multicolor(raw_orig, benchmark_param, store,
-                                        pg_backend, request):
+                                        pg_backend, request, qapp):
     events = np.full((50, 3), [0, 0, 1])
     events[:, 0] = np.arange(0, len(raw_orig), len(raw_orig) / 50) \
         + raw_orig.first_samp
@@ -191,4 +191,4 @@ def test_scroll_speed_epochs_multicolor(raw_orig, benchmark_param, store,
 
     fig = epochs.plot(show=False, block=False, epoch_colors=epoch_colors,
                       **benchmark_param)
-    _Benchmark(fig, app, store, request)
+    _Benchmark(fig, qapp, store, request)
