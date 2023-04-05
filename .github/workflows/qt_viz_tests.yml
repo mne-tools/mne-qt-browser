@@ -79,7 +79,7 @@ jobs:
           python -m pip install --upgrade pip
           git clone -b ${MNE_BRANCH} --single-branch --branch main https://github.com/mne-tools/mne-python.git ../mne-python
           python -m pip install -qe ../mne-python
-          python -m pip install -ve .${PIP_OPTION} -r requirements.txt -r requirements_testing.txt PyQt5
+          python -m pip install -ve .${PIP_OPTION} -r requirements_testing.txt PyQt5
       - shell: bash -el {0}
         run: ./tools/get_testing_version.sh
         name: 'Get testing version'
@@ -175,7 +175,7 @@ jobs:
           else
             QT_LIB_INSTALL="$QT_LIB"
           fi
-          python -m pip install -ve .${PIP_OPTION} -r requirements.txt -r requirements_testing.txt $QT_LIB_INSTALL
+          python -m pip install -ve .${PIP_OPTION} -r requirements_testing.txt $QT_LIB_INSTALL
       - shell: bash -el {0}
         run: ./tools/get_testing_version.sh
         name: 'Get testing version'
