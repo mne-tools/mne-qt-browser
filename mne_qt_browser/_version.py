@@ -5,6 +5,6 @@ try:
     __version__ = version("mne_qt_browser")
 except Exception:
     try:
-        from ._version import __version__
+        from .__version import __version__  # written by setuptools_scm
     except ImportError:
         __version__ = '0.0.0'

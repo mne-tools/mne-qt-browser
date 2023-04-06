@@ -57,7 +57,7 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools_scm]
 tag_regex = "^(?P<prefix>v)?(?P<version>[0-9.]+)(?P<suffix>.*)?$"
 version_scheme = "release-branch-semver"
-write_to = "mne_qt_browser/_version.py"
+write_to = "mne_qt_browser/__version.py"
 
 [tool.setuptools.packages.find]
 exclude = ["false"]  # on CircleCI this folder appears during pip install -ve. for an unknown reason
