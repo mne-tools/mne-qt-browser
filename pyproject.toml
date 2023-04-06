@@ -1,0 +1,70 @@
+[project]
+name = "mne-qt-browser"
+description = "A new backend based on pyqtgraph for the 2D-Data-Browser in MNE-Python"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {file = "LICENSE"}
+keywords = ["science", "neuroscience", "psychology"]
+authors = [
+  {name = "Martin Schulz", email = "dev@earthman-music.de"},
+]
+classifiers = [
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python"
+]
+dependencies = [
+    "importlib_metadata; python_version < '3.8'",
+    "packaging",
+    "setuptools >=65",
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "qtpy",
+    "scooby",
+    "mne>=1.0",
+    "pyqtgraph>=0.12.3",
+    "colorspacious",
+    "pyopengl; platform_system=='Darwin'",
+    "darkdetect",
+    "qdarkstyle",
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+opengl = [
+    "pyopengl",
+]
+tests = [
+    "pytest",
+    "pytest-qt",
+    "pytest-cov",
+    "pytest-timeout",
+    "scikit-learn",
+    "pytest-harvest",
+    "pytest-error-for-skips",
+    "sphinx-gallery",
+]
+
+[project.urls]
+homepage = "https://mne.tools/mne-bids-pipeline"
+repository = "https://github.com/mne-tools/mne-bids-pipeline"
+changelog = "http://github.com/mne-tools/mne-qt-browser/releases"
+
+[build-system]
+requires = ["setuptools>=65", "setuptools_scm[toml]>=6.2", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+tag_regex = "^(?P<prefix>v)?(?P<version>[0-9.]+)(?P<suffix>.*)?$"
+version_scheme = "release-branch-semver"
+write_to = "mne_qt_browser/_version.py"
+
+[tool.setuptools.packages.find]
+exclude = ["false"]  # on CircleCI this folder appears during pip install -ve. for an unknown reason
+
+[tool.pytest.ini_options]
+addopts = "-ra --cov-report= --tb=short --junit-xml=junit-results.xml --capture=sys --durations=10"
+testpaths = [
+    "mne_qt_browser",
+]
+junit_family = "xunit2"
