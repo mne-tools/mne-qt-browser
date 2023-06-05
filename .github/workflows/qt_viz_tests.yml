@@ -45,12 +45,12 @@ jobs:
             python: '3.9'
             name: no opengl
           - os: ubuntu
-            mne: maint/1.3
+            mne: maint/1.4
             opengl: ''
             python: '3.9'
             name: no opengl
           - os: ubuntu
-            mne: maint/1.0
+            mne: maint/1.3
             opengl: 'opengl'
             python: '3.9'
             name: old
