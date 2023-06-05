@@ -105,7 +105,7 @@ jobs:
         if: runner.os == 'Linux' && contains(matrix.opengl, 'opengl')
       - name: Show system information
         run: mne sys_info
-      - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/viz ../mne-python/mne/report
+      - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/report ../mne-python/mne/viz
         name: Run MNE-Tests
       - run: pytest --error-for-skips mne_qt_browser/tests/test_pg_specific.py
         name: Run pyqtgraph-specific tests
@@ -197,7 +197,7 @@ jobs:
           mne sys_info -pd
           echo ${QT_LIB}:
           mne sys_info -pd | grep "^.*qtpy.*${QT_LIB}=.*$"
-      - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/viz ../mne-python/mne/report
+      - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/report ../mne-python/mne/viz
         name: Run MNE-Tests
       - run: pytest --error-for-skips mne_qt_browser/tests/test_pg_specific.py
         name: Run pyqtgraph-specific tests
