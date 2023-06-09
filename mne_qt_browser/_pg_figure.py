@@ -3444,6 +3444,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             xmax = self.mne.xmax
             xmin = xmax - self.mne.duration
 
+        if self.mne.filter_coefs is not None:
+            self._rerun_precompute()
+
         self.mne.plt.setXRange(xmin, xmax, padding=0)
 
     def vscroll(self, step):
@@ -3503,6 +3506,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         if xmin < 0:
             xmin = 0
+
+        if self.mne.filter_coefs is not None:
+            self._rerun_precompute()
 
         self.mne.ax_hscroll.update_duration()
         self.mne.plt.setXRange(xmin, xmax, padding=0)
