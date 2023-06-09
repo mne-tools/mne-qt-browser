@@ -4174,10 +4174,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.fig_proj.toggle_all()
 
     def _toggle_whitening(self):
-        super()._toggle_whitening()
-        # If data was precomputed it needs to be precomputed again.
-        self._rerun_precompute()
-        self._redraw()
+        if self.mne.noise_cov is not None:
+            super()._toggle_whitening()
+            # If data was precomputed it needs to be precomputed again.
+            self._rerun_precompute()
+            self._redraw()
 
     def _toggle_settings_fig(self):
         if self.mne.fig_settings is None:
