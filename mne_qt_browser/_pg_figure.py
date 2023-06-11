@@ -2606,7 +2606,7 @@ class LoadThread(QThread):
         # Deactive remove dc because it will be removed for visible range
         stashed_remove_dc = self.mne.remove_dc
         self.mne.remove_dc = False
-        data = browser._process_data(data, 0, len(data), picks, self)
+        data = browser._process_data(data, 0, data.shape[-1], picks, self)
         self.mne.remove_dc = stashed_remove_dc
 
         self.mne.global_data = data
