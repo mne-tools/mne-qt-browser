@@ -3426,7 +3426,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def hscroll(self, step):
         """Scroll horizontally by step."""
         if isinstance(step, str):
-            assert step in ('left', 'right', '-full', '+full')
             if step in ('-full', '+full'):
                 rel_step = self.mne.duration
                 if step == '-full':
@@ -3441,10 +3440,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                     rel_step = rel_step * -1
         else:
             if self.mne.is_epochs:
-                sensitivity = self.mne.n_epochs
+                rel_step = (
+                    np.sign(step) * self.mne.duration / self.mne.n_epochs
+                )
             else:
-                sensitivity = self.mne.scroll_sensitivity
-            rel_step = step * self.mne.duration / sensitivity
+                rel_step = (
+                    step * self.mne.duration / self.mne.scroll_sensitivity
+                )
         del step
 
         # Get current range and add step to it
