@@ -3148,7 +3148,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'qt_key': Qt.Key_Left,
                 'modifier': [None, 'Shift'],
                 'slot': [self.hscroll],
-                'parameter': [-40, '-full'],
+                'parameter': ['left', '-full'],
                 'description': [f'Scroll left ({hscroll_type})',
                                 'Scroll left (full page)']
             },
@@ -3157,7 +3157,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'qt_key': Qt.Key_Right,
                 'modifier': [None, 'Shift'],
                 'slot': [self.hscroll],
-                'parameter': [40, '+full'],
+                'parameter': ['right', '+full'],
                 'description': [f'Scroll right ({hscroll_type})',
                                 'Scroll right (full page)']
             },
@@ -3425,15 +3425,30 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def hscroll(self, step):
         """Scroll horizontally by step."""
-        if step == '+full':
-            rel_step = self.mne.duration
-        elif step == '-full':
-            rel_step = - self.mne.duration
-        elif self.mne.is_epochs:
-            direction = 1 if step > 0 else -1
-            rel_step = direction * self.mne.duration / self.mne.n_epochs
+        if isinstance(step, str):
+            if step in ('-full', '+full'):
+                rel_step = self.mne.duration
+                if step == '-full':
+                    rel_step = rel_step * -1
+            else:
+                assert step in ('left', 'right')
+                if self.mne.is_epochs:
+                    rel_step = self.mne.duration / self.mne.n_epochs
+                else:
+                    rel_step = 0.25 * self.mne.duration
+                if step == 'left':
+                    rel_step = rel_step * -1
         else:
-            rel_step = step * self.mne.duration / self.mne.scroll_sensitivity
+            if self.mne.is_epochs:
+                rel_step = (
+                    np.sign(step) * self.mne.duration / self.mne.n_epochs
+                )
+            else:
+                rel_step = (
+                    step * self.mne.duration / self.mne.scroll_sensitivity
+                )
+        del step
+
         # Get current range and add step to it
         xmin, xmax = [i + rel_step for i in self.mne.viewbox.viewRange()[0]]
 
