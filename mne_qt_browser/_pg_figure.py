@@ -2606,7 +2606,7 @@ class LoadThread(QThread):
         # Deactive remove dc because it will be removed for visible range
         stashed_remove_dc = self.mne.remove_dc
         self.mne.remove_dc = False
-        data = browser._process_data(data, 0, len(data), picks, self)
+        data = browser._process_data(data, 0, data.shape[-1], picks, self)
         self.mne.remove_dc = stashed_remove_dc
 
         self.mne.global_data = data
@@ -4168,10 +4168,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.fig_proj.toggle_all()
 
     def _toggle_whitening(self):
-        super()._toggle_whitening()
-        # If data was precomputed it needs to be precomputed again.
-        self._rerun_precompute()
-        self._redraw()
+        if self.mne.noise_cov is not None:
+            super()._toggle_whitening()
+            # If data was precomputed it needs to be precomputed again.
+            self._rerun_precompute()
+            self._redraw()
 
     def _toggle_settings_fig(self):
         if self.mne.fig_settings is None:
