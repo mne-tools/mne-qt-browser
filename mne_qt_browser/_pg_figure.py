@@ -3042,12 +3042,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         adecr_nchan = QAction(
             QIcon.fromTheme("zoom_out"), 'Zoom out', parent=self)
         adecr_nchan.triggered.connect(
-            _methpartial(self.scale_all, step=4 / 5))
+            _methpartial(self.scale_all, step=-0.5))
         self.mne.toolbar.addAction(adecr_nchan)
         aincr_nchan = QAction(
             QIcon.fromTheme("zoom_in"), 'Zoom in', parent=self)
         aincr_nchan.triggered.connect(
-            _methpartial(self.scale_all, step=5 / 4))
+            _methpartial(self.scale_all, step= 0.5))
         self.mne.toolbar.addAction(aincr_nchan)
         self.mne.toolbar.addSeparator()
 
@@ -3215,21 +3215,21 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'qt_key': Qt.Key_Minus,
                 'slot': [self.scale_all],
                 'kw': 'step',
-                'parameter': [4 / 5],
+                'parameter': [-0.5],
                 'description': ['Decrease Scale']
             },
             '+': {
                 'qt_key': Qt.Key_Plus,
                 'slot': [self.scale_all],
                 'kw': 'step',
-                'parameter': [5 / 4],
+                'parameter': [0.5],
                 'description': ['Increase Scale']
             },
             '=': {
                 'qt_key': Qt.Key_Equal,
                 'slot': [self.scale_all],
                 'kw': 'step',
-                'parameter': [5 / 4],
+                'parameter': [0.5],
                 'description': ['Increase Scale']
             },
             'a': {
@@ -3410,7 +3410,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def scale_all(self, checked=False, *, step):
         """Scale all traces by multiplying with step."""
-        self.mne.scale_factor *= step
+        self.mne.scale_factor += step
 
         # Reapply clipping if necessary
         if self.mne.clipping is not None:
