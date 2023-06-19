@@ -3044,6 +3044,16 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         adecr_nchan.triggered.connect(
             _methpartial(self.scale_all, step=-0.5))
         self.mne.toolbar.addAction(adecr_nchan)
+
+
+        set_amp = QLineEdit('1', parent=self)
+        #set_amp.setValidator(QDoubleValidator(0.01,99.99,2))
+        set_amp.editingFinished.connect(
+            _methpartial(self.set_scale_factor, scale = set_amp.text())
+        )
+        self.mne.toolbar.addWidget(set_amp)
+
+        
         aincr_nchan = QAction(
             QIcon.fromTheme("zoom_in"), 'Zoom in', parent=self)
         aincr_nchan.triggered.connect(
@@ -3422,6 +3432,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Update Scalebars
         self._update_scalebar_values()
+    
+    def set_scale_factor(self, *, scale):
+        """Set the scale factor manually."""
+        self.mne.scale_factor = scale
+        self.update_scale()
+        self._update_data()
 
     def hscroll(self, step):
         """Scroll horizontally by step."""
