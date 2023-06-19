@@ -3048,6 +3048,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         set_amp = QLineEdit('1', parent=self)
         #set_amp.setValidator(QDoubleValidator(0.01,99.99,2))
+        #set_amp.displayText(self.mne.scale_factor)
         set_amp.editingFinished.connect(
             _methpartial(self.set_scale_factor, scale = set_amp.text())
         )
@@ -3435,9 +3436,20 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     
     def set_scale_factor(self, *, scale):
         """Set the scale factor manually."""
-        self.mne.scale_factor = scale
-        self.update_scale()
-        self._update_data()
+        self.mne.scale_factor = float(scale)
+
+        # Reapply clipping if necessary
+        if self.mne.clipping is not None:
+            self._update_data()
+
+        # Scale Traces (by scaling the Item, not the data)
+        for line in self.mne.traces:
+            line.update_scale()
+
+        # Update Scalebars
+        self._update_scalebar_values()
+    
+
 
     def hscroll(self, step):
         """Scroll horizontally by step."""
