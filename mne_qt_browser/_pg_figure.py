@@ -284,8 +284,10 @@ class DataTrace(PlotCurveItem):
         # Raw/ICA
         else:
             if self.isbad:
+                self.setZValue(0)
                 self.color = self.mne.ch_color_bad
             else:
+                self.setZValue(1)
                 self.color = self.mne.ch_color_ref[self.ch_name]
 
         self.setPen(self.mne.mkPen(_get_color(self.color, self.mne.dark)))
