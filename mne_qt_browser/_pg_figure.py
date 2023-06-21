@@ -284,8 +284,10 @@ class DataTrace(PlotCurveItem):
         # Raw/ICA
         else:
             if self.isbad:
+                self.setZValue(0)
                 self.color = self.mne.ch_color_bad
             else:
+                self.setZValue(1)
                 self.color = self.mne.ch_color_ref[self.ch_name]
 
         self.setPen(self.mne.mkPen(_get_color(self.color, self.mne.dark)))
@@ -332,10 +334,6 @@ class DataTrace(PlotCurveItem):
         self.order_idx = np.argwhere(self.mne.ch_order == self.ch_idx)[0][0]
         self.ch_name = self.mne.inst.ch_names[ch_idx]
         self.isbad = self.ch_name in self.mne.info['bads']
-        if self.isbad:
-            self.setZValue(0)
-        else:
-            self.setZValue(1)
         self.ch_type = self.mne.ch_types[ch_idx]
         self.update_ypos(propagate=False)
 
@@ -421,10 +419,6 @@ class DataTrace(PlotCurveItem):
 
             # Update line color status
             self.isbad = not self.isbad
-            if self.isbad:
-                self.setZValue(0)
-            else:
-                self.setZValue(1)
 
             # Update colors for epochs
             if self.mne.is_epochs:
