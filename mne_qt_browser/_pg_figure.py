@@ -417,6 +417,10 @@ class DataTrace(PlotCurveItem):
 
             # Update line color status
             self.isbad = not self.isbad
+            if self.isbad:
+                self.setZValue(0)
+            else:
+                self.setZValue(1)
 
             # Update colors for epochs
             if self.mne.is_epochs:
