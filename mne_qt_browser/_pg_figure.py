@@ -332,6 +332,10 @@ class DataTrace(PlotCurveItem):
         self.order_idx = np.argwhere(self.mne.ch_order == self.ch_idx)[0][0]
         self.ch_name = self.mne.inst.ch_names[ch_idx]
         self.isbad = self.ch_name in self.mne.info['bads']
+        if self.isbad:
+            self.setZValue(0)
+        else:
+            self.setZValue(1)
         self.ch_type = self.mne.ch_types[ch_idx]
         self.update_ypos(propagate=False)
 
