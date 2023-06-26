@@ -2099,7 +2099,7 @@ class AnnotRegion(LinearRegionItem):
 
 class _AnnotEditDialog(_BaseDialog):
     def __init__(self, annot_dock):
-        super().__init__(annot_dock.weakmain, title='Edit Annotations')
+        super().__init__(annot_dock.weakmain(), title='Edit Annotations')
         self.ad = annot_dock
 
         self.current_mode = None
