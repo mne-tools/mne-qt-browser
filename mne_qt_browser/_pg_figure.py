@@ -2464,7 +2464,6 @@ class AnnotationDock(QDockWidget):
         new_descr = self.description_cmbx.itemText(descr_idx)
         self.mne.current_description = new_descr
         # increase zValue of currently selected annotation and decrease all the others
-        # for annot in self.
         for region in self.mne.regions:
             if region.description == self.mne.current_description:
                 region.setZValue(2)
