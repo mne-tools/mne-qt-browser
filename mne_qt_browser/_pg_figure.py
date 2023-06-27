@@ -21,7 +21,7 @@ from os.path import getsize
 
 import numpy as np
 from qtpy.QtCore import (QEvent, QThread, Qt, Signal, QRectF, QLineF,
-                         QPointF, QPoint, QSettings)
+                         QPointF, QPoint, QSettings, QSignalBlocker)
 from qtpy.QtGui import (QFont, QIcon, QPixmap, QTransform, QGuiApplication,
                         QMouseEvent, QImage, QPainter, QPainterPath, QColor)
 from qtpy.QtTest import QTest
@@ -2216,13 +2216,19 @@ class AnnotationDock(QDockWidget):
         layout.addWidget(QLabel('Start:'))
         self.start_bx = QDoubleSpinBox()
         self.start_bx.setDecimals(time_decimals)
-        self.start_bx.editingFinished.connect(self._start_changed)
+        self.start_bx.setMinimum(0)
+        self.start_bx.setMaximum(self.mne.inst.times[-1] - 1 / self.mne.info["sfreq"])
+        self.start_bx.setSingleStep(0.05)
+        self.start_bx.valueChanged.connect(self._start_changed)
         layout.addWidget(self.start_bx)
 
         layout.addWidget(QLabel('Stop:'))
         self.stop_bx = QDoubleSpinBox()
         self.stop_bx.setDecimals(time_decimals)
-        self.stop_bx.editingFinished.connect(self._stop_changed)
+        self.stop_bx.setMinimum(1 / self.mne.info["sfreq"])
+        self.stop_bx.setMaximum(self.mne.inst.times[-1])
+        self.stop_bx.setSingleStep(0.05)
+        self.stop_bx.valueChanged.connect(self._stop_changed)
         layout.addWidget(self.stop_bx)
 
         help_bt = QPushButton(QIcon.fromTheme("help"), 'Help')
@@ -2415,30 +2421,28 @@ class AnnotationDock(QDockWidget):
     def _start_changed(self):
         start = self.start_bx.value()
         sel_region = self.mne.selected_region
-        if sel_region:
-            stop = sel_region.getRegion()[1]
-            if start < stop:
-                sel_region.setRegion((start, stop))
-            else:
-                self.weakmain().message_box(
-                    text='Invalid value!',
-                    info_text='Start can\'t be bigger or equal to Stop!',
-                    icon=QMessageBox.Critical, modal=False)
-                self.start_bx.setValue(sel_region.getRegion()[0])
+        stop = sel_region.getRegion()[1]
+        if start < stop:
+            self.mne.selected_region.setRegion((start, stop))
+        else:
+            self.weakmain().message_box(
+                text='Invalid value!',
+                info_text='Start can\'t be bigger or equal to Stop!',
+                icon=QMessageBox.Critical, modal=False)
+            self.start_bx.setValue(sel_region.getRegion()[0])
 
     def _stop_changed(self):
         stop = self.stop_bx.value()
         sel_region = self.mne.selected_region
-        if sel_region:
-            start = sel_region.getRegion()[0]
-            if start < stop:
-                sel_region.setRegion((start, stop))
-            else:
-                self.weakmain().message_box(
-                    text='Invalid value!',
-                    info_text='Stop can\'t be smaller or equal to Start!',
-                    icon=QMessageBox.Critical)
-                self.stop_bx.setValue(sel_region.getRegion()[1])
+        start = sel_region.getRegion()[0]
+        if start < stop:
+            sel_region.setRegion((start, stop))
+        else:
+            self.weakmain().message_box(
+                text='Invalid value!',
+                info_text='Stop can\'t be smaller or equal to Start!',
+                icon=QMessageBox.Critical)
+            self.stop_bx.setValue(sel_region.getRegion()[1])
 
     def _set_color(self):
         curr_descr = self.description_cmbx.currentText()
@@ -2461,8 +2465,13 @@ class AnnotationDock(QDockWidget):
     def update_values(self, region):
         """Update spinbox-values from region."""
         rgn = region.getRegion()
-        self.start_bx.setValue(rgn[0])
-        self.stop_bx.setValue(rgn[1])
+        self.start_bx.setEnabled(True)
+        self.stop_bx.setEnabled(True)
+        # change value with sending the valueChanged signal
+        with QSignalBlocker(self.start_bx):
+            self.start_bx.setValue(rgn[0])
+        with QSignalBlocker(self.stop_bx):
+            self.stop_bx.setValue(rgn[1])
 
     def _update_description_cmbx(self):
         self.description_cmbx.clear()
@@ -2480,8 +2489,10 @@ class AnnotationDock(QDockWidget):
         if self.description_cmbx.count() > 0:
             self.description_cmbx.setCurrentIndex(0)
             self.mne.current_description = self.description_cmbx.currentText()
-        self.start_bx.setValue(0)
-        self.stop_bx.setValue(0)
+        with QSignalBlocker(self.start_bx):
+            self.start_bx.setValue(0)
+        with QSignalBlocker(self.stop_bx):
+            self.stop_bx.setValue(1 / self.mne.info["sfreq"])
 
     def _show_help(self):
         info_text = '<h1>Help</h1>' \
@@ -4043,6 +4054,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Reset selected region
         if region == self.mne.selected_region:
             self.mne.selected_region = None
+            # disable, reset start/stop doubleSpinBox until another region is selected
+            self.mne.fig_annotation.start_bx.setEnabled(False)
+            self.mne.fig_annotation.stop_bx.setEnabled(False)
+            with QSignalBlocker(self.mne.fig_annotation.start_bx):
+                self.mne.fig_annotation.start_bx.setValue(0)
+            with QSignalBlocker(self.mne.fig_annotation.stop_bx):
+                self.mne.fig_annotation.stop_bx.setValue(1 / self.mne.info["sfreq"])
 
         # Remove from annotations
         if from_annot:
@@ -4104,6 +4122,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.fig_annotation = AnnotationDock(self)
             self.addDockWidget(Qt.TopDockWidgetArea, self.mne.fig_annotation)
             self.mne.fig_annotation.setVisible(False)
+            self.mne.fig_annotation.start_bx.setEnabled(False)
+            self.mne.fig_annotation.stop_bx.setEnabled(False)
 
         # Add annotations as regions
         for annot in self.mne.inst.annotations:
