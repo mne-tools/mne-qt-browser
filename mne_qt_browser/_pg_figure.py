@@ -2467,9 +2467,9 @@ class AnnotationDock(QDockWidget):
         rgn = region.getRegion()
         self.start_bx.setEnabled(True)
         self.stop_bx.setEnabled(True)
-        with QSignalBlocker(self.start_bx):
+        with SignalBlocker(self.start_bx):
             self.start_bx.setValue(rgn[0])
-        with QSignalBlocker(self.stop_bx):
+        with SignalBlocker(self.stop_bx):
             self.stop_bx.setValue(rgn[1])
 
     def _update_description_cmbx(self):
@@ -2488,9 +2488,9 @@ class AnnotationDock(QDockWidget):
         if self.description_cmbx.count() > 0:
             self.description_cmbx.setCurrentIndex(0)
             self.mne.current_description = self.description_cmbx.currentText()
-        with QSignalBlocker(self.start_bx):
+        with SignalBlocker(self.start_bx):
             self.start_bx.setValue(0)
-        with QSignalBlocker(self.stop_bx):
+        with SignalBlocker(self.stop_bx):
             self.stop_bx.setValue(1 / self.mne.info["sfreq"])
 
     def _show_help(self):
@@ -4056,9 +4056,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # disable, reset start/stop doubleSpinBox until another region is selected
             self.mne.fig_annotation.start_bx.setEnabled(False)
             self.mne.fig_annotation.stop_bx.setEnabled(False)
-            with QSignalBlocker(self.mne.fig_annotation.start_bx):
+            with SignalBlocker(self.mne.fig_annotation.start_bx):
                 self.mne.fig_annotation.start_bx.setValue(0)
-            with QSignalBlocker(self.mne.fig_annotation.stop_bx):
+            with SignalBlocker(self.mne.fig_annotation.stop_bx):
                 self.mne.fig_annotation.stop_bx.setValue(1 / self.mne.info["sfreq"])
 
         # Remove from annotations
@@ -4762,3 +4762,19 @@ def _init_browser(**kwargs):
 
 class PyQtGraphBrowser(MNEQtBrowser):  # noqa: D101
     pass  # just for backward compat with MNE 1.0 scraping
+
+
+class SignalBlocker(QSignalBlocker):
+    """Wrapper to use QSignalBlocker as a context manager in PySide2."""
+
+    def __enter__(self):
+        if hasattr(super(), "__enter__"):
+            super().__enter__()
+        else:
+            super().reblock()
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if hasattr(super(), "__exit__"):
+            super().__exit__(exc_type, exc_value, traceback)
+        else:
+            super().unblock()
