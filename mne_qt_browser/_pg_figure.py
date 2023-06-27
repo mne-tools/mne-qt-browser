@@ -2095,6 +2095,11 @@ class AnnotRegion(LinearRegionItem):
         else:
             event.ignore()
 
+    def mouseDragEvent(self, event):
+        """Customize mouse drag events."""
+        # TODO: Prevent annotations from extending beyond (0, raw.times[-1])
+        super().mouseDragEvent(event)
+
     def update_label_pos(self):
         """Update position of description-label from annotation-region."""
         rgn = self.getRegion()
