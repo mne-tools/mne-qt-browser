@@ -2105,8 +2105,8 @@ class AnnotRegion(LinearRegionItem):
 
         if ev.isStart():
             bdp = ev.buttonDownPos()
-            self.cursorOffsets = [l.pos() - bdp for l in self.lines]
-            self.startPositions = [l.pos() for l in self.lines]
+            self.cursorOffsets = [line.pos() - bdp for line in self.lines]
+            self.startPositions = [lline^.pos() for line in self.lines]
             self.moving = True
 
         if not self.moving:
