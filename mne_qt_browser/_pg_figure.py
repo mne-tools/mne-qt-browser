@@ -21,7 +21,7 @@ from os.path import getsize
 
 import numpy as np
 from qtpy.QtCore import (QEvent, QThread, Qt, Signal, QRectF, QLineF,
-                         QPointF, QPoint, QSettings)
+                         QPointF, QPoint, QSettings, QSignalBlocker)
 from qtpy.QtGui import (QFont, QIcon, QPixmap, QTransform, QGuiApplication,
                         QMouseEvent, QImage, QPainter, QPainterPath, QColor)
 from qtpy.QtTest import QTest
@@ -1251,6 +1251,7 @@ class RawViewBox(ViewBox):
                 if event.isStart():
                     self._drag_start = self.mapSceneToView(
                             event.lastScenePos()).x()
+                    self._drag_start = 0 if self._drag_start < 0 else self._drag_start
                     drag_stop = self.mapSceneToView(event.scenePos()).x()
                     self._drag_region = AnnotRegion(self.mne,
                                                     description=description,
@@ -1258,6 +1259,10 @@ class RawViewBox(ViewBox):
                                                             drag_stop))
                 elif event.isFinish():
                     drag_stop = self.mapSceneToView(event.scenePos()).x()
+                    drag_stop = 0 if drag_stop < 0 else drag_stop
+                    drag_stop = (
+                        self.mne.xmax if self.mne.xmax < drag_stop else drag_stop
+                    )
                     self._drag_region.setRegion((self._drag_start, drag_stop))
                     plot_onset = min(self._drag_start, drag_stop)
                     plot_offset = max(self._drag_start, drag_stop)
@@ -2088,6 +2093,52 @@ class AnnotRegion(LinearRegionItem):
         else:
             event.ignore()
 
+    def mouseDragEvent(self, ev):
+        """Customize mouse drag events."""
+        if (
+            not self.mne.annotation_mode
+            or not self.movable
+            or not ev.button() == Qt.LeftButton
+        ):
+            return
+        ev.accept()
+
+        if ev.isStart():
+            bdp = ev.buttonDownPos()
+            self.cursorOffsets = [line.pos() - bdp for line in self.lines]
+            self.startPositions = [line.pos() for line in self.lines]
+            self.moving = True
+
+        if not self.moving:
+            return
+
+        new_pos = [pos + ev.pos() for pos in self.cursorOffsets]
+        # make sure the new_pos is not exiting the boundaries set for each line which
+        # corresponds to (0, raw.times[-1])
+        # we have to take into account regions draw from right to left and from left to
+        # right separately because we are changing the position of the individual lines
+        # used to create the region
+        idx = 0 if new_pos[0].x() <= new_pos[1].x() else 1
+        if new_pos[idx].x() < self.lines[idx].bounds()[0]:
+            shift = self.lines[idx].bounds()[0] - new_pos[idx].x()
+            for pos in new_pos:
+                pos.setX(pos.x() + shift)
+        if self.lines[(idx + 1) % 2].bounds()[1] < new_pos[(idx + 1) % 2].x():
+            shift = new_pos[(idx + 1) % 2].x() - self.lines[(idx + 1) % 2].bounds()[1]
+            for pos in new_pos:
+                pos.setX(pos.x() - shift)
+
+        with SignalBlocker(self.lines[0]):
+            for pos, line in zip(new_pos, self.lines):
+                line.setPos(pos)
+        self.prepareGeometryChange()
+
+        if ev.isFinish():
+            self.moving = False
+            self.sigRegionChangeFinished.emit(self)
+        else:
+            self.sigRegionChanged.emit(self)
+
     def update_label_pos(self):
         """Update position of description-label from annotation-region."""
         rgn = self.getRegion()
@@ -2099,7 +2150,7 @@ class AnnotRegion(LinearRegionItem):
 
 class _AnnotEditDialog(_BaseDialog):
     def __init__(self, annot_dock):
-        super().__init__(annot_dock.main, title='Edit Annotations')
+        super().__init__(annot_dock.weakmain(), title='Edit Annotations')
         self.ad = annot_dock
 
         self.current_mode = None
@@ -2209,13 +2260,19 @@ class AnnotationDock(QDockWidget):
         layout.addWidget(QLabel('Start:'))
         self.start_bx = QDoubleSpinBox()
         self.start_bx.setDecimals(time_decimals)
-        self.start_bx.editingFinished.connect(self._start_changed)
+        self.start_bx.setMinimum(0)
+        self.start_bx.setMaximum(self.mne.xmax - 1 / self.mne.info["sfreq"])
+        self.start_bx.setSingleStep(0.05)
+        self.start_bx.valueChanged.connect(self._start_changed)
         layout.addWidget(self.start_bx)
 
         layout.addWidget(QLabel('Stop:'))
         self.stop_bx = QDoubleSpinBox()
         self.stop_bx.setDecimals(time_decimals)
-        self.stop_bx.editingFinished.connect(self._stop_changed)
+        self.stop_bx.setMinimum(1 / self.mne.info["sfreq"])
+        self.stop_bx.setMaximum(self.mne.xmax)
+        self.stop_bx.setSingleStep(0.05)
+        self.stop_bx.valueChanged.connect(self._stop_changed)
         layout.addWidget(self.stop_bx)
 
         help_bt = QPushButton(QIcon.fromTheme("help"), 'Help')
@@ -2273,6 +2330,7 @@ class AnnotationDock(QDockWidget):
         self.weakmain()._setup_annotation_colors()
         self._update_regions_colors()
         self._update_description_cmbx()
+        self.mne.current_description = new_des
         self.mne.overview_bar.update_annotations()
 
     def _edit_description_selected(self, new_des):
@@ -2407,30 +2465,28 @@ class AnnotationDock(QDockWidget):
     def _start_changed(self):
         start = self.start_bx.value()
         sel_region = self.mne.selected_region
-        if sel_region:
-            stop = sel_region.getRegion()[1]
-            if start < stop:
-                sel_region.setRegion((start, stop))
-            else:
-                self.weakmain().message_box(
-                    text='Invalid value!',
-                    info_text='Start can\'t be bigger or equal to Stop!',
-                    icon=QMessageBox.Critical, modal=False)
-                self.start_bx.setValue(sel_region.getRegion()[0])
+        stop = sel_region.getRegion()[1]
+        if start < stop:
+            self.mne.selected_region.setRegion((start, stop))
+        else:
+            self.weakmain().message_box(
+                text='Invalid value!',
+                info_text='Start can\'t be bigger or equal to Stop!',
+                icon=QMessageBox.Critical, modal=False)
+            self.start_bx.setValue(sel_region.getRegion()[0])
 
     def _stop_changed(self):
         stop = self.stop_bx.value()
         sel_region = self.mne.selected_region
-        if sel_region:
-            start = sel_region.getRegion()[0]
-            if start < stop:
-                sel_region.setRegion((start, stop))
-            else:
-                self.weakmain().message_box(
-                    text='Invalid value!',
-                    info_text='Stop can\'t be smaller or equal to Start!',
-                    icon=QMessageBox.Critical)
-                self.stop_bx.setValue(sel_region.getRegion()[1])
+        start = sel_region.getRegion()[0]
+        if start < stop:
+            sel_region.setRegion((start, stop))
+        else:
+            self.weakmain().message_box(
+                text='Invalid value!',
+                info_text='Stop can\'t be smaller or equal to Start!',
+                icon=QMessageBox.Critical)
+            self.stop_bx.setValue(sel_region.getRegion()[1])
 
     def _set_color(self):
         curr_descr = self.description_cmbx.currentText()
@@ -2453,8 +2509,12 @@ class AnnotationDock(QDockWidget):
     def update_values(self, region):
         """Update spinbox-values from region."""
         rgn = region.getRegion()
-        self.start_bx.setValue(rgn[0])
-        self.stop_bx.setValue(rgn[1])
+        self.start_bx.setEnabled(True)
+        self.stop_bx.setEnabled(True)
+        with SignalBlocker(self.start_bx):
+            self.start_bx.setValue(rgn[0])
+        with SignalBlocker(self.stop_bx):
+            self.stop_bx.setValue(rgn[1])
 
     def _update_description_cmbx(self):
         self.description_cmbx.clear()
@@ -2472,8 +2532,10 @@ class AnnotationDock(QDockWidget):
         if self.description_cmbx.count() > 0:
             self.description_cmbx.setCurrentIndex(0)
             self.mne.current_description = self.description_cmbx.currentText()
-        self.start_bx.setValue(0)
-        self.stop_bx.setValue(0)
+        with SignalBlocker(self.start_bx):
+            self.start_bx.setValue(0)
+        with SignalBlocker(self.stop_bx):
+            self.stop_bx.setValue(1 / self.mne.info["sfreq"])
 
     def _show_help(self):
         info_text = '<h1>Help</h1>' \
@@ -4035,6 +4097,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Reset selected region
         if region == self.mne.selected_region:
             self.mne.selected_region = None
+            # disable, reset start/stop doubleSpinBox until another region is selected
+            self.mne.fig_annotation.start_bx.setEnabled(False)
+            self.mne.fig_annotation.stop_bx.setEnabled(False)
+            with SignalBlocker(self.mne.fig_annotation.start_bx):
+                self.mne.fig_annotation.start_bx.setValue(0)
+            with SignalBlocker(self.mne.fig_annotation.stop_bx):
+                self.mne.fig_annotation.stop_bx.setValue(1 / self.mne.info["sfreq"])
 
         # Remove from annotations
         if from_annot:
@@ -4096,6 +4165,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.fig_annotation = AnnotationDock(self)
             self.addDockWidget(Qt.TopDockWidgetArea, self.mne.fig_annotation)
             self.mne.fig_annotation.setVisible(False)
+            self.mne.fig_annotation.start_bx.setEnabled(False)
+            self.mne.fig_annotation.stop_bx.setEnabled(False)
 
         # Add annotations as regions
         for annot in self.mne.inst.annotations:
@@ -4735,3 +4806,19 @@ def _init_browser(**kwargs):
 
 class PyQtGraphBrowser(MNEQtBrowser):  # noqa: D101
     pass  # just for backward compat with MNE 1.0 scraping
+
+
+class SignalBlocker(QSignalBlocker):
+    """Wrapper to use QSignalBlocker as a context manager in PySide2."""
+
+    def __enter__(self):
+        if hasattr(super(), "__enter__"):
+            super().__enter__()
+        else:
+            super().reblock()
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if hasattr(super(), "__exit__"):
+            super().__exit__(exc_type, exc_value, traceback)
+        else:
+            super().unblock()
