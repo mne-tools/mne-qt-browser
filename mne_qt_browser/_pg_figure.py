@@ -2280,6 +2280,7 @@ class AnnotationDock(QDockWidget):
         self.weakmain()._setup_annotation_colors()
         self._update_regions_colors()
         self._update_description_cmbx()
+        self.mne.current_description = new_des
         self.mne.overview_bar.update_annotations()
 
     def _edit_description_selected(self, new_des):
