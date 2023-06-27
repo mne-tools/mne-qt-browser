@@ -1251,6 +1251,7 @@ class RawViewBox(ViewBox):
                 if event.isStart():
                     self._drag_start = self.mapSceneToView(
                             event.lastScenePos()).x()
+                    self._drag_start = 0 if self._drag_start < 0 else self._drag_start
                     drag_stop = self.mapSceneToView(event.scenePos()).x()
                     self._drag_region = AnnotRegion(self.mne,
                                                     description=description,
@@ -1258,6 +1259,12 @@ class RawViewBox(ViewBox):
                                                             drag_stop))
                 elif event.isFinish():
                     drag_stop = self.mapSceneToView(event.scenePos()).x()
+                    drag_stop = 0 if drag_stop < 0 else drag_stop
+                    drag_stop = (
+                        self.mne.inst.times[-1]
+                        if self.mne.inst.times[-1] < drag_stop
+                        else drag_stop
+                    )
                     self._drag_region.setRegion((self._drag_start, drag_stop))
                     plot_onset = min(self._drag_start, drag_stop)
                     plot_offset = max(self._drag_start, drag_stop)
