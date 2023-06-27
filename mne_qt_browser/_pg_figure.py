@@ -2467,7 +2467,6 @@ class AnnotationDock(QDockWidget):
         rgn = region.getRegion()
         self.start_bx.setEnabled(True)
         self.stop_bx.setEnabled(True)
-        # change value with sending the valueChanged signal
         with QSignalBlocker(self.start_bx):
             self.start_bx.setValue(rgn[0])
         with QSignalBlocker(self.stop_bx):
