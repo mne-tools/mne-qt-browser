@@ -2467,7 +2467,7 @@ class AnnotationDock(QDockWidget):
         # for annot in self.
         for region in self.mne.regions:
             if region.description == self.mne.current_description:
-                region.setZValue(3)
+                region.setZValue(2)
             else:
                 region.setZValue(1)
 
