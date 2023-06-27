@@ -2088,8 +2088,10 @@ class AnnotRegion(LinearRegionItem):
                 event.accept()
             elif event.button() == Qt.RightButton and self.movable:
                 self.remove()
-                # Propagate remove request to lower annotations if overlapping
-                event.ignore()
+                # the annotation removed should be the one on top of all others, which
+                # should correspond to the one of the type currently selected and with
+                # the highest zValue
+                event.accept()
         else:
             event.ignore()
 
@@ -2461,6 +2463,13 @@ class AnnotationDock(QDockWidget):
     def _description_changed(self, descr_idx):
         new_descr = self.description_cmbx.itemText(descr_idx)
         self.mne.current_description = new_descr
+        # increase zValue of currently selected annotation and decrease all the others
+        # for annot in self.
+        for region in self.mne.regions:
+            if region.description == self.mne.current_description:
+                region.setZValue(3)
+            else:
+                region.setZValue(1)
 
     def _start_changed(self):
         start = self.start_bx.value()
