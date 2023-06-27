@@ -1261,9 +1261,7 @@ class RawViewBox(ViewBox):
                     drag_stop = self.mapSceneToView(event.scenePos()).x()
                     drag_stop = 0 if drag_stop < 0 else drag_stop
                     drag_stop = (
-                        self.mne.inst.times[-1]
-                        if self.mne.inst.times[-1] < drag_stop
-                        else drag_stop
+                        self.mne.xmax if self.mne.xmax < drag_stop else drag_stop
                     )
                     self._drag_region.setRegion((self._drag_start, drag_stop))
                     plot_onset = min(self._drag_start, drag_stop)
@@ -2095,10 +2093,51 @@ class AnnotRegion(LinearRegionItem):
         else:
             event.ignore()
 
-    def mouseDragEvent(self, event):
+    def mouseDragEvent(self, ev):
         """Customize mouse drag events."""
-        # TODO: Prevent annotations from extending beyond (0, raw.times[-1])
-        super().mouseDragEvent(event)
+        if (
+            not self.mne.annotation_mode
+            or not self.movable
+            or not ev.button() == Qt.LeftButton
+        ):
+            return
+        ev.accept()
+
+        if ev.isStart():
+            bdp = ev.buttonDownPos()
+            self.cursorOffsets = [l.pos() - bdp for l in self.lines]
+            self.startPositions = [l.pos() for l in self.lines]
+            self.moving = True
+
+        if not self.moving:
+            return
+
+        new_pos = [pos + ev.pos() for pos in self.cursorOffsets]
+        # make sure the new_pos is not exiting the boundaries set for each line which
+        # corresponds to (0, raw.times[-1])
+        # we have to take into account regions draw from right to left and from left to
+        # right separately because we are changing the position of the individual lines
+        # used to create the region
+        idx = 0 if new_pos[0].x() <= new_pos[1].x() else 1
+        if new_pos[idx].x() < self.lines[idx].bounds()[0]:
+            shift = self.lines[idx].bounds()[0] - new_pos[idx].x()
+            for pos in new_pos:
+                pos.setX(pos.x() + shift)
+        if self.lines[(idx + 1) % 2].bounds()[1] < new_pos[(idx + 1) % 2].x():
+            shift = new_pos[(idx + 1) % 2].x() - self.lines[(idx + 1) % 2].bounds()[1]
+            for pos in new_pos:
+                pos.setX(pos.x() - shift)
+
+        with SignalBlocker(self.lines[0]):
+            for pos, line in zip(new_pos, self.lines):
+                line.setPos(pos)
+        self.prepareGeometryChange()
+
+        if ev.isFinish():
+            self.moving = False
+            self.sigRegionChangeFinished.emit(self)
+        else:
+            self.sigRegionChanged.emit(self)
 
     def update_label_pos(self):
         """Update position of description-label from annotation-region."""
@@ -2222,7 +2261,7 @@ class AnnotationDock(QDockWidget):
         self.start_bx = QDoubleSpinBox()
         self.start_bx.setDecimals(time_decimals)
         self.start_bx.setMinimum(0)
-        self.start_bx.setMaximum(self.mne.inst.times[-1] - 1 / self.mne.info["sfreq"])
+        self.start_bx.setMaximum(self.mne.xmax - 1 / self.mne.info["sfreq"])
         self.start_bx.setSingleStep(0.05)
         self.start_bx.valueChanged.connect(self._start_changed)
         layout.addWidget(self.start_bx)
@@ -2231,7 +2270,7 @@ class AnnotationDock(QDockWidget):
         self.stop_bx = QDoubleSpinBox()
         self.stop_bx.setDecimals(time_decimals)
         self.stop_bx.setMinimum(1 / self.mne.info["sfreq"])
-        self.stop_bx.setMaximum(self.mne.inst.times[-1])
+        self.stop_bx.setMaximum(self.mne.xmax)
         self.stop_bx.setSingleStep(0.05)
         self.stop_bx.valueChanged.connect(self._stop_changed)
         layout.addWidget(self.stop_bx)
