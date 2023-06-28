@@ -3394,7 +3394,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # Disable time format toggling
             del self.mne.keyboard_shortcuts['t']
         else:
-            # dissable histogram of epoch PTP amplitude
+            # disable histogram of epoch PTP amplitude
             del self.mne.keyboard_shortcuts["h"]
 
     def _hidpi_mkPen(self, *args, **kwargs):
