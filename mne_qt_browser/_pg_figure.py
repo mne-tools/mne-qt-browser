@@ -3393,6 +3393,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if self.mne.is_epochs:
             # Disable time format toggling
             del self.mne.keyboard_shortcuts['t']
+        else:
+            # dissable histogram of epoch PTP amplitude
+            del self.mne.keyboard_shortcuts["h"]
 
     def _hidpi_mkPen(self, *args, **kwargs):
         kwargs['width'] = self._pixel_ratio * kwargs.get('width', 1.)
