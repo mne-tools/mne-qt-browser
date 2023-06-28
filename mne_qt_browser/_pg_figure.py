@@ -4203,7 +4203,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         for region in self.mne.regions:
             region.setMovable(self.mne.annotation_mode)
             if self.mne.annotation_mode:
-                region.setZvalue(
+                region.setZValue(
                     2 if region.description == self.mne.current_description else 1
                 )
             else:
