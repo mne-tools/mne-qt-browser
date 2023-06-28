@@ -4332,10 +4332,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.remove_dc = not self.mne.remove_dc
         self._redraw()
 
-    def _toggle_epoch_histogram(self):
-        fig = self._create_epoch_histogram()
-        self._get_dlg_from_mpl(fig)
-
     def _set_events_visible(self, visible):
         for event_line in self.mne.event_lines:
             event_line.setVisible(visible)
@@ -4421,7 +4417,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if fig is not None:
             self._get_dlg_from_mpl(fig)
 
-    def _toggle_epoch_histogramm(self):
+    def _toggle_epoch_histogram(self):
         if self.mne.is_epochs:
             fig = self._create_epoch_histogram()
             if fig is not None:
