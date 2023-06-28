@@ -1296,6 +1296,7 @@ class RawViewBox(ViewBox):
                         plot_onset, duration, self.mne.current_description,
                         region=self._drag_region)
                     self._drag_region.select(True)
+                    self._drag_region.setZValue(1)
 
                     # Update Overview-Bar
                     self.mne.overview_bar.update_annotations()
@@ -2466,9 +2467,9 @@ class AnnotationDock(QDockWidget):
         # increase zValue of currently selected annotation and decrease all the others
         for region in self.mne.regions:
             if region.description == self.mne.current_description:
-                region.setZValue(2)
-            else:
                 region.setZValue(1)
+            else:
+                region.setZValue(0)
 
     def _start_changed(self):
         start = self.start_bx.value()
@@ -4185,6 +4186,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             duration = annot['duration']
             description = annot['description']
             region = self._add_region(plot_onset, duration, description)
+            if region.description == self.mne.current_description:
+                region.setZValue(1)
             region.update_visible(False)
 
         # Initialize showing annotation widgets
@@ -4202,7 +4205,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         for region in self.mne.regions:
             region.setMovable(self.mne.annotation_mode)
             if self.mne.annotation_mode:
-                region.setZValue(2)
+                region.setZValue(1)
             else:
                 region.setZValue(0)
 
