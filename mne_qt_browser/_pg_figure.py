@@ -3394,6 +3394,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # Disable time format toggling
             del self.mne.keyboard_shortcuts['t']
         else:
+            if self.mne.info["meas_date"] is None:
+                del self.mne.keyboard_shortcuts["t"]
             # disable histogram of epoch PTP amplitude
             del self.mne.keyboard_shortcuts["h"]
 
@@ -4344,13 +4346,14 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self._set_events_visible(self.mne.events_visible)
 
     def _toggle_time_format(self):
-        if self.mne.time_format == 'float':
-            self.mne.time_format = 'clock'
-            self.mne.time_axis.setLabel(text='Time of day')
-        else:
-            self.mne.time_format = 'float'
-            self.mne.time_axis.setLabel(text='Time', units='s')
-        self._update_yaxis_labels()
+        if self.mne.info["meas_date"] is not None:
+            if self.mne.time_format == 'float':
+                self.mne.time_format = 'clock'
+                self.mne.time_axis.setLabel(text='Time of day')
+            else:
+                self.mne.time_format = 'float'
+                self.mne.time_axis.setLabel(text='Time', units='s')
+            self._update_yaxis_labels()
 
     def _toggle_fullscreen(self):
         if self.isFullScreen():
