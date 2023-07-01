@@ -2231,7 +2231,7 @@ class AnnotationDock(QDockWidget):
 
         self.description_cmbx = QComboBox()
         self.description_cmbx.setSizeAdjustPolicy(QComboBox.AdjustToContents)
-        self.description_cmbx.activated.connect(self._description_changed)
+        self.description_cmbx.currentIndexChanged.connect(self._description_changed)
         self._update_description_cmbx()
         layout.addWidget(self.description_cmbx)
 
