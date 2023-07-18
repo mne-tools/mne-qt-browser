@@ -4008,9 +4008,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
             # remove DC locally
             if self.mne.remove_dc:
-                self.mne.data = self.mne.data - \
-                                self.mne.data.mean(axis=1, keepdims=True)
-
+                self.mne.data = (
+                    self.mne.data - np.nanmean(self.mne.data, axis=1, keepdims=True)
+                )
         else:
             # While data is not precomputed get data only from shown range and
             # process only those.
