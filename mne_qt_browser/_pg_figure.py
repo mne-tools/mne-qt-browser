@@ -3044,17 +3044,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         adecr_nchan.triggered.connect(
             _methpartial(self.scale_all, step=-0.5))
         self.mne.toolbar.addAction(adecr_nchan)
-
-
-        set_amp = QLineEdit('1', parent=self)
-        #set_amp.setValidator(QDoubleValidator(0.01,99.99,2))
-        #set_amp.displayText(self.mne.scale_factor)
-        set_amp.editingFinished.connect(
-            _methpartial(self.set_scale_factor, scale = set_amp.text())
-        )
-        self.mne.toolbar.addWidget(set_amp)
-
-        
         aincr_nchan = QAction(
             QIcon.fromTheme("zoom_in"), 'Zoom in', parent=self)
         aincr_nchan.triggered.connect(
