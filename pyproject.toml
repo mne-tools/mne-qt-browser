@@ -21,7 +21,7 @@ dependencies = [
     "matplotlib",
     "qtpy",
     "scooby",
-    "mne @ git+https://github.com/drammock/mne-python.git@d5c60e10402d439e4e64ec59b87d646372dbcf6a",
+    "mne@git+https://github.com/drammock/mne-python.git#egg=annot-deletion",
     "pyqtgraph>=0.12.3",
     "colorspacious",
     "pyopengl; platform_system=='Darwin'",
