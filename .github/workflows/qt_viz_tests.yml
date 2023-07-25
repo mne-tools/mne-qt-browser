@@ -77,7 +77,7 @@ jobs:
         run: |  # use MNE main to ensure test files are available
           set -e
           python -m pip install --upgrade pip
-          git clone -b ${MNE_BRANCH} --single-branch --branch main https://github.com/mne-tools/mne-python.git ../mne-python
+          git clone -b ${MNE_BRANCH} --single-branch --branch annot-deletion https://github.com/drammock/mne-python.git ../mne-python
           python -m pip install -qe ../mne-python
           if [[ "${{ matrix.opengl }}" == "opengl" ]]; then
             PIP_OPTION="[opengl,tests]"
