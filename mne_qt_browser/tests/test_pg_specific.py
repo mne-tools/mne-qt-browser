@@ -24,7 +24,7 @@ def test_annotations_interactions(raw_orig, pg_backend):
     fig._fake_keypress('a')
 
     # Set current description to index 1
-    annot_dock.description_cmbx.activated.emit(1)
+    annot_dock.description_cmbx.setCurrentIndex(1)
     assert fig.mne.current_description == 'B'
 
     # Draw additional annotation
