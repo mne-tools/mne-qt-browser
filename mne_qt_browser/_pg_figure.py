@@ -3403,6 +3403,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # Disable time format toggling
             del self.mne.keyboard_shortcuts['t']
         else:
+            if self.mne.info["meas_date"] is None:
+                del self.mne.keyboard_shortcuts["t"]
             # disable histogram of epoch PTP amplitude
             del self.mne.keyboard_shortcuts["h"]
 
@@ -4015,9 +4017,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
             # remove DC locally
             if self.mne.remove_dc:
-                self.mne.data = self.mne.data - \
-                                self.mne.data.mean(axis=1, keepdims=True)
-
+                self.mne.data = (
+                    self.mne.data - np.nanmean(self.mne.data, axis=1, keepdims=True)
+                )
         else:
             # While data is not precomputed get data only from shown range and
             # process only those.
@@ -4355,13 +4357,14 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self._set_events_visible(self.mne.events_visible)
 
     def _toggle_time_format(self):
-        if self.mne.time_format == 'float':
-            self.mne.time_format = 'clock'
-            self.mne.time_axis.setLabel(text='Time of day')
-        else:
-            self.mne.time_format = 'float'
-            self.mne.time_axis.setLabel(text='Time', units='s')
-        self._update_yaxis_labels()
+        if self.mne.info["meas_date"] is not None:
+            if self.mne.time_format == 'float':
+                self.mne.time_format = 'clock'
+                self.mne.time_axis.setLabel(text='Time of day')
+            else:
+                self.mne.time_format = 'float'
+                self.mne.time_axis.setLabel(text='Time', units='s')
+            self._update_yaxis_labels()
 
     def _toggle_fullscreen(self):
         if self.isFullScreen():
