@@ -29,7 +29,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu, windows, macos]
-        mne: [main, maint/1.4]
+        mne: [annot-deletion, maint/1.4]
         opengl: ['opengl']
         python: ['3.11']
         name: [matrix]
@@ -77,7 +77,7 @@ jobs:
         run: |  # use MNE main to ensure test files are available
           set -e
           python -m pip install --upgrade pip
-          git clone --single-branch --branch annot-deletion https://github.com/drammock/mne-python.git ../mne-python
+          git clone -b ${MNE_BRANCH} --single-branch https://github.com/drammock/mne-python.git ../mne-python
           python -m pip install -qe ../mne-python
           if [[ "${{ matrix.opengl }}" == "opengl" ]]; then
             PIP_OPTION="[opengl,tests]"
