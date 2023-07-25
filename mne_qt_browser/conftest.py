@@ -17,7 +17,7 @@ _store = {'Raw': {},
 def pytest_configure(config):
     """Configure pytest options."""
     # Markers
-    for marker in ('benchmark',):
+    for marker in ('benchmark', 'pgtest', 'slowtest'):
         config.addinivalue_line('markers', marker)
 
 
