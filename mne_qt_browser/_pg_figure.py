@@ -1572,6 +1572,30 @@ class _BaseDialog(QDialog):
             self.weakmain().raise_()
         return super().event(event)
 
+class AmplitudeSettingsDialog(_BaseDialog):
+    """Shows advanced settings for amplitude scaling."""
+
+    def __init__(self, main, title='Advanced Amplitude Settings', **kwargs):
+        super().__init__(main, title=title, **kwargs)
+
+        layout = QFormLayout()
+
+        self.all_scale_cmbx = QComboBox()
+        self.all_scale_cmbx.setToolTip('% Scaling for all channels')
+        self.all_scale_cmbx.addItems(['25','50','75','100','150','200','250'])
+        self.all_scale_box = QSpinBox()
+        self.all_scale_box.setToolTip('Manually enter the "%" scaling of all channels')
+        self.all_scale_box.setMinimum(1)
+        layout.addrow('All', self.all_scale_cmbx, self.all_scale_box)
+        
+        self.setLayout(layout)
+        self.show()
+
+    def closeEvent(self, event):  # noqa: D102
+        #_disconnect(self.ds_method_cmbx.currentTextChanged)
+        #_disconnect(self.scroll_sensitivity_slider.valueChanged)
+        super().closeEvent(event)
+
 
 class SettingsDialog(_BaseDialog):
     """Shows additional settings."""
@@ -2752,6 +2776,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.test_mode = False
         # A Settings-Dialog
         self.mne.fig_settings = None
+        # A Settings-Dialog for Amplitude
+        self.mne.fig_amp_settings = None
         # Stores decimated data
         self.mne.decim_data = None
         # Stores ypos for selection-mode
@@ -3049,6 +3075,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         aincr_nchan.triggered.connect(
             _methpartial(self.scale_all, step= 0.5))
         self.mne.toolbar.addAction(aincr_nchan)
+        ampsettings = QAction(QIcon.fromTheme("settings"), 'Amplitude Advanced Settings',
+                            parent=self)
+        ampsettings.triggered.connect(self._toggle_amp_settings_fig)
+        self.mne.toolbar.addAction(ampsettings)
         self.mne.toolbar.addSeparator()
 
         if not self.mne.is_epochs:
@@ -4189,6 +4219,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # If data was precomputed it needs to be precomputed again.
         self._rerun_precompute()
         self._redraw()
+
+    def _toggle_amp_settings_fig(self):
+        if self.mne.fig_amp_settings is None:
+            AmplitudeSettingsDialog(self, name='fig_amp_settings')
+        else:
+            self.mne.fig_amp_settings.close()
+            self.mne.fig_amp_settings = None
 
     def _toggle_settings_fig(self):
         if self.mne.fig_settings is None:
