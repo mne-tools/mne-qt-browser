@@ -146,7 +146,7 @@ def test_scroll_speed_epochs_unicolor(raw_orig, benchmark_param, store,
     # Prevent problems with info's locked-stated
     epochs.info._unlocked = True
 
-    fig = epochs.plot(show=False, block=False, **benchmark_param)
+    fig = epochs.plot(show=False, block=False, events=False, **benchmark_param)
     _Benchmark(fig, qapp, store, request)
 
 
@@ -189,6 +189,6 @@ def test_scroll_speed_epochs_multicolor(raw_orig, benchmark_param, store,
     if sys.platform == 'darwin':
         benchmark_param['use_opengl'] = True
 
-    fig = epochs.plot(show=False, block=False, epoch_colors=epoch_colors,
+    fig = epochs.plot(show=False, block=False, events=False, epoch_colors=epoch_colors,
                       **benchmark_param)
     _Benchmark(fig, qapp, store, request)
