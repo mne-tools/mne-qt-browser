@@ -176,7 +176,7 @@ jobs:
           python -m pip install -ve .${PIP_OPTION} ${QT_LIB_INSTALL}
       - name: Patch MNE 1.4 test
         if: ${{ matrix.mne == '1.4' }}
-        run: patch -d ../mne-python < /.github/workflows/mne_1_4.patch
+        run: patch -d ../mne-python < .github/workflows/mne_1_4.patch
       - shell: bash -el {0}
         run: ./tools/get_testing_version.sh
         name: 'Get testing version'
