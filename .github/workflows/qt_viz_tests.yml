@@ -75,7 +75,6 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install dependencies
         run: |  # use MNE main to ensure test files are available
-          set -e
           python -m pip install --upgrade pip
           git clone -b ${MNE_BRANCH} --single-branch --branch main https://github.com/mne-tools/mne-python.git ../mne-python
           python -m pip install -qe ../mne-python
@@ -148,7 +147,7 @@ jobs:
       QT_LIB: ${{ matrix.qt }}
     defaults:
       run:
-        shell: bash
+        shell: bash -el {0}
     steps:
       - uses: actions/checkout@v3
         with:
@@ -159,7 +158,6 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install dependencies
         run: |  # use MNE main to ensure test files are available
-          set -e
           python -m pip install --upgrade pip
           git clone -b ${MNE_BRANCH} --single-branch --branch main https://github.com/mne-tools/mne-python.git ../mne-python
           python -m pip install -qe ../mne-python
@@ -176,6 +174,9 @@ jobs:
             PIP_OPTION="[tests]"
           fi
           python -m pip install -ve .${PIP_OPTION} ${QT_LIB_INSTALL}
+      - name: Patch MNE 1.4 test
+        if: ${{ matrix.mne == '1.4' }}
+        run: patch -d ../mne-python < /.github/workflows/mne_1_4.patch
       - shell: bash -el {0}
         run: ./tools/get_testing_version.sh
         name: 'Get testing version'

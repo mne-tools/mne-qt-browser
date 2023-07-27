@@ -1,0 +1,20 @@
+diff --git a/mne/viz/tests/test_raw.py b/mne/viz/tests/test_raw.py
+index 5533b5870..56ff1e607 100644
+--- a/mne/viz/tests/test_raw.py
++++ b/mne/viz/tests/test_raw.py
+@@ -23,6 +23,7 @@ from mne.utils import (
+     get_config,
+     set_config,
+     _assert_no_instances,
++    check_version,
+ )
+ from mne.viz import plot_raw, plot_sensors
+ from mne.viz.utils import _fake_click, _fake_keypress
+@@ -745,6 +746,7 @@ def test_plot_annotations(raw, browser_backend):
+         assert fig.mne.regions[0].isVisible()
+ 
+ 
++@pytest.mark.xfail(check_version("mne_qt_browser", "0.5.2"), reason="old behavior was wrong")
+ @pytest.mark.parametrize("hide_which", ([], [0], [1], [0, 1]))
+ def test_remove_annotations(raw, hide_which, browser_backend):
+     """Test that right-click doesn't remove hidden annotation spans."""
