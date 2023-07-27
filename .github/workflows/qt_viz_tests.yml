@@ -177,7 +177,7 @@ jobs:
       - name: Patch MNE 1.4 test
         if: ${{ matrix.mne == '1.4' }}
         run: patch -d ../mne-python < .github/workflows/mne_1_4.patch
-      - shell: bash -el {0}
+      - shell: bash -e {0}
         run: ./tools/get_testing_version.sh
         name: 'Get testing version'
         working-directory: ../mne-python
