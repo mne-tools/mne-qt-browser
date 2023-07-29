@@ -1253,10 +1253,12 @@ class RawViewBox(ViewBox):
                             event.lastScenePos()).x()
                     self._drag_start = 0 if self._drag_start < 0 else self._drag_start
                     drag_stop = self.mapSceneToView(event.scenePos()).x()
-                    self._drag_region = AnnotRegion(self.mne,
-                                                    description=description,
-                                                    values=(self._drag_start,
-                                                            drag_stop))
+                    self._drag_region = AnnotRegion(
+                        self.mne,
+                        description=description,
+                        values=(self._drag_start, drag_stop),
+                        weakmain=self.weakmain,
+                    )
                 elif event.isFinish():
                     drag_stop = self.mapSceneToView(event.scenePos()).x()
                     drag_stop = 0 if drag_stop < 0 else drag_stop
@@ -1278,12 +1280,11 @@ class RawViewBox(ViewBox):
                     # Add to regions/merge regions
                     merge_values = [plot_onset, plot_offset]
                     rm_regions = list()
-                    for region in [r for r in self.mne.regions
-                                   if r.description ==
-                                   self.mne.current_description]:
+                    for region in self.mne.regions:
+                        if region.description != self.mne.current_description:
+                            continue
                         values = region.getRegion()
-                        if any([plot_onset < val < plot_offset for val in
-                                values]):
+                        if any([plot_onset <= val <= plot_offset for val in values]):
                             merge_values += values
                             rm_regions.append(region)
                     if len(merge_values) > 2:
@@ -2006,7 +2007,7 @@ class AnnotRegion(LinearRegionItem):
     gotSelected = Signal(object)
     removeRequested = Signal(object)
 
-    def __init__(self, mne, description, values):
+    def __init__(self, mne, description, values, weakmain):
         super().__init__(values=values, orientation='vertical',
                          movable=True, swapMode='sort',
                          bounds=(0, mne.xmax))
@@ -2014,6 +2015,7 @@ class AnnotRegion(LinearRegionItem):
         self.setZValue(0)
 
         self.sigRegionChangeFinished.connect(self._region_changed)
+        self.weakmain = weakmain
         self.mne = mne
         self.description = description
         self.old_onset = values[0]
@@ -2031,6 +2033,36 @@ class AnnotRegion(LinearRegionItem):
     def _region_changed(self):
         self.regionChangeFinished.emit(self)
         self.old_onset = self.getRegion()[0]
+        # merge annotations if needed
+        onset = _sync_onset(self.mne.inst, self.old_onset, inverse=True)
+        _merge_annotations(
+            onset,
+            onset + self.getRegion()[1] - self.getRegion()[0],
+            self.mne.current_description,
+            self.mne.inst.annotations,
+        )
+        # remove merged regions
+        overlapping_regions = list()
+        for region in self.mne.regions:
+            if region.description != self.mne.current_description:
+                continue
+            if id(self) == id(region):
+                continue
+            values = region.getRegion()
+            if any(self.getRegion()[0] <= val <= self.getRegion()[1] for val in values):
+                overlapping_regions.append(region)
+        # figure out new boundaries
+        regions_ = np.array(
+            [region.getRegion() for region in overlapping_regions] + [self.getRegion()]
+        )
+        onset = np.min(regions_[:, 0])
+        offset = np.max(regions_[:, 1])
+        # remove overlapping regions
+        for region in overlapping_regions:
+            self.weakmain()._remove_region(region, from_annot=False)
+        # re-set while blocking the signal to avoid re-running this function
+        with SignalBlocker(self):
+            self.setRegion((onset, offset))
 
     def update_color(self):
         """Update color of annotation-region."""
@@ -4084,8 +4116,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     def _add_region(self, plot_onset, duration, description, *, region=None):
         if not region:
-            region = AnnotRegion(self.mne, description=description,
-                                 values=(plot_onset, plot_onset + duration))
+            region = AnnotRegion(
+                self.mne,
+                description=description,
+                values=(plot_onset, plot_onset + duration),
+                weakmain=weakref.ref(self),
+            )
         # Add region to list and plot
         self.mne.regions.append(region)
 
