@@ -1284,7 +1284,7 @@ class RawViewBox(ViewBox):
                         if region.description != self.mne.current_description:
                             continue
                         values = region.getRegion()
-                        if any([plot_onset <= val <= plot_offset for val in values]):
+                        if any(plot_onset <= val <= plot_offset for val in values):
                             merge_values += values
                             rm_regions.append(region)
                     if len(merge_values) > 2:
