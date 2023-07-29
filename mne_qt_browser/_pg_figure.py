@@ -2031,7 +2031,6 @@ class AnnotRegion(LinearRegionItem):
         self.mne.plt.addItem(self.label_item, ignoreBounds=True)
 
     def _region_changed(self):
-        print ("HERE")
         self.old_onset = self.getRegion()[0]
         # merge annotations if needed
         onset = _sync_onset(self.mne.inst, self.old_onset, inverse=True)
