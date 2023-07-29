@@ -1244,8 +1244,7 @@ class RawViewBox(ViewBox):
         """Customize mouse drag events."""
         event.accept()
 
-        if event.button() == Qt.LeftButton \
-                and self.mne.annotation_mode:
+        if event.button() == Qt.LeftButton and self.mne.annotation_mode:
             if self.mne.current_description:
                 description = self.mne.current_description
                 if event.isStart():
@@ -1303,7 +1302,8 @@ class RawViewBox(ViewBox):
                     self.mne.overview_bar.update_annotations()
                 else:
                     x_to = self.mapSceneToView(event.scenePos()).x()
-                    self._drag_region.setRegion((self._drag_start, x_to))
+                    with SignalBlocker(self._drag_region):
+                        self._drag_region.setRegion((self._drag_start, x_to))
 
             elif event.isFinish():
                 self.weakmain().message_box(
@@ -2031,6 +2031,7 @@ class AnnotRegion(LinearRegionItem):
         self.mne.plt.addItem(self.label_item, ignoreBounds=True)
 
     def _region_changed(self):
+        print ("HERE")
         self.old_onset = self.getRegion()[0]
         # merge annotations if needed
         onset = _sync_onset(self.mne.inst, self.old_onset, inverse=True)
