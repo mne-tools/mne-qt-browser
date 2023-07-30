@@ -1583,17 +1583,13 @@ class AmplitudeSettingsDialog(_BaseDialog):
         self.all_scale_cmbx = QComboBox()
         self.all_scale_cmbx.setToolTip('% Scaling for all channels')
         self.all_scale_cmbx.addItems(['25','50','75','100','150','200','250'])
-        self.all_scale_box = QSpinBox()
-        self.all_scale_box.setToolTip('Manually enter the "%" scaling of all channels')
-        self.all_scale_box.setMinimum(1)
-        layout.addrow('All', self.all_scale_cmbx, self.all_scale_box)
+        layout.addRow('All', self.all_scale_cmbx)
         
         self.setLayout(layout)
         self.show()
 
     def closeEvent(self, event):  # noqa: D102
-        #_disconnect(self.ds_method_cmbx.currentTextChanged)
-        #_disconnect(self.scroll_sensitivity_slider.valueChanged)
+        _disconnect(self.all_scale_cmbx.currentTextChanged)
         super().closeEvent(event)
 
 
