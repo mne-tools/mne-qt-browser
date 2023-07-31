@@ -17,6 +17,7 @@ from ast import literal_eval
 from collections import OrderedDict
 from copy import copy
 from functools import partial
+import os
 from os.path import getsize
 
 import numpy as np
@@ -1523,6 +1524,7 @@ class _BaseDialog(QDialog):
                  modal=False, name=None, title=None,
                  flags=Qt.Window | Qt.Tool):
         super().__init__(main, flags)
+        _set_window_flags(self)
         self.weakmain = weakref.ref(main)
         self.widget = widget
         self.mne = main.mne
@@ -1577,7 +1579,7 @@ class _BaseDialog(QDialog):
     # the main window should be raised as well
     def event(self, event):
         if event.type() == QEvent.WindowActivate:
-            self.weakmain().raise_()
+            _qt_raise_window(self.weakmain())
         return super().event(event)
 
 
@@ -1789,6 +1791,7 @@ class _ChannelFig(FigureCanvasQTAgg):
         self.figure = figure
         self.mne = mne
         super().__init__(figure)
+        _set_window_flags(self)
         self.setFocusPolicy(Qt.FocusPolicy(Qt.StrongFocus | Qt.WheelFocus))
         self.setFocus()
         self._lasso_path = None
@@ -4404,6 +4407,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         canvas = FigureCanvasQTAgg(fig)
         canvas.setFocusPolicy(Qt.FocusPolicy(Qt.StrongFocus | Qt.WheelFocus))
         canvas.setFocus()
+        _set_window_flags(canvas)
         # Pass window title and fig_name on
         if hasattr(fig, 'fig_name'):
             canvas.fig_name = fig.fig_name
@@ -4627,7 +4631,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # (came up with test_epochs::test_plot_epochs_clicks)
         QTest.qWait(100)
         if not self.mne.butterfly:
-            ch_name = self.mne.ch_names[self.mne.picks[ch_index]]
+            ch_name = str(self.mne.ch_names[self.mne.picks[ch_index]])
             xrange, yrange = self.mne.channel_axis.ch_texts[ch_name]
             x = np.mean(xrange)
             y = np.mean(yrange)
@@ -4835,3 +4839,8 @@ class SignalBlocker(QSignalBlocker):
             super().__exit__(exc_type, exc_value, traceback)
         else:
             super().unblock()
+
+
+def _set_window_flags(widget):
+    if os.getenv("_MNE_BROWSER_BACK", "").lower() == "true":
+        widget.setWindowFlags(widget.windowFlags() | Qt.WindowStaysOnBottomHint)

@@ -10,20 +10,6 @@ on:
       - cron: "0 4 * * 1"  # At 04:00 on Monday
 
 jobs:
-  style:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.9
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install ruff
-      - name: Lint with ruff
-        run: ruff .
   pytest:
     strategy:
       fail-fast: false
@@ -33,6 +19,7 @@ jobs:
         opengl: ['opengl']
         python: ['3.11']
         name: [matrix]
+        pip: ['']
         include:
           - os: ubuntu
             mne: main
@@ -54,6 +41,12 @@ jobs:
             opengl: 'opengl'
             python: '3.9'
             name: old
+          - os: ubuntu
+            mne: main
+            opengl: 'opengl'
+            python: '3.11'
+            pip: pre
+            name: pip-pre
     name: pytest ${{ matrix.name }} / ${{ matrix.os }} / MNE ${{ matrix.mne }}
     runs-on: ${{ matrix.os }}-latest
     env:
@@ -85,6 +78,10 @@ jobs:
             PIP_OPTION="[tests]"
           fi
           python -m pip install -ve .${PIP_OPTION} PyQt5
+          if [[ "${{ matrix.pip }}" == "pre" ]]; then
+            echo "Upgrading to pre-release NumPy, SciPy, and matplotlib"
+            python -m pip install --upgrade --pre --only-binary ":all:" --default-timeout=60 --extra-index-url "https://pypi.anaconda.org/scientific-python-nightly-wheels/simple" numpy scipy matplotlib
+          fi
       - run: ./tools/get_testing_version.sh
         name: 'Get testing version'
         working-directory: ../mne-python
