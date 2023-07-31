@@ -35,7 +35,7 @@ from qtpy.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
                             QVBoxLayout, QLineEdit, QCheckBox, QScrollArea,
                             QGraphicsLineItem, QGraphicsScene, QTextEdit,
                             QSizePolicy, QSpinBox, QSlider, QWidgetAction,
-                            QRadioButton)
+                            QRadioButton,QTabWidget)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from matplotlib.colors import to_rgba_array
 from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
@@ -1580,11 +1580,25 @@ class AmplitudeSettingsDialog(_BaseDialog):
 
         layout = QFormLayout()
 
+        self.tabs = QTabWidget()
+        self.general_tab = QWidget()
+        self.channel_tab = QWidget()
+        self.tabs.addTab(self.general_tab,"General")
+        self.tabs.addTab(self.channel_tab,"Channels")
+
+        self.general_tab.layout = QFormLayout(self)
+        self.channel_tab.layout = QFormLayout(self)
+
         self.all_scale_cmbx = QComboBox()
         self.all_scale_cmbx.setToolTip('% Scaling for all channels')
         self.all_scale_cmbx.addItems(['25','50','75','100','150','200','250'])
-        layout.addRow('All', self.all_scale_cmbx)
+
+        self.general_tab.layout.addRow('All',self.all_scale_cmbx)
+        self.general_tab.setLayout(self.general_tab.layout)
+        self.channel_tab.setLayout(self.channel_tab.layout)
+
         
+        layout.addWidget(self.tabs)
         self.setLayout(layout)
         self.show()
 
