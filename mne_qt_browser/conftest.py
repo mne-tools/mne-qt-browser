@@ -17,7 +17,8 @@ def pytest_configure(config):
     # Markers
     for marker in ("benchmark", "pgtest", "slowtest"):
         config.addinivalue_line("markers", marker)
-    os.environ["_MNE_BROWSER_BACK"] = "true"
+    if "_MNE_BROWSER_BACK" not in os.environ:
+        os.environ["_MNE_BROWSER_BACK"] = "true"
 
 
 @pytest.fixture(scope="session")
