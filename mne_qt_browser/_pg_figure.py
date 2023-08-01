@@ -1376,6 +1376,9 @@ class VLineLabel(InfLineLabel):
         self.setText(self.format.format(value=value))
         self.updatePosition()
 
+    def hoverEvent(self, ev):
+        self.line.hoverEvent(ev)
+
 
 class VLine(InfiniteLine):
     """Marker to be placed inside the Trace-Plot."""
