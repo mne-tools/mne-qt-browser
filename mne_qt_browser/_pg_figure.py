@@ -1339,7 +1339,6 @@ class VLineLabel(InfLineLabel):
     """Label of the vline displaying the time."""
 
     def __init__(self, vline):
-        vline = weakref.ref(vline)
         super().__init__(vline, text='{value:.3f} s', position=0.98,
                          fill=(0, 191, 0), color='k', movable=True)
         self.cursorOffset = None
@@ -4717,10 +4716,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             if getattr(self.mne, 'vline', None) is not None:
                 if self.mne.is_epochs:
                     for vl in self.mne.vline:
-                        _disconnect(vl.sigPositionChangeFinished)
+                        _disconnect(vl.sigPositionChangeFinished, allow_error=True)
                     self.mne.vline.clear()
                 else:
-                    _disconnect(self.mne.vline.sigPositionChangeFinished)
+                    _disconnect(self.mne.vline.sigPositionChangeFinished, allow_error=True)
         if getattr(self, 'load_thread', None) is not None:
             self.load_thread.clean()
             self.load_thread = None
