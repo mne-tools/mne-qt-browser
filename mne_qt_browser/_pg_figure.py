@@ -1710,14 +1710,6 @@ class _BaseDialog(QDialog):
                 self.mne.child_figs.remove(self)
         event.accept()
 
-    # If this widget gets activated (e.g., the user clicks away from the
-    # browser but then returns to it by clicking in a selection window),
-    # the main window should be raised as well
-    def event(self, event):
-        if event.type() == QEvent.WindowActivate:
-            _qt_raise_window(self.weakmain())
-        return super().event(event)
-
 
 class SettingsDialog(_BaseDialog):
     """Shows additional settings."""
@@ -1727,6 +1719,14 @@ class SettingsDialog(_BaseDialog):
 
         layout = QFormLayout()
 
+        # Antialiasing
+        self.antialiasing_box = QCheckBox()
+        self.antialiasing_box.setToolTip('Enable/Disable antialiasing.\n')
+        self.antialiasing_box.stateChanged.connect(_methpartial(self._toggle_antialiasing))
+        self.antialiasing_box.setChecked(self.mne.antialiasing)
+        layout.addRow('antialiasing', self.antialiasing_box)
+
+        # Downsampling
         self.downsampling_box = QSpinBox()
         self.downsampling_box.setToolTip(
             "Set an integer as the downsampling"
@@ -1746,6 +1746,7 @@ class SettingsDialog(_BaseDialog):
         )
         layout.addRow("downsampling", self.downsampling_box)
 
+        # Downsampling method
         self.ds_method_cmbx = QComboBox()
         self.ds_method_cmbx.setToolTip(
             "<h2>Downsampling Method</h2>"
@@ -1769,18 +1770,21 @@ class SettingsDialog(_BaseDialog):
         self.ds_method_cmbx.setCurrentText(self.mne.ds_method)
         layout.addRow("ds_method", self.ds_method_cmbx)
 
+        # Scrolling sensitivity
         self.scroll_sensitivity_slider = QSlider(Qt.Horizontal)
         self.scroll_sensitivity_slider.setMinimum(10)
         self.scroll_sensitivity_slider.setMaximum(1000)
-        self.scroll_sensitivity_slider.setToolTip(
-            "Set the sensitivity of " "the scrolling in " "horizontal direction."
-        )
+        self.scroll_sensitivity_slider.setToolTip('Set the sensitivity of the scrolling in horizontal direction. '
+                                                  'Adjust this value if the scrolling for example with an horizontal '
+                                                  'mouse wheel is too fast or too slow. Default is 100.')
         self.scroll_sensitivity_slider.valueChanged.connect(
             _methpartial(self._value_changed, value_name="scroll_sensitivity")
         )
         # Set default
         self.scroll_sensitivity_slider.setValue(self.mne.scroll_sensitivity)
-        layout.addRow("horizontal scroll sensitivity", self.scroll_sensitivity_slider)
+        layout.addRow('horizontal scroll sensitivity',
+                      self.scroll_sensitivity_slider)
+
         self.setLayout(layout)
         self.show()
 
@@ -1799,6 +1803,9 @@ class SettingsDialog(_BaseDialog):
             self.mne.ax_hscroll._update_scroll_sensitivity()
         else:
             self.weakmain()._redraw()
+
+    def _toggle_antialiasing(self, _):
+        self.weakmain()._toggle_antialiasing()
 
 
 class HelpDialog(_BaseDialog):
