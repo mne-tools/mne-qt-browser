@@ -1386,6 +1386,12 @@ class VLine(InfiniteLine):
         self.mne = mne
         self.label = VLineLabel(self)
 
+    def setMouseHover(self, hover):
+        super().setMouseHover(hover)
+        # Also change color of label
+        self.label.fill = self.currentPen.color()
+        self.label.border = self.currentPen
+
 
 def _q_font(point_size, bold=False):
     font = QFont()
