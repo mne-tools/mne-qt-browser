@@ -1340,7 +1340,7 @@ class VLineLabel(InfLineLabel):
 
     def __init__(self, vline):
         super().__init__(vline, text='{value:.3f} s', position=0.98,
-                         fill='g', color='b', movable=True)
+                         fill=(0, 191, 0), color='k', movable=True)
         self.cursorOffset = None
 
     def mouseDragEvent(self, ev):
@@ -1384,7 +1384,7 @@ class VLine(InfiniteLine):
     """Marker to be placed inside the Trace-Plot."""
 
     def __init__(self, mne, pos, bounds):
-        super().__init__(pos, pen={"color": "g", "width": 2}, hoverPen='y',
+        super().__init__(pos, pen={"color": (0, 191, 0), "width": 2}, hoverPen='y',
                          movable=True, bounds=bounds)
         self.mne = mne
         self.label = VLineLabel(self)
@@ -3419,6 +3419,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 del self.mne.keyboard_shortcuts["t"]
             # disable histogram of epoch PTP amplitude
             del self.mne.keyboard_shortcuts["h"]
+        self._add_vline(3)
 
     def _hidpi_mkPen(self, *args, **kwargs):
         kwargs['width'] = self._pixel_ratio * kwargs.get('width', 1.)
