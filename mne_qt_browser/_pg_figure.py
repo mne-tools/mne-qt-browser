@@ -3419,7 +3419,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 del self.mne.keyboard_shortcuts["t"]
             # disable histogram of epoch PTP amplitude
             del self.mne.keyboard_shortcuts["h"]
-        self._add_vline(3)
+
 
     def _hidpi_mkPen(self, *args, **kwargs):
         kwargs['width'] = self._pixel_ratio * kwargs.get('width', 1.)
