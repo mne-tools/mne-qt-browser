@@ -4719,8 +4719,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                         _disconnect(vl.sigPositionChangeFinished)
                     self.mne.vline.clear()
                 else:
-                    _disconnect(self.mne.vline.sigPositionChangeFinished,
-                                allow_error=True)
+                    _disconnect(self.mne.vline.sigPositionChangeFinished)
         if getattr(self, 'load_thread', None) is not None:
             self.load_thread.clean()
             self.load_thread = None
