@@ -2005,7 +2005,7 @@ class SelectionDialog(_BaseDialog):  # noqa: D101
             # MNE >= 1.0
             self.channel_fig.lasso.callbacks.clear()
         for chkbx in self.chkbxs.values():
-            _disconnect(chkbx.clicked)
+            _disconnect(chkbx.clicked, allow_error=True)
         main = self.weakmain()
         if main is not None:
             main.close()
