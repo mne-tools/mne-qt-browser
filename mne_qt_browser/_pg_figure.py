@@ -1377,7 +1377,7 @@ class VLineLabel(InfLineLabel):
         self.updatePosition()
 
     def hoverEvent(self, ev):
-        self.line.hoverEvent(ev)
+        _methpartial(self.line.hoverEvent)(ev)
 
 
 class VLine(InfiniteLine):
@@ -2005,7 +2005,7 @@ class SelectionDialog(_BaseDialog):  # noqa: D101
             # MNE >= 1.0
             self.channel_fig.lasso.callbacks.clear()
         for chkbx in self.chkbxs.values():
-            _disconnect(chkbx.clicked, allow_error=True)
+            _disconnect(chkbx.clicked)
         main = self.weakmain()
         if main is not None:
             main.close()
