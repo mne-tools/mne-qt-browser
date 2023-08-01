@@ -1381,7 +1381,7 @@ class VLine(InfiniteLine):
     """Marker to be placed inside the Trace-Plot."""
 
     def __init__(self, mne, pos, bounds):
-        super().__init__(pos, pen='g', hoverPen='y',
+        super().__init__(pos, pen={"color": "g", "width": 2}, hoverPen='y',
                          movable=True, bounds=bounds)
         self.mne = mne
         self.label = VLineLabel(self)
