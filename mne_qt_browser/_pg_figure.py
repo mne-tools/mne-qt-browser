@@ -1339,6 +1339,7 @@ class VLineLabel(InfLineLabel):
     """Label of the vline displaying the time."""
 
     def __init__(self, vline):
+        vline = weakref.ref(vline)
         super().__init__(vline, text='{value:.3f} s', position=0.98,
                          fill=(0, 191, 0), color='k', movable=True)
         self.cursorOffset = None
