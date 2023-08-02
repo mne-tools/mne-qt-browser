@@ -96,6 +96,8 @@ _dark_dict = {
     (0, 255, 255): (0, 139, 139),  # 'darkcyan'
 }
 
+_vline_color = (0, 191, 0)
+
 
 def _get_color(color_spec, invert=False):
     """Wrap mkColor to accept all possible matplotlib color-specifiers."""
@@ -1340,7 +1342,7 @@ class VLineLabel(InfLineLabel):
 
     def __init__(self, vline):
         super().__init__(vline, text='{value:.3f} s', position=0.98,
-                         fill=(0, 191, 0), color='k', movable=True)
+                         fill=_vline_color, color='k', movable=True)
         self.cursorOffset = None
 
     def mouseDragEvent(self, ev):
@@ -1384,7 +1386,7 @@ class VLine(InfiniteLine):
     """Marker to be placed inside the Trace-Plot."""
 
     def __init__(self, mne, pos, bounds):
-        super().__init__(pos, pen={"color": (0, 191, 0), "width": 2}, hoverPen='y',
+        super().__init__(pos, pen={"color": _vline_color, "width": 2}, hoverPen='y',
                          movable=True, bounds=bounds)
         self.mne = mne
         self.label = VLineLabel(self)
