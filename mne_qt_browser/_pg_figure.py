@@ -2065,6 +2065,7 @@ class AnnotRegion(LinearRegionItem):
         # re-set while blocking the signal to avoid re-running this function
         with SignalBlocker(self):
             self.setRegion((onset, offset))
+        self.update_label_pos()
 
     def update_color(self):
         """Update color of annotation-region."""
