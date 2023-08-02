@@ -96,6 +96,8 @@ _dark_dict = {
     (0, 255, 255): (0, 139, 139),  # 'darkcyan'
 }
 
+_vline_color = (0, 191, 0)
+
 
 def _get_color(color_spec, invert=False):
     """Wrap mkColor to accept all possible matplotlib color-specifiers."""
@@ -1341,7 +1343,7 @@ class VLineLabel(InfLineLabel):
 
     def __init__(self, vline):
         super().__init__(vline, text='{value:.3f} s', position=0.98,
-                         fill='g', color='b', movable=True)
+                         fill=_vline_color, color='k', movable=True)
         self.cursorOffset = None
 
     def mouseDragEvent(self, ev):
@@ -1377,15 +1379,24 @@ class VLineLabel(InfLineLabel):
         self.setText(self.format.format(value=value))
         self.updatePosition()
 
+    def hoverEvent(self, ev):
+        _methpartial(self.line.hoverEvent)(ev)
+
 
 class VLine(InfiniteLine):
     """Marker to be placed inside the Trace-Plot."""
 
     def __init__(self, mne, pos, bounds):
-        super().__init__(pos, pen='g', hoverPen='y',
+        super().__init__(pos, pen={"color": _vline_color, "width": 2}, hoverPen='y',
                          movable=True, bounds=bounds)
         self.mne = mne
         self.label = VLineLabel(self)
+
+    def setMouseHover(self, hover):
+        super().setMouseHover(hover)
+        # Also change color of label
+        self.label.fill = self.currentPen.color()
+        self.label.border = self.currentPen
 
 
 def _q_font(point_size, bold=False):
@@ -3436,6 +3447,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # disable histogram of epoch PTP amplitude
             del self.mne.keyboard_shortcuts["h"]
 
+
     def _hidpi_mkPen(self, *args, **kwargs):
         kwargs['width'] = self._pixel_ratio * kwargs.get('width', 1.)
         return mkPen(*args, **kwargs)
@@ -4737,10 +4749,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             if getattr(self.mne, 'vline', None) is not None:
                 if self.mne.is_epochs:
                     for vl in self.mne.vline:
-                        _disconnect(vl.sigPositionChangeFinished)
+                        _disconnect(vl.sigPositionChangeFinished, allow_error=True)
                     self.mne.vline.clear()
                 else:
-                    _disconnect(self.mne.vline.sigPositionChangeFinished)
+                    _disconnect(self.mne.vline.sigPositionChangeFinished,
+                                allow_error=True)
         if getattr(self, 'load_thread', None) is not None:
             self.load_thread.clean()
             self.load_thread = None
