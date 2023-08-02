@@ -1258,52 +1258,53 @@ class RawViewBox(ViewBox):
                                                     description=description,
                                                     values=(self._drag_start,
                                                             drag_stop))
-                elif event.isFinish():
-                    drag_stop = self.mapSceneToView(event.scenePos()).x()
-                    drag_stop = 0 if drag_stop < 0 else drag_stop
-                    drag_stop = (
-                        self.mne.xmax if self.mne.xmax < drag_stop else drag_stop
-                    )
-                    self._drag_region.setRegion((self._drag_start, drag_stop))
-                    plot_onset = min(self._drag_start, drag_stop)
-                    plot_offset = max(self._drag_start, drag_stop)
-                    duration = abs(self._drag_start - drag_stop)
+                elif self._drag_region is not None:
+                    if event.isFinish():
+                        drag_stop = self.mapSceneToView(event.scenePos()).x()
+                        drag_stop = 0 if drag_stop < 0 else drag_stop
+                        drag_stop = (
+                            self.mne.xmax if self.mne.xmax < drag_stop else drag_stop
+                        )
+                        self._drag_region.setRegion((self._drag_start, drag_stop))
+                        plot_onset = min(self._drag_start, drag_stop)
+                        plot_offset = max(self._drag_start, drag_stop)
+                        duration = abs(self._drag_start - drag_stop)
 
-                    # Add to annotations
-                    onset = _sync_onset(self.mne.inst, plot_onset,
-                                        inverse=True)
-                    _merge_annotations(onset, onset + duration,
-                                       self.mne.current_description,
-                                       self.mne.inst.annotations)
+                        # Add to annotations
+                        onset = _sync_onset(self.mne.inst, plot_onset,
+                                            inverse=True)
+                        _merge_annotations(onset, onset + duration,
+                                           self.mne.current_description,
+                                           self.mne.inst.annotations)
 
-                    # Add to regions/merge regions
-                    merge_values = [plot_onset, plot_offset]
-                    rm_regions = list()
-                    for region in [r for r in self.mne.regions
-                                   if r.description ==
-                                   self.mne.current_description]:
-                        values = region.getRegion()
-                        if any([plot_onset < val < plot_offset for val in
-                                values]):
-                            merge_values += values
-                            rm_regions.append(region)
-                    if len(merge_values) > 2:
-                        self._drag_region.setRegion((min(merge_values),
-                                                     max(merge_values)))
-                    for rm_region in rm_regions:
-                        self.weakmain()._remove_region(
-                            rm_region, from_annot=False)
-                    self.weakmain()._add_region(
-                        plot_onset, duration, self.mne.current_description,
-                        region=self._drag_region)
-                    self._drag_region.select(True)
-                    self._drag_region.setZValue(2)
+                        # Add to regions/merge regions
+                        merge_values = [plot_onset, plot_offset]
+                        rm_regions = list()
+                        for region in [r for r in self.mne.regions
+                                       if r.description ==
+                                       self.mne.current_description]:
+                            values = region.getRegion()
+                            if any([plot_onset < val < plot_offset for val in
+                                    values]):
+                                merge_values += values
+                                rm_regions.append(region)
+                        if len(merge_values) > 2:
+                            self._drag_region.setRegion((min(merge_values),
+                                                         max(merge_values)))
+                        for rm_region in rm_regions:
+                            self.weakmain()._remove_region(
+                                rm_region, from_annot=False)
+                        self.weakmain()._add_region(
+                            plot_onset, duration, self.mne.current_description,
+                            region=self._drag_region)
+                        self._drag_region.select(True)
+                        self._drag_region.setZValue(2)
 
-                    # Update Overview-Bar
-                    self.mne.overview_bar.update_annotations()
-                else:
-                    x_to = self.mapSceneToView(event.scenePos()).x()
-                    self._drag_region.setRegion((self._drag_start, x_to))
+                        # Update Overview-Bar
+                        self.mne.overview_bar.update_annotations()
+                    else:
+                        x_to = self.mapSceneToView(event.scenePos()).x()
+                        self._drag_region.setRegion((self._drag_start, x_to))
 
             elif event.isFinish():
                 self.weakmain().message_box(
