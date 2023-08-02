@@ -2034,15 +2034,8 @@ class AnnotRegion(LinearRegionItem):
         self.mne.plt.addItem(self.label_item, ignoreBounds=True)
 
     def _region_changed(self):
+        self.regionChangeFinished.emit(self)
         self.old_onset = self.getRegion()[0]
-        # merge annotations if needed
-        onset = _sync_onset(self.mne.inst, self.old_onset, inverse=True)
-        _merge_annotations(
-            onset,
-            onset + self.getRegion()[1] - self.getRegion()[0],
-            self.mne.current_description,
-            self.mne.inst.annotations,
-        )
         # remove merged regions
         overlapping_regions = list()
         for region in self.mne.regions:
@@ -4183,17 +4176,19 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         rgn = region.getRegion()
         region.select(True)
         idx = self._get_onset_idx(region.old_onset)
-
-        # Update Spinboxes of Annot-Dock
+        # update Spinboxes of Annot-Dock
         self.mne.fig_annotation.update_values(region)
-
-        # Change annotations
-        self.mne.inst.annotations.onset[idx] = _sync_onset(self.mne.inst,
-                                                           rgn[0],
-                                                           inverse=True)
+        # edit inst.annotations
+        onset = _sync_onset(self.mne.inst, rgn[0], inverse=True)
+        self.mne.inst.annotations.onset[idx] = onset
         self.mne.inst.annotations.duration[idx] = rgn[1] - rgn[0]
-
-        # Update overview-bar
+        _merge_annotations(
+            onset,
+            onset + rgn[1] - rgn[0],
+            self.mne.current_description,
+            self.mne.inst.annotations,
+        )
+        # update overview-bar
         self.mne.overview_bar.update_annotations()
 
     def _draw_annotations(self):
