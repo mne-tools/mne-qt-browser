@@ -15,7 +15,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu, windows, macos]
-        mne: [main, maint/1.4]
+        mne: [main, annotations]
         opengl: ['opengl']
         python: ['3.11']
         name: [matrix]
@@ -70,7 +70,7 @@ jobs:
         run: |  # use MNE main to ensure test files are available
           set -eo pipefail
           python -m pip install --upgrade pip
-          git clone -b ${MNE_BRANCH} --single-branch --branch main https://github.com/mne-tools/mne-python.git ../mne-python
+          git clone -b ${MNE_BRANCH} --single-branch https://github.com/mscheltienne/mne-python.git ../mne-python
           python -m pip install -qe ../mne-python
           if [[ "${{ matrix.opengl }}" == "opengl" ]]; then
             PIP_OPTION="[opengl,tests]"

@@ -21,7 +21,6 @@ dependencies = [
     "matplotlib",
     "qtpy",
     "scooby",
-    "mne>=1.0",
     "pyqtgraph>=0.12.3",
     "colorspacious",
     "pyopengl; platform_system=='Darwin'",
