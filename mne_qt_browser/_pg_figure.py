@@ -1309,6 +1309,7 @@ class RawViewBox(ViewBox):
                 self.weakmain().message_box(
                     text='No description!',
                     info_text='No description is given, add one!',
+                    buttons=QMessageBox.Ok,
                     icon=QMessageBox.Warning)
 
     def mouseClickEvent(self, event):
