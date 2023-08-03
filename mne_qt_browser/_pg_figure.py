@@ -1312,6 +1312,7 @@ class RawViewBox(ViewBox):
                 self.weakmain().message_box(
                     text='No description!',
                     info_text='No description is given, add one!',
+                    buttons=QMessageBox.Ok,
                     icon=QMessageBox.Warning)
 
     def mouseClickEvent(self, event):
@@ -2412,27 +2413,28 @@ class AnnotationDock(QDockWidget):
                 icon=QMessageBox.Information)
 
     def _remove_description(self, rm_description):
-        # Remove regions
-        for rm_region in [r for r in self.mne.regions
-                          if r.description == rm_description]:
-            rm_region.remove()
+        if rm_description != "":
+            # Remove regions
+            for rm_region in [r for r in self.mne.regions
+                              if r.description == rm_description]:
+                rm_region.remove()
 
-        # Remove from descriptions
-        self.mne.new_annotation_labels.remove(rm_description)
-        self._update_description_cmbx()
+            # Remove from descriptions
+            self.mne.new_annotation_labels.remove(rm_description)
+            self._update_description_cmbx()
 
-        # Remove from visible annotations
-        self.mne.visible_annotations.pop(rm_description)
+            # Remove from visible annotations
+            self.mne.visible_annotations.pop(rm_description)
 
-        # Remove from color-mapping
-        if rm_description in self.mne.annotation_segment_colors:
-            self.mne.annotation_segment_colors.pop(rm_description)
+            # Remove from color-mapping
+            if rm_description in self.mne.annotation_segment_colors:
+                self.mne.annotation_segment_colors.pop(rm_description)
 
-        # Set first description in Combo-Box to current description
-        if self.description_cmbx.count() > 0:
-            self.description_cmbx.setCurrentIndex(0)
-            self.mne.current_description = \
-                self.description_cmbx.currentText()
+            # Set first description in Combo-Box to current description
+            if self.description_cmbx.count() > 0:
+                self.description_cmbx.setCurrentIndex(0)
+                self.mne.current_description = \
+                    self.description_cmbx.currentText()
 
     def _remove_description_dlg(self):
         rm_description = self.description_cmbx.currentText()
