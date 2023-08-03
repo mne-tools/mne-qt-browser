@@ -2052,7 +2052,7 @@ class AnnotRegion(LinearRegionItem):
         # remove merged regions
         overlapping_regions = list()
         for region in self.mne.regions:
-            if region.description != self.mne.current_description:
+            if region.description != self.description:
                 continue
             if id(self) == id(region):
                 continue
@@ -4199,7 +4199,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         _merge_annotations(
             onset,
             onset + rgn[1] - rgn[0],
-            self.mne.current_description,
+            region.description,
             self.mne.inst.annotations,
         )
         # update overview-bar
