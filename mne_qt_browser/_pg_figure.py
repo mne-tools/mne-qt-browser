@@ -37,7 +37,7 @@ from qtpy.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
                             QGraphicsLineItem, QGraphicsScene, QTextEdit,
                             QSizePolicy, QSpinBox, QSlider, QWidgetAction,
                             QRadioButton)
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.colors import to_rgba_array
 from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
                        LinearRegionItem, PlotCurveItem, PlotItem,
@@ -419,6 +419,7 @@ class DataTrace(PlotCurveItem):
         else:
             bad_color, pick, marked_bad = self.weakmain()._toggle_bad_channel(
                 self.range_idx)
+            self.weakmain()._apply_update_projectors()
 
             # Update line color status
             self.isbad = not self.isbad
@@ -2053,9 +2054,7 @@ class AnnotRegion(LinearRegionItem):
         # remove merged regions
         overlapping_regions = list()
         for region in self.mne.regions:
-            if region.description != self.description:
-                continue
-            if id(self) == id(region):
+            if region.description != self.description or id(self) == id(region):
                 continue
             values = region.getRegion()
             if any(self.getRegion()[0] <= val <= self.getRegion()[1] for val in values):
