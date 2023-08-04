@@ -37,7 +37,7 @@ from qtpy.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
                             QGraphicsLineItem, QGraphicsScene, QTextEdit,
                             QSizePolicy, QSpinBox, QSlider, QWidgetAction,
                             QRadioButton)
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.colors import to_rgba_array
 from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
                        LinearRegionItem, PlotCurveItem, PlotItem,
