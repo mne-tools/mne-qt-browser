@@ -419,6 +419,7 @@ class DataTrace(PlotCurveItem):
         else:
             bad_color, pick, marked_bad = self.weakmain()._toggle_bad_channel(
                 self.range_idx)
+            self.weakmain()._apply_update_projectors()
 
             # Update line color status
             self.isbad = not self.isbad
