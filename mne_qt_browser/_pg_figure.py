@@ -2053,9 +2053,7 @@ class AnnotRegion(LinearRegionItem):
         # remove merged regions
         overlapping_regions = list()
         for region in self.mne.regions:
-            if region.description != self.description:
-                continue
-            if id(self) == id(region):
+            if region.description != self.description or id(self) == id(region):
                 continue
             values = region.getRegion()
             if any(self.getRegion()[0] <= val <= self.getRegion()[1] for val in values):
