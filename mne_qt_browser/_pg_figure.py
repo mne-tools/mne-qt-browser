@@ -48,7 +48,7 @@ from colorspacious import cspace_convert
 import scooby
 from mne.viz import plot_sensors
 from mne.viz._figure import BrowserBase
-from mne.viz.utils import _simplify_float, _merge_annotations, _figure_agg
+from mne.viz.utils import _simplify_float, _merge_annotations, _figure_agg, warn
 from mne.annotations import _sync_onset
 from mne.io.pick import (_DATA_CH_TYPES_ORDER_DEFAULT,
                          channel_indices_by_type, _DATA_CH_TYPES_SPLIT)
@@ -1578,32 +1578,32 @@ class AmplitudeSettingsDialog(_BaseDialog):
     def __init__(self, main, title='Advanced Amplitude Settings', **kwargs):
         super().__init__(main, title=title, **kwargs)
 
-        layout = QFormLayout()
+        layout = QVBoxLayout()
 
+        #Tabs
         self.tabs = QTabWidget()
         self.general_tab = QWidget()
         self.channel_tab = QWidget()
         self.tabs.addTab(self.general_tab,"General")
         self.tabs.addTab(self.channel_tab,"Channels")
-
         self.general_tab.layout = QFormLayout(self)
         self.channel_tab.layout = QFormLayout(self)
 
+        #General Tab
         self.all_scale_cmbx = QComboBox()
         self.all_scale_cmbx.setToolTip('% Scaling for all channels')
         self.all_scale_cmbx.addItems(['25','50','75','100','150','200','250'])
-
+        self.all_scale_cmbx.setEditable(True)
         self.general_tab.layout.addRow('All',self.all_scale_cmbx)
         self.general_tab.setLayout(self.general_tab.layout)
+     
         self.channel_tab.setLayout(self.channel_tab.layout)
-
-        
         layout.addWidget(self.tabs)
         self.setLayout(layout)
         self.show()
 
     def closeEvent(self, event):  # noqa: D102
-        _disconnect(self.all_scale_cmbx.currentTextChanged)
+        #_disconnect(self.all_scale_cmbx.currentTextChanged)
         super().closeEvent(event)
 
 
