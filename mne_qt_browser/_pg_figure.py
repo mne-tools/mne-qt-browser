@@ -1581,24 +1581,27 @@ class AmplitudeSettingsDialog(_BaseDialog):
         layout = QVBoxLayout()
 
         #Tabs
-        self.tabs = QTabWidget()
-        self.general_tab = QWidget()
-        self.channel_tab = QWidget()
-        self.tabs.addTab(self.general_tab,"General")
-        self.tabs.addTab(self.channel_tab,"Channels")
-        self.general_tab.layout = QFormLayout(self)
-        self.channel_tab.layout = QFormLayout(self)
+        tabs = QTabWidget()
+        general_tab = QWidget()
+        channel_tab = QWidget()
+        tabs.addTab(general_tab,"General")
+        tabs.addTab(channel_tab,"Channels")
+        general_tab.layout = QVBoxLayout()
+        channel_tab.layout = QVBoxLayout()
 
         #General Tab
+        gen_layout1 = QFormLayout()
         self.all_scale_cmbx = QComboBox()
         self.all_scale_cmbx.setToolTip('% Scaling for all channels')
         self.all_scale_cmbx.addItems(['25','50','75','100','150','200','250'])
         self.all_scale_cmbx.setEditable(True)
-        self.general_tab.layout.addRow('All',self.all_scale_cmbx)
-        self.general_tab.setLayout(self.general_tab.layout)
+        gen_layout1.addRow('All',self.all_scale_cmbx)
+
+        general_tab.layout.addLayout(gen_layout1)
+        general_tab.setLayout(general_tab.layout)
      
-        self.channel_tab.setLayout(self.channel_tab.layout)
-        layout.addWidget(self.tabs)
+        channel_tab.setLayout(channel_tab.layout)
+        layout.addWidget(tabs)
         self.setLayout(layout)
         self.show()
 
