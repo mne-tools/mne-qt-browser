@@ -1572,11 +1572,28 @@ class _BaseDialog(QDialog):
             self.weakmain().raise_()
         return super().event(event)
 
+class ComboBox(QComboBox):
+    """ Custom QComboBox Widget """
+
+    def __init__(self, items, **kwargs):
+        super().__init__(**kwargs)
+        self.addItems(items)
+        self.setEditable(True)
+        self.setEnabled(False)
+
 class AmplitudeSettingsDialog(_BaseDialog):
     """Shows advanced settings for amplitude scaling."""
 
     def __init__(self, main, title='Advanced Amplitude Settings', **kwargs):
         super().__init__(main, title=title, **kwargs)
+
+        ordered_types = self.mne.ch_types[self.mne.ch_order]
+        unique_type_idxs = np.unique(ordered_types,
+                                     return_index=True)[1]
+        ch_types_ordered = [ordered_types[idx] for idx
+                            in sorted(unique_type_idxs)]
+        print(ch_types_ordered)
+
 
         layout = QVBoxLayout()
 
@@ -1586,18 +1603,25 @@ class AmplitudeSettingsDialog(_BaseDialog):
         channel_tab = QWidget()
         tabs.addTab(general_tab,"General")
         tabs.addTab(channel_tab,"Channels")
-        general_tab.layout = QVBoxLayout()
-        channel_tab.layout = QVBoxLayout()
+        general_tab.layout = QFormLayout()
+        channel_tab.layout = QFormLayout()
 
         #General Tab
-        gen_layout1 = QFormLayout()
-        self.all_scale_cmbx = QComboBox()
-        self.all_scale_cmbx.setToolTip('% Scaling for all channels')
-        self.all_scale_cmbx.addItems(['25','50','75','100','150','200','250'])
-        self.all_scale_cmbx.setEditable(True)
-        gen_layout1.addRow('All',self.all_scale_cmbx)
+        self.all_check = QCheckBox("All Channels")
+        self.all_check.setChecked(True)
+        general_tab.layout.addRow(self.all_check)
+        self.all_scale_cmbx = ComboBox(items=['25','50','75','100','150','200','250']) 
+        general_tab.layout.addRow('All',self.all_scale_cmbx)
+        self.types_check = QCheckBox("Channel Types")
+        self.types_check.setChecked(False)
+        general_tab.layout.addRow(self.types_check)
 
-        general_tab.layout.addLayout(gen_layout1)
+        for index in ch_types_ordered:
+            #setattr(self, index, ComboBox(items=['a','b','c']))
+            self.index = ComboBox(items=['a','b','c'])
+            general_tab.layout.addRow(index,self.index)
+
+
         general_tab.setLayout(general_tab.layout)
      
         channel_tab.setLayout(channel_tab.layout)
@@ -1605,7 +1629,7 @@ class AmplitudeSettingsDialog(_BaseDialog):
         self.setLayout(layout)
         self.show()
 
-    def closeEvent(self, event):  # noqa: D102
+    def closeEvent(self, event):
         #_disconnect(self.all_scale_cmbx.currentTextChanged)
         super().closeEvent(event)
 
