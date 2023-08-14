@@ -1587,22 +1587,14 @@ class AmplitudeSettingsDialog(_BaseDialog):
     def __init__(self, main, title='Advanced Amplitude Settings', **kwargs):
         super().__init__(main, title=title, **kwargs)
 
-        ordered_types = self.mne.ch_types[self.mne.ch_order]
-        unique_type_idxs = np.unique(ordered_types,
-                                     return_index=True)[1]
-        ch_types_ordered = [ordered_types[idx] for idx
-                            in sorted(unique_type_idxs)]
-        print(ch_types_ordered)
-
-
         layout = QVBoxLayout()
 
         #Tabs
         tabs = QTabWidget()
         general_tab = QWidget()
         channel_tab = QWidget()
-        tabs.addTab(general_tab,"General")
-        tabs.addTab(channel_tab,"Channels")
+        tabs.addTab(general_tab, "General")
+        tabs.addTab(channel_tab, "Channels")
         general_tab.layout = QFormLayout()
         channel_tab.layout = QFormLayout()
 
@@ -1611,17 +1603,52 @@ class AmplitudeSettingsDialog(_BaseDialog):
         self.all_check.setChecked(True)
         general_tab.layout.addRow(self.all_check)
         self.all_scale_cmbx = ComboBox(items=['25','50','75','100','150','200','250']) 
-        general_tab.layout.addRow('All',self.all_scale_cmbx)
+        general_tab.layout.addRow('% Scaling', self.all_scale_cmbx)
         self.types_check = QCheckBox("Channel Types")
         self.types_check.setChecked(False)
         general_tab.layout.addRow(self.types_check)
 
+        ordered_types = self.mne.ch_types[self.mne.ch_order]
+        unique_type_idxs = np.unique(ordered_types,
+                                     return_index=True)[1]
+        ch_types_ordered = [ordered_types[idx] for idx
+                            in sorted(unique_type_idxs)]
+        print(ch_types_ordered)
+
+        """
+        for chtype in ch_types_ordered:
+            match chtype:
+                case 'grad':
+                    temp_attr = chtype + '_grad'
+                    self.temp_attr = ComboBox(items=['200','400','600','800','1200','1600','2000'])
+                    general_tab.layout.addRow('MEG?')
+                    general_tab.layout.addRow('[fT/cm]/monitor cm', self.temp_attr)
+                case 'mag':
+                    temp_attr = chtype + '_mag'
+                    self.temp_attr = ComboBox(items=['200','400','600','800','1200','1600','2000'])
+                    general_tab.layout.addRow('MAG?')
+                    general_tab.layout.addRow('[fT/cm]/monitor cm', self.temp_attr)
+                case 'eeg':
+                    temp_attr = chtype + '_eeg'
+                    self.temp_attr = ComboBox(items=['200','400','600','800','1200','1600','2000'])
+                    general_tab.layout.addRow('EEG')
+                    general_tab.layout.addRow('[fT/cm]/monitor cm', self.temp_attr)
+                case 'eog':
+                    temp_attr = chtype + '_eog'
+                    self.temp_attr = ComboBox(items=['200','400','600','800','1200','1600','2000'])
+                    general_tab.layout.addRow('EOG')
+                    general_tab.layout.addRow('[fT/cm]/monitor cm', self.temp_attr)
+                case 'stim':
+                    temp_attr = chtype + '_stim'
+                    self.temp_attr = ComboBox(items=['200','400','600','800','1200','1600','2000'])
+                    general_tab.layout.addRow('STI')
+                    general_tab.layout.addRow('[fT/cm]/monitor cm', self.temp_attr)
+        """
         for index in ch_types_ordered:
-            #setattr(self, index, ComboBox(items=['a','b','c']))
-            self.index = ComboBox(items=['a','b','c'])
-            general_tab.layout.addRow(index,self.index)
-
-
+            match index:
+                case 'grad':
+                    self.index = ComboBox(items=['200','400','600','800','1200','1600','2000'])
+                    general_tab.layout.addRow('[fT/cm]/monitor cm', self.index)
         general_tab.setLayout(general_tab.layout)
      
         channel_tab.setLayout(channel_tab.layout)
