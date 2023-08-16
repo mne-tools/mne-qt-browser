@@ -1572,16 +1572,6 @@ class _BaseDialog(QDialog):
             self.weakmain().raise_()
         return super().event(event)
 
-class ComboBox(QComboBox):
-    """ Custom QComboBox Widget """
-
-    def __init__(self, items, **kwargs):
-        super().__init__(**kwargs)
-        self.addItems(items)
-        self.setCurrentText(items[3])
-        self.setEditable(True)
-        self.setEnabled(True)
-
 #Default items for ComboBoxes of various types
 combx_params = {
     'all': ['25','50','75','100','150','200','250'],
@@ -1591,6 +1581,16 @@ combx_params = {
     'eog': ['75','150','225','300','450','600','750'],
     'stim': ['75','150','225','300','450','600','750']
 }
+
+class ComboBox(QComboBox):
+    """ Custom QComboBox Widget """
+
+    def __init__(self, type, **kwargs):
+        super().__init__(**kwargs)
+        items = combx_params[type]
+        self.addItems(items)
+        self.setCurrentText(items[3])
+        self.setEditable(True)
 
 class AmplitudeSettingsDialog(_BaseDialog):
     """Shows advanced settings for amplitude scaling."""
@@ -1613,7 +1613,7 @@ class AmplitudeSettingsDialog(_BaseDialog):
         self.all_check = QCheckBox("All Channels")
         self.all_check.setChecked(True)
         general_tab.layout.addRow(self.all_check)
-        self.all_scale_cmbx = ComboBox(combx_params['all']) 
+        self.all_scale_cmbx = ComboBox('all') 
         general_tab.layout.addRow('% Scaling', self.all_scale_cmbx)
         self.types_check = QCheckBox("Channel Types")
         self.types_check.setChecked(False)
@@ -1628,33 +1628,28 @@ class AmplitudeSettingsDialog(_BaseDialog):
         for index in ch_types_ordered:
             match index:
                 case 'grad':
-                    self.index = ComboBox(items=combx_params[index])
+                    self.index = ComboBox(index)
                     lbl = QLabel('MEG?')
-                    lbl.setAlignment(Qt.AlignLeft)
                     general_tab.layout.addRow(lbl)
                     general_tab.layout.addRow('[fT/cm]/monitor cm', self.index)
                 case 'mag':
-                    self.index = ComboBox(items=combx_params[index])
+                    self.index = ComboBox(index)
                     lbl = QLabel('MAG?')
-                    lbl.setAlignment(Qt.AlignLeft)
                     general_tab.layout.addRow(lbl)
                     general_tab.layout.addRow('[fT]/monitor cm', self.index)
                 case 'eeg':
-                    self.index = ComboBox(items=combx_params[index])
+                    self.index = ComboBox(index)
                     lbl = QLabel('EEG')
-                    lbl.setAlignment(Qt.AlignLeft)
                     general_tab.layout.addRow(lbl)
                     general_tab.layout.addRow('[μV]/monitor cm', self.index)
                 case 'eog':
-                    self.index = ComboBox(items=combx_params[index])
+                    self.index = ComboBox(index)
                     lbl = QLabel('EOG')
-                    lbl.setAlignment(Qt.AlignLeft)
                     general_tab.layout.addRow(lbl)
                     general_tab.layout.addRow('[μV]/monitor cm', self.index)
                 case 'stim':
-                    self.index = ComboBox(items=combx_params[index])
+                    self.index = ComboBox(index)
                     lbl = QLabel('STIM')
-                    lbl.setAlignment(Qt.AlignLeft)
                     general_tab.layout.addRow(lbl)
                     general_tab.layout.addRow('[μV]/monitor cm', self.index)
 
