@@ -1585,9 +1585,9 @@ combx_params = {
 class ComboBox(QComboBox):
     """ Custom QComboBox Widget """
 
-    def __init__(self, type, **kwargs):
+    def __init__(self, norm, **kwargs):
         super().__init__(**kwargs)
-        items = combx_params[type]
+        items = [str(int(x)) for x in [norm/4, norm/2, 3*norm/4, norm, 3*norm/2, 2*norm, 5*norm/2]]
         self.addItems(items)
         self.setCurrentText(items[3])
         self.setEditable(True)
@@ -1597,7 +1597,6 @@ class AmplitudeSettingsDialog(_BaseDialog):
 
     def __init__(self, main, title='Advanced Amplitude Settings', **kwargs):
         super().__init__(main, title=title, **kwargs)
-
         layout = QVBoxLayout()
 
         #Tabs
@@ -1614,7 +1613,7 @@ class AmplitudeSettingsDialog(_BaseDialog):
         self.all_check = QCheckBox("All Channels")
         self.all_check.setChecked(True)
         general_tab.layout.addRow(self.all_check)
-        self.all_scale_cmbx = ComboBox('all') 
+        self.all_scale_cmbx = ComboBox(norm=100) 
         general_tab.layout.addRow('% Scaling', self.all_scale_cmbx)
         sprt = QFrame()
         sprt.setFrameShape(QFrame.HLine)
@@ -1625,40 +1624,25 @@ class AmplitudeSettingsDialog(_BaseDialog):
         self.types_check = QCheckBox("Channel Types")
         self.types_check.setChecked(False)
         general_tab.layout.addRow(self.types_check)
-
         ordered_types = self.mne.ch_types[self.mne.ch_order]
         unique_type_idxs = np.unique(ordered_types,
                                      return_index=True)[1]
         ch_types_ordered = [ordered_types[idx] for idx
                             in sorted(unique_type_idxs)]
-
+                
         for index in ch_types_ordered:
-            match index:
-                case 'grad':
-                    self.index = ComboBox(index)
-                    lbl = QLabel('MEG?')
-                    general_tab.layout.addRow(lbl)
-                    general_tab.layout.addRow('[fT/cm]/monitor cm', self.index)
-                case 'mag':
-                    self.index = ComboBox(index)
-                    lbl = QLabel('MAG?')
-                    general_tab.layout.addRow(lbl)
-                    general_tab.layout.addRow('[fT]/monitor cm', self.index)
-                case 'eeg':
-                    self.index = ComboBox(index)
-                    lbl = QLabel('EEG')
-                    general_tab.layout.addRow(lbl)
-                    general_tab.layout.addRow('[μV]/monitor cm', self.index)
-                case 'eog':
-                    self.index = ComboBox(index)
-                    lbl = QLabel('EOG')
-                    general_tab.layout.addRow(lbl)
-                    general_tab.layout.addRow('[μV]/monitor cm', self.index)
-                case 'stim':
-                    self.index = ComboBox(index)
-                    lbl = QLabel('STIM')
-                    general_tab.layout.addRow(lbl)
-                    general_tab.layout.addRow('[μV]/monitor cm', self.index)
+            lbl = QLabel(index)
+            general_tab.layout.addRow(lbl)
+            scaler = 1 if self.mne.butterfly else 2
+            uscaler = 50 if index == 'stim' else self.mne.unit_scalings[index]
+            inv_norm = (scaler *
+                    self.mne.scalings[index] *
+                    uscaler /
+                    self.mne.scale_factor)
+            self.index = ComboBox(inv_norm)
+            unit = 'Units' if index == 'stim' else self.mne.units[index]
+            text = '['+unit+']/monitor cm'
+            general_tab.layout.addRow(text, self.index)
 
         general_tab.setLayout(general_tab.layout)
      
