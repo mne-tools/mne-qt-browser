@@ -35,7 +35,7 @@ from qtpy.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
                             QVBoxLayout, QLineEdit, QCheckBox, QScrollArea,
                             QGraphicsLineItem, QGraphicsScene, QTextEdit,
                             QSizePolicy, QSpinBox, QSlider, QWidgetAction,
-                            QRadioButton,QTabWidget,QFrame)
+                            QRadioButton,QTabWidget,QFrame,QGroupBox)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from matplotlib.colors import to_rgba_array
 from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
@@ -1572,25 +1572,19 @@ class _BaseDialog(QDialog):
             self.weakmain().raise_()
         return super().event(event)
 
-#Default items for ComboBoxes of various types
-combx_params = {
-    'all': ['25','50','75','100','150','200','250'],
-    'grad': ['200','400','600','800','1200','1600','2000'],
-    'mag': ['500','1000','1500','2000','3000','4000','5000'],
-    'eeg': ['10','20','30','40','60','80','100'],
-    'eog': ['75','150','225','300','450','600','750'],
-    'stim': ['75','150','225','300','450','600','750']
-}
-
 class ComboBox(QComboBox):
     """ Custom QComboBox Widget """
 
-    def __init__(self, norm, **kwargs):
+    def __init__(self, norm=100, sf=1, **kwargs):
         super().__init__(**kwargs)
-        items = [str(int(x)) for x in [norm/4, norm/2, 3*norm/4, norm, 3*norm/2, 2*norm, 5*norm/2]]
+        reg_norm = norm*sf
+        items = [str(int(x)) for x in [reg_norm/4, reg_norm/2, 3*reg_norm/4, reg_norm, 3*reg_norm/2, 2*reg_norm, 5*reg_norm/2]]
         self.addItems(items)
-        self.setCurrentText(items[3])
+        self.setCurrentText(str(int(norm)))
         self.setEditable(True)
+        self.setInsertPolicy(0)
+        self.setCompleter(None)
+
 
 class AmplitudeSettingsDialog(_BaseDialog):
     """Shows advanced settings for amplitude scaling."""
@@ -1598,6 +1592,7 @@ class AmplitudeSettingsDialog(_BaseDialog):
     def __init__(self, main, title='Advanced Amplitude Settings', **kwargs):
         super().__init__(main, title=title, **kwargs)
         layout = QVBoxLayout()
+        print(self.mne.scale_factor)
 
         #Tabs
         tabs = QTabWidget()
@@ -1610,10 +1605,11 @@ class AmplitudeSettingsDialog(_BaseDialog):
 
         #General Tab
         #All Types
-        self.all_check = QCheckBox("All Channels")
-        self.all_check.setChecked(True)
-        general_tab.layout.addRow(self.all_check)
-        self.all_scale_cmbx = ComboBox(norm=100) 
+        self.all_radio = QRadioButton("All Channels", self)
+        self.all_radio.setChecked(True)
+        self.all_radio.clicked.connect(self._radio_clicked)
+        general_tab.layout.addRow(self.all_radio)
+        self.all_scale_cmbx = ComboBox()
         general_tab.layout.addRow('% Scaling', self.all_scale_cmbx)
         sprt = QFrame()
         sprt.setFrameShape(QFrame.HLine)
@@ -1621,37 +1617,53 @@ class AmplitudeSettingsDialog(_BaseDialog):
         general_tab.layout.addRow(sprt)
 
         #Channel Types
-        self.types_check = QCheckBox("Channel Types")
-        self.types_check.setChecked(False)
-        general_tab.layout.addRow(self.types_check)
+        self.types_radio = QRadioButton("Channel Types", self)
+        self.types_radio.clicked.connect(self._radio_clicked)
+        general_tab.layout.addRow(self.types_radio)
+
+
+        self.types_group = QGroupBox(self)
+        tbox = QFormLayout()
         ordered_types = self.mne.ch_types[self.mne.ch_order]
         unique_type_idxs = np.unique(ordered_types,
                                      return_index=True)[1]
-        ch_types_ordered = [ordered_types[idx] for idx
+        self.ch_types_ordered = [ordered_types[idx] for idx
                             in sorted(unique_type_idxs)]
                 
-        for index in ch_types_ordered:
-            lbl = QLabel(index)
-            general_tab.layout.addRow(lbl)
+        for index in self.ch_types_ordered:
+            lbl = QLabel(index.upper())
+            tbox.addRow(lbl)
             scaler = 1 if self.mne.butterfly else 2
             uscaler = 50 if index == 'stim' else self.mne.unit_scalings[index]
             inv_norm = (scaler *
                     self.mne.scalings[index] *
                     uscaler /
                     self.mne.scale_factor)
-            self.index = ComboBox(inv_norm)
-            unit = 'Units' if index == 'stim' else self.mne.units[index]
+            self.index = ComboBox(norm=inv_norm, sf=self.mne.scale_factor)
+            unit = '%' if index == 'stim' else self.mne.units[index]
             text = '['+unit+']/monitor cm'
-            general_tab.layout.addRow(text, self.index)
-
+            tbox.addRow(text, self.index)
+        self.types_group.setEnabled(False)
+        self.types_group.setLayout(tbox)    
+        general_tab.layout.addRow(self.types_group)
         general_tab.setLayout(general_tab.layout)
      
         channel_tab.setLayout(channel_tab.layout)
         layout.addWidget(tabs)
         self.setLayout(layout)
         self.show()
+     
+    def _radio_clicked(self):
+        rb = self.sender()
+        all = True if rb.text() == "All Channels" else False
+        self.all_scale_cmbx.setEnabled(all)
+        self.types_group.setEnabled(not all)
+        """for index in self.ch_types_ordered:
+            self.index.setDisabled(all)"""
 
     def closeEvent(self, event):
+        _disconnect(self.all_radio.clicked)
+        _disconnect(self.types_radio.clicked)
         #_disconnect(self.all_scale_cmbx.currentTextChanged)
         super().closeEvent(event)
 
