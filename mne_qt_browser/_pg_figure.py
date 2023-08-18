@@ -1585,15 +1585,12 @@ class ComboBox(QComboBox):
         self.setInsertPolicy(0)
         self.setCompleter(None)
 
-
 class AmplitudeSettingsDialog(_BaseDialog):
     """Shows advanced settings for amplitude scaling."""
 
     def __init__(self, main, title='Advanced Amplitude Settings', **kwargs):
         super().__init__(main, title=title, **kwargs)
         layout = QVBoxLayout()
-        print(self.mne.scale_factor)
-
         #Tabs
         tabs = QTabWidget()
         general_tab = QWidget()
@@ -1610,26 +1607,24 @@ class AmplitudeSettingsDialog(_BaseDialog):
         self.all_radio.clicked.connect(self._radio_clicked)
         general_tab.layout.addRow(self.all_radio)
         self.all_scale_cmbx = ComboBox()
+        self.all_scale_cmbx.currentTextChanged.connect(_methpartial(
+            self._value_changed, type='all'))
         general_tab.layout.addRow('% Scaling', self.all_scale_cmbx)
         sprt = QFrame()
         sprt.setFrameShape(QFrame.HLine)
         sprt.setFrameShadow(QFrame.Raised)
         general_tab.layout.addRow(sprt)
-
         #Channel Types
         self.types_radio = QRadioButton("Channel Types", self)
         self.types_radio.clicked.connect(self._radio_clicked)
         general_tab.layout.addRow(self.types_radio)
-
-
         self.types_group = QGroupBox(self)
         tbox = QFormLayout()
         ordered_types = self.mne.ch_types[self.mne.ch_order]
         unique_type_idxs = np.unique(ordered_types,
                                      return_index=True)[1]
         self.ch_types_ordered = [ordered_types[idx] for idx
-                            in sorted(unique_type_idxs)]
-                
+                            in sorted(unique_type_idxs)]   
         for index in self.ch_types_ordered:
             lbl = QLabel(index.upper())
             tbox.addRow(lbl)
@@ -1654,17 +1649,27 @@ class AmplitudeSettingsDialog(_BaseDialog):
         self.show()
      
     def _radio_clicked(self):
+        #Function to determine which area is active/inactive,
+        #from All Channels and Channel Types
         rb = self.sender()
-        all = True if rb.text() == "All Channels" else False
-        self.all_scale_cmbx.setEnabled(all)
-        self.types_group.setEnabled(not all)
-        """for index in self.ch_types_ordered:
-            self.index.setDisabled(all)"""
+        flag = True if rb.text() == "All Channels" else False
+        self.all_scale_cmbx.setEnabled(flag)
+        self.types_group.setEnabled(not flag)
+
+    def _value_changed(self, new_value, type, ch_name=None):
+        print('value changed')
+        print('type',type)
+        print('new value', new_value)
+        print('chname',ch_name)
+        match type:
+            case 'all':
+                self.weakmain().set_scale_factor(scale=float(new_value)/100)
+
 
     def closeEvent(self, event):
         _disconnect(self.all_radio.clicked)
         _disconnect(self.types_radio.clicked)
-        #_disconnect(self.all_scale_cmbx.currentTextChanged)
+        _disconnect(self.all_scale_cmbx.currentTextChanged)
         super().closeEvent(event)
 
 
@@ -3526,7 +3531,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     
     def set_scale_factor(self, *, scale):
         """Set the scale factor manually."""
-        self.mne.scale_factor = float(scale)
+        self.mne.scale_factor = scale
 
         # Reapply clipping if necessary
         if self.mne.clipping is not None:
