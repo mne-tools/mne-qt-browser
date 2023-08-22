@@ -47,12 +47,12 @@ from scipy.stats import zscore
 from colorspacious import cspace_convert
 
 import scooby
+from mne import channel_indices_by_type
 from mne.viz import plot_sensors
 from mne.viz._figure import BrowserBase
 from mne.viz.utils import _simplify_float, _merge_annotations, _figure_agg
 from mne.annotations import _sync_onset
-from mne.io.pick import (_DATA_CH_TYPES_ORDER_DEFAULT,
-                         channel_indices_by_type, _DATA_CH_TYPES_SPLIT)
+from mne.io.pick import _DATA_CH_TYPES_ORDER_DEFAULT, _DATA_CH_TYPES_SPLIT
 from mne.utils import (_to_rgb, logger, sizeof_fmt, warn, get_config,
                        _check_option)
 
