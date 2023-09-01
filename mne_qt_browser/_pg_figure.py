@@ -2020,13 +2020,12 @@ class AnnotRegion(LinearRegionItem):
     gotSelected = Signal(object)
     removeRequested = Signal(object)
 
-    def __init__(self, mne, description, values):
+    def __init__(self, mne, description, values, ch_names):
         super().__init__(values=values, orientation='vertical',
                          movable=True, swapMode='sort',
                          bounds=(0, mne.xmax))
         # Set default z-value to 0 to be behind other items in scene
         self.setZValue(0)
-
         self.sigRegionChangeFinished.connect(self._region_changed)
         self.mne = mne
         self.description = description
@@ -2037,7 +2036,16 @@ class AnnotRegion(LinearRegionItem):
         self.label_item.setFont(_q_font(10, bold=True))
         self.sigRegionChanged.connect(self.update_label_pos)
 
+        self.is_visible = False
+
+        # Channels associated with the AnnotRegion
+        self.ch_names = ch_names
+        self._values = values
+        self.ch_annots = {c: None for c in ch_names}
+
         self.update_color()
+
+        self.update_channel_annots()
 
         self.mne.plt.addItem(self, ignoreBounds=True)
         self.mne.plt.addItem(self.label_item, ignoreBounds=True)
@@ -2045,17 +2053,26 @@ class AnnotRegion(LinearRegionItem):
     def _region_changed(self):
         self.regionChangeFinished.emit(self)
         self.old_onset = self.getRegion()[0]
+        self.update_channel_annots()
 
     def update_color(self):
         """Update color of annotation-region."""
         color_string = self.mne.annotation_segment_colors[self.description]
+        color_string2 = "#ff0000"
         self.base_color = _get_color(color_string, self.mne.dark)
         self.hover_color = _get_color(color_string, self.mne.dark)
         self.text_color = _get_color(color_string, self.mne.dark)
-        self.base_color.setAlpha(75)
         self.hover_color.setAlpha(150)
         self.text_color.setAlpha(255)
-        self.line_pen = self.mne.mkPen(color=self.hover_color, width=2)
+
+        # Differences between annotations with channels and annotations without channels associated
+        if len(self.ch_names) > 0:
+            self.line_pen = self.mne.mkPen(color=color_string, width=5, style=Qt.DashLine)
+            self.base_color.setAlpha(20)
+        else:
+            self.line_pen = self.mne.mkPen(color=self.hover_color, width=2)
+            self.base_color.setAlpha(75)
+
         self.hover_pen = self.mne.mkPen(color=self.text_color, width=2)
         self.setBrush(self.base_color)
         self.setHoverBrush(self.hover_color)
@@ -2063,7 +2080,24 @@ class AnnotRegion(LinearRegionItem):
         for line in self.lines:
             line.setPen(self.line_pen)
             line.setHoverPen(self.hover_pen)
+        self.update_channel_annots()
         self.update()
+
+    def update_channel_annots(self):
+        """Update channels associated with this annotation"""
+        if len(self.ch_annots) > 0:
+            current_ch_annots = list(self.ch_annots.keys())
+            for ch, val in self.ch_annots.items():
+                if val is None:
+                    self.ch_annots[ch] = ChannelAnnotRegion(self.mne, self, ch, self._values)
+                    self.allChildItems(self.ch_annots[ch])
+                self.ch_annots[ch].update_visible()
+                self.ch_annots[ch].update_color()
+                # if ch not in current_ch_annots:
+                #     self.ch_annots[ch] = ChannelAnnotRegion(self.mne, self, ch, self._values)
+                # elif ch in current_ch_annots:
+                #     self.ch_annots[ch].update_visible()
+                #     self.ch_annots[ch].update_color()
 
     def update_description(self, description):
         """Update description of annoation-region."""
@@ -2075,6 +2109,7 @@ class AnnotRegion(LinearRegionItem):
         """Update if annotation-region is visible."""
         self.setVisible(visible)
         self.label_item.setVisible(visible)
+        self.is_visible = visible
 
     def remove(self):
         """Remove annotation-region."""
@@ -2164,6 +2199,72 @@ class AnnotRegion(LinearRegionItem):
             ymax = vb.viewRange()[1][1]
             self.label_item.setPos(sum(rgn) / 2, ymax - 0.3)
 
+class ChannelAnnotRegion(LinearRegionItem):
+    """Graphics-Object for marking Channels associated with Annotations"""
+
+    #regionChangeFinished = Signal(object)
+    gotSelected = Signal(object)
+    removeRequested = Signal(object)
+
+    def __init__(self, mne, annotation, ch_name, values):
+        super().__init__(values=values, orientation='vertical',
+                         movable=True, swapMode='sort',
+                         bounds=(0, mne.xmax))
+        # Set default z-value to 0 to be behind other items in scene
+        self.setZValue(0)
+
+        self.sigRegionChangeFinished.connect(self._region_changed)
+        self.mne = mne
+        self.annot_region = annotation
+        self.annot_region.visibleChanged.connect(self.update_visible)
+        self.ch_name = ch_name
+        #self.trace = [tr for tr in self.mne.traces if tr.ch_name == ch_name][0]
+        self.trace = None
+        self.old_onset = values[0]
+        self.selected = False
+        self.is_visible = False
+
+        self.update_color()
+
+        #self.sigRegionChanged.connect(self.update_label_pos)
+
+        self.mne.plt.addItem(self, ignoreBounds=True)
+        #self.mne.plt.addItem(self.label_item, ignoreBounds=True)
+
+
+    def _region_changed(self):
+        self.regionChangeFinished.emit(self)
+        self.old_onset = self.getRegion()[0]
+
+    def update_color(self):
+        color_string = self.mne.annotation_segment_colors[self.annot_region.description]
+        color_string = "#ff0000"
+        self.base_color = _get_color(color_string, self.mne.dark)
+        self.hover_color = _get_color(color_string, self.mne.dark)
+        #self.base_color.setAlpha(200)
+        #self.hover_color.setAlpha(20)
+        self.hover_color.setAlpha(200)
+
+        self.line_pen = self.mne.mkPen(color=self.hover_color, width=2)
+        self.setBrush(self.base_color)
+        self.setHoverBrush(self.hover_color)
+        # for line in self.lines:
+        #     line.setPen(self.line_pen)
+        #     line.setHoverPen(self.hover_pen)
+        self.update()
+
+    def update_visible(self):
+        traces = [tr for tr in self.mne.traces if tr.ch_name == self.ch_name]
+        if len(traces) == 0:
+            self.trace = None
+        else:
+            self.trace = traces[0]
+        if self.annot_region.is_visible and self.trace is not None:
+            self.setVisible(True)
+            self.is_visible = True
+        else:
+            self.setVisible(False)
+            self.is_visible = False
 
 class _AnnotEditDialog(_BaseDialog):
     def __init__(self, annot_dock):
@@ -4097,10 +4198,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     # ANNOTATIONS
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-    def _add_region(self, plot_onset, duration, description, *, region=None):
+    def _add_region(self, plot_onset, duration, description, ch_names, *, region=None):
         if not region:
             region = AnnotRegion(self.mne, description=description,
-                                 values=(plot_onset, plot_onset + duration))
+                                 values=(plot_onset, plot_onset + duration),
+                                 ch_names=ch_names)
         # Add region to list and plot
         self.mne.regions.append(region)
 
@@ -4202,7 +4304,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             plot_onset = _sync_onset(self.mne.inst, annot['onset'])
             duration = annot['duration']
             description = annot['description']
-            region = self._add_region(plot_onset, duration, description)
+            ch_names = annot['ch_names']
+            region = self._add_region(plot_onset, duration, description, ch_names)
             region.update_visible(False)
 
         # Initialize showing annotation widgets
@@ -4526,6 +4629,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         for trace in self.mne.traces:
             # Update data
             trace.update_data()
+        for rg in self.mne.regions:
+            rg.update_channel_annots()
 
     def _get_size(self):
         inch_width = self.width() / self.logicalDpiX()
