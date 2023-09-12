@@ -401,7 +401,7 @@ class DataTrace(PlotCurveItem):
                                     self.mne.epoch_colors[epoch_idx]])
 
             # Update bad channel colors
-            bad_idxs = np.in1d(self.mne.ch_names, self.mne.info['bads'])
+            bad_idxs = np.isin(self.mne.ch_names, self.mne.info['bads'])
             new_epo_color[bad_idxs] = to_rgba_array(self.mne.ch_color_bad)
 
             self.mne.epoch_color_ref[:, epoch_idx] = new_epo_color
@@ -1954,13 +1954,13 @@ class SelectionDialog(_BaseDialog):  # noqa: D101
 
     def _set_custom_selection(self):
         chs = self.channel_fig.lasso.selection
-        inds = np.in1d(self.mne.ch_names, chs)
+        inds = np.isin(self.mne.ch_names, chs)
         self.mne.ch_selections['Custom'] = inds.nonzero()[0]
         if any(inds):
             self._chkbx_changed(None, 'Custom')
 
     def _update_highlighted_sensors(self):
-        inds = np.in1d(self.mne.fig_selection.channel_fig.lasso.ch_names,
+        inds = np.isin(self.mne.fig_selection.channel_fig.lasso.ch_names,
                        self.mne.ch_names[self.mne.picks]).nonzero()[0]
         self.channel_fig.lasso.select_many(inds)
         self.channel_widget.draw()
@@ -1971,7 +1971,7 @@ class SelectionDialog(_BaseDialog):  # noqa: D101
         for this_type in _DATA_CH_TYPES_SPLIT:
             if this_type in self.mne.ch_types:
                 sensor_picks.extend(ch_indices[this_type])
-        sensor_idx = np.in1d(sensor_picks, pick).nonzero()[0]
+        sensor_idx = np.isin(sensor_picks, pick).nonzero()[0]
         # change the sensor color
         fig = self.channel_fig
         fig.lasso.ec[sensor_idx, 0] = float(mark_bad)  # change R of RGBA array
@@ -2933,7 +2933,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 to_rgba_array(self.mne.epoch_color_bad)
 
             # Mark bad channels
-            bad_idxs = np.in1d(self.mne.ch_names, self.mne.info['bads'])
+            bad_idxs = np.isin(self.mne.ch_names, self.mne.info['bads'])
             self.mne.epoch_color_ref[bad_idxs, :] = \
                 to_rgba_array(self.mne.ch_color_bad)
 
@@ -4070,7 +4070,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Initialize decim
         self.mne.decim_data = np.ones_like(self.mne.picks)
-        data_picks_mask = np.in1d(self.mne.picks, self.mne.picks_data)
+        data_picks_mask = np.isin(self.mne.picks, self.mne.picks_data)
         self.mne.decim_data[data_picks_mask] = self.mne.decim
 
         # Apply clipping
