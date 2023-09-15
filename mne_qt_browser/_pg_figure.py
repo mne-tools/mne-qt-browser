@@ -37,7 +37,7 @@ from qtpy.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
                             QGraphicsLineItem, QGraphicsScene, QTextEdit,
                             QSizePolicy, QSpinBox, QSlider, QWidgetAction,
                             QRadioButton)
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.colors import to_rgba_array
 from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
                        LinearRegionItem, PlotCurveItem, PlotItem,
@@ -47,12 +47,12 @@ from scipy.stats import zscore
 from colorspacious import cspace_convert
 
 import scooby
+from mne import channel_indices_by_type
 from mne.viz import plot_sensors
 from mne.viz._figure import BrowserBase
 from mne.viz.utils import _simplify_float, _merge_annotations, _figure_agg
 from mne.annotations import _sync_onset
-from mne.io.pick import (_DATA_CH_TYPES_ORDER_DEFAULT,
-                         channel_indices_by_type, _DATA_CH_TYPES_SPLIT)
+from mne.io.pick import _DATA_CH_TYPES_ORDER_DEFAULT, _DATA_CH_TYPES_SPLIT
 from mne.utils import (_to_rgb, logger, sizeof_fmt, warn, get_config,
                        _check_option)
 
@@ -401,7 +401,7 @@ class DataTrace(PlotCurveItem):
                                     self.mne.epoch_colors[epoch_idx]])
 
             # Update bad channel colors
-            bad_idxs = np.in1d(self.mne.ch_names, self.mne.info['bads'])
+            bad_idxs = np.isin(self.mne.ch_names, self.mne.info['bads'])
             new_epo_color[bad_idxs] = to_rgba_array(self.mne.ch_color_bad)
 
             self.mne.epoch_color_ref[:, epoch_idx] = new_epo_color
@@ -419,6 +419,7 @@ class DataTrace(PlotCurveItem):
         else:
             bad_color, pick, marked_bad = self.weakmain()._toggle_bad_channel(
                 self.range_idx)
+            self.weakmain()._apply_update_projectors()
 
             # Update line color status
             self.isbad = not self.isbad
@@ -1247,8 +1248,7 @@ class RawViewBox(ViewBox):
         """Customize mouse drag events."""
         event.accept()
 
-        if event.button() == Qt.LeftButton \
-                and self.mne.annotation_mode:
+        if event.button() == Qt.LeftButton and self.mne.annotation_mode:
             if self.mne.current_description:
                 description = self.mne.current_description
                 if event.isStart():
@@ -1256,10 +1256,12 @@ class RawViewBox(ViewBox):
                             event.lastScenePos()).x()
                     self._drag_start = 0 if self._drag_start < 0 else self._drag_start
                     drag_stop = self.mapSceneToView(event.scenePos()).x()
-                    self._drag_region = AnnotRegion(self.mne,
-                                                    description=description,
-                                                    values=(self._drag_start,
-                                                            drag_stop))
+                    self._drag_region = AnnotRegion(
+                        self.mne,
+                        description=description,
+                        values=(self._drag_start, drag_stop),
+                        weakmain=self.weakmain,
+                    )
                 elif event.isFinish():
                     drag_stop = self.mapSceneToView(event.scenePos()).x()
                     drag_stop = 0 if drag_stop < 0 else drag_stop
@@ -1281,12 +1283,11 @@ class RawViewBox(ViewBox):
                     # Add to regions/merge regions
                     merge_values = [plot_onset, plot_offset]
                     rm_regions = list()
-                    for region in [r for r in self.mne.regions
-                                   if r.description ==
-                                   self.mne.current_description]:
+                    for region in self.mne.regions:
+                        if region.description != self.mne.current_description:
+                            continue
                         values = region.getRegion()
-                        if any([plot_onset < val < plot_offset for val in
-                                values]):
+                        if any(plot_onset <= val <= plot_offset for val in values):
                             merge_values += values
                             rm_regions.append(region)
                     if len(merge_values) > 2:
@@ -1305,12 +1306,14 @@ class RawViewBox(ViewBox):
                     self.mne.overview_bar.update_annotations()
                 else:
                     x_to = self.mapSceneToView(event.scenePos()).x()
-                    self._drag_region.setRegion((self._drag_start, x_to))
+                    with SignalBlocker(self._drag_region):
+                        self._drag_region.setRegion((self._drag_start, x_to))
 
             elif event.isFinish():
                 self.weakmain().message_box(
                     text='No description!',
                     info_text='No description is given, add one!',
+                    buttons=QMessageBox.Ok,
                     icon=QMessageBox.Warning)
 
     def mouseClickEvent(self, event):
@@ -1392,10 +1395,12 @@ class VLine(InfiniteLine):
         self.label = VLineLabel(self)
 
     def setMouseHover(self, hover):
+        """Customize the mouse hovering event."""
         super().setMouseHover(hover)
         # Also change color of label
         self.label.fill = self.currentPen.color()
         self.label.border = self.currentPen
+        self.label.update()
 
 
 def _q_font(point_size, bold=False):
@@ -1949,13 +1954,13 @@ class SelectionDialog(_BaseDialog):  # noqa: D101
 
     def _set_custom_selection(self):
         chs = self.channel_fig.lasso.selection
-        inds = np.in1d(self.mne.ch_names, chs)
+        inds = np.isin(self.mne.ch_names, chs)
         self.mne.ch_selections['Custom'] = inds.nonzero()[0]
         if any(inds):
             self._chkbx_changed(None, 'Custom')
 
     def _update_highlighted_sensors(self):
-        inds = np.in1d(self.mne.fig_selection.channel_fig.lasso.ch_names,
+        inds = np.isin(self.mne.fig_selection.channel_fig.lasso.ch_names,
                        self.mne.ch_names[self.mne.picks]).nonzero()[0]
         self.channel_fig.lasso.select_many(inds)
         self.channel_widget.draw()
@@ -1966,7 +1971,7 @@ class SelectionDialog(_BaseDialog):  # noqa: D101
         for this_type in _DATA_CH_TYPES_SPLIT:
             if this_type in self.mne.ch_types:
                 sensor_picks.extend(ch_indices[this_type])
-        sensor_idx = np.in1d(sensor_picks, pick).nonzero()[0]
+        sensor_idx = np.isin(sensor_picks, pick).nonzero()[0]
         # change the sensor color
         fig = self.channel_fig
         fig.lasso.ec[sensor_idx, 0] = float(mark_bad)  # change R of RGBA array
@@ -2020,13 +2025,14 @@ class AnnotRegion(LinearRegionItem):
     gotSelected = Signal(object)
     removeRequested = Signal(object)
 
-    def __init__(self, mne, description, values, ch_names):
+    def __init__(self, mne, description, values, weakmain, ch_names):
         super().__init__(values=values, orientation='vertical',
                          movable=True, swapMode='sort',
                          bounds=(0, mne.xmax))
         # Set default z-value to 0 to be behind other items in scene
         self.setZValue(0)
         self.sigRegionChangeFinished.connect(self._region_changed)
+        self.weakmain = weakmain
         self.mne = mne
         self.description = description
         self.old_onset = values[0]
@@ -2053,6 +2059,29 @@ class AnnotRegion(LinearRegionItem):
     def _region_changed(self):
         self.regionChangeFinished.emit(self)
         self.old_onset = self.getRegion()[0]
+        
+        # remove merged regions
+        overlapping_regions = list()
+        for region in self.mne.regions:
+            if region.description != self.description or id(self) == id(region):
+                continue
+            values = region.getRegion()
+            if any(self.getRegion()[0] <= val <= self.getRegion()[1] for val in values):
+                overlapping_regions.append(region)
+        # figure out new boundaries
+        regions_ = np.array(
+            [region.getRegion() for region in overlapping_regions] + [self.getRegion()]
+        )
+        onset = np.min(regions_[:, 0])
+        offset = np.max(regions_[:, 1])
+        # remove overlapping regions
+        for region in overlapping_regions:
+            self.weakmain()._remove_region(region, from_annot=False)
+        # re-set while blocking the signal to avoid re-running this function
+        with SignalBlocker(self):
+            self.setRegion((onset, offset))
+        self.update_label_pos()
+
         self.update_channel_annots()
 
     def update_color(self):
@@ -2486,27 +2515,28 @@ class AnnotationDock(QDockWidget):
                 icon=QMessageBox.Information)
 
     def _remove_description(self, rm_description):
-        # Remove regions
-        for rm_region in [r for r in self.mne.regions
-                          if r.description == rm_description]:
-            rm_region.remove()
+        if rm_description != "":
+            # Remove regions
+            for rm_region in [r for r in self.mne.regions
+                              if r.description == rm_description]:
+                rm_region.remove()
 
-        # Remove from descriptions
-        self.mne.new_annotation_labels.remove(rm_description)
-        self._update_description_cmbx()
+            # Remove from descriptions
+            self.mne.new_annotation_labels.remove(rm_description)
+            self._update_description_cmbx()
 
-        # Remove from visible annotations
-        self.mne.visible_annotations.pop(rm_description)
+            # Remove from visible annotations
+            self.mne.visible_annotations.pop(rm_description)
 
-        # Remove from color-mapping
-        if rm_description in self.mne.annotation_segment_colors:
-            self.mne.annotation_segment_colors.pop(rm_description)
+            # Remove from color-mapping
+            if rm_description in self.mne.annotation_segment_colors:
+                self.mne.annotation_segment_colors.pop(rm_description)
 
-        # Set first description in Combo-Box to current description
-        if self.description_cmbx.count() > 0:
-            self.description_cmbx.setCurrentIndex(0)
-            self.mne.current_description = \
-                self.description_cmbx.currentText()
+            # Set first description in Combo-Box to current description
+            if self.description_cmbx.count() > 0:
+                self.description_cmbx.setCurrentIndex(0)
+                self.mne.current_description = \
+                    self.description_cmbx.currentText()
 
     def _remove_description_dlg(self):
         rm_description = self.description_cmbx.currentText()
@@ -3006,7 +3036,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 to_rgba_array(self.mne.epoch_color_bad)
 
             # Mark bad channels
-            bad_idxs = np.in1d(self.mne.ch_names, self.mne.info['bads'])
+            bad_idxs = np.isin(self.mne.ch_names, self.mne.info['bads'])
             self.mne.epoch_color_ref[bad_idxs, :] = \
                 to_rgba_array(self.mne.ch_color_bad)
 
@@ -4143,7 +4173,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Initialize decim
         self.mne.decim_data = np.ones_like(self.mne.picks)
-        data_picks_mask = np.in1d(self.mne.picks, self.mne.picks_data)
+        data_picks_mask = np.isin(self.mne.picks, self.mne.picks_data)
         self.mne.decim_data[data_picks_mask] = self.mne.decim
 
         # Apply clipping
@@ -4200,9 +4230,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     def _add_region(self, plot_onset, duration, description, ch_names, *, region=None):
         if not region:
-            region = AnnotRegion(self.mne, description=description,
-                                 values=(plot_onset, plot_onset + duration),
-                                 ch_names=ch_names)
+            region = AnnotRegion(
+                self.mne,
+                description=description,
+                values=(plot_onset, plot_onset + duration),
+                weakmain=weakref.ref(self),
+                ch_names=ch_names,
+            )
         # Add region to list and plot
         self.mne.regions.append(region)
 
@@ -4261,17 +4295,19 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         rgn = region.getRegion()
         region.select(True)
         idx = self._get_onset_idx(region.old_onset)
-
-        # Update Spinboxes of Annot-Dock
+        # update Spinboxes of Annot-Dock
         self.mne.fig_annotation.update_values(region)
-
-        # Change annotations
-        self.mne.inst.annotations.onset[idx] = _sync_onset(self.mne.inst,
-                                                           rgn[0],
-                                                           inverse=True)
+        # edit inst.annotations
+        onset = _sync_onset(self.mne.inst, rgn[0], inverse=True)
+        self.mne.inst.annotations.onset[idx] = onset
         self.mne.inst.annotations.duration[idx] = rgn[1] - rgn[0]
-
-        # Update overview-bar
+        _merge_annotations(
+            onset,
+            onset + rgn[1] - rgn[0],
+            region.description,
+            self.mne.inst.annotations,
+        )
+        # update overview-bar
         self.mne.overview_bar.update_annotations()
 
     def _draw_annotations(self):
