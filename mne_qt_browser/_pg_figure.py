@@ -1575,10 +1575,9 @@ class _BaseDialog(QDialog):
 class ComboBox(QComboBox):
     """ Custom QComboBox Widget """
 
-    def __init__(self, norm=100, sf=1, **kwargs):
+    def __init__(self, norm=100, **kwargs):
         super().__init__(**kwargs)
-        reg_norm = norm*sf
-        items = [str(int(x)) for x in [reg_norm/4, reg_norm/2, 3*reg_norm/4, reg_norm, 3*reg_norm/2, 2*reg_norm, 5*reg_norm/2]]
+        items = [str(int(x)) for x in [norm/4, norm/2, 3*norm/4, norm, 3*norm/2, 2*norm, 5*norm/2]]
         self.addItems(items)
         self.setCurrentText(str(int(norm)))
         self.setEditable(True)
@@ -1607,6 +1606,7 @@ class AmplitudeSettingsDialog(_BaseDialog):
         self.all_radio.clicked.connect(self._radio_clicked)
         general_tab.layout.addRow(self.all_radio)
         self.all_scale_cmbx = ComboBox()
+        self.all_scale_cmbx.setCurrentText(str(int(self.mne.scale_factor*100)))
         self.all_scale_cmbx.currentTextChanged.connect(_methpartial(
             self._value_changed, type='all'))
         general_tab.layout.addRow('% Scaling', self.all_scale_cmbx)
@@ -1626,16 +1626,15 @@ class AmplitudeSettingsDialog(_BaseDialog):
         self.ch_types_ordered = [ordered_types[idx] for idx
                             in sorted(unique_type_idxs)]
         if 'stim' in self.ch_types_ordered: self.ch_types_ordered.remove('stim')
-        print(self.ch_types_ordered)
         for index in self.ch_types_ordered:
             lbl = QLabel(index.upper())
             tbox.addRow(lbl)
             scaler = 1 if self.mne.butterfly else 2
             inv_norm = (scaler *
                     self.mne.scalings[index] *
-                    self.mne.unit_scalings[index] /
-                    self.mne.scale_factor)
-            self.index = ComboBox(norm=inv_norm, sf=self.mne.scale_factor)
+                    self.mne.unit_scalings[index])
+            self.index = ComboBox(norm=inv_norm)
+            self.index.setCurrentText(str(int(inv_norm/self.mne.scale_factor)))
             text = '['+ self.mne.units[index] +']/monitor cm'
             tbox.addRow(text, self.index)
         self.types_group.setEnabled(False)
@@ -1656,10 +1655,12 @@ class AmplitudeSettingsDialog(_BaseDialog):
         self.all_scale_cmbx.setEnabled(flag)
         self.types_group.setEnabled(not flag)
 
-    def _value_changed(self, new_value, type, ch_name=None):
+    def _value_changed(self, new_value, type):
         match type:
             case 'all':
-                self.weakmain().set_scale_factor(scale=float(new_value)/100)
+                scale = float(new_value)/100
+                self.weakmain().set_scale_factor(scale=scale)
+                
 
 
     def closeEvent(self, event):
@@ -3140,12 +3141,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         adecr_nchan = QAction(
             QIcon.fromTheme("zoom_out"), 'Zoom out', parent=self)
         adecr_nchan.triggered.connect(
-            _methpartial(self.scale_all, step=-0.5))
+            _methpartial(self.scale_all, step=4 / 5))
         self.mne.toolbar.addAction(adecr_nchan)
         aincr_nchan = QAction(
             QIcon.fromTheme("zoom_in"), 'Zoom in', parent=self)
         aincr_nchan.triggered.connect(
-            _methpartial(self.scale_all, step= 0.5))
+            _methpartial(self.scale_all, step=5 / 4))
         self.mne.toolbar.addAction(aincr_nchan)
         ampsettings = QAction(QIcon.fromTheme("settings"), 'Amplitude Advanced Settings',
                             parent=self)
@@ -3512,7 +3513,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def scale_all(self, checked=False, *, step):
         """Scale all traces by multiplying with step."""
-        self.mne.scale_factor += step
+        self.mne.scale_factor *= step
 
         # Reapply clipping if necessary
         if self.mne.clipping is not None:
