@@ -1624,19 +1624,19 @@ class AmplitudeSettingsDialog(_BaseDialog):
         unique_type_idxs = np.unique(ordered_types,
                                      return_index=True)[1]
         self.ch_types_ordered = [ordered_types[idx] for idx
-                            in sorted(unique_type_idxs)]   
+                            in sorted(unique_type_idxs)]
+        if 'stim' in self.ch_types_ordered: self.ch_types_ordered.remove('stim')
+        print(self.ch_types_ordered)
         for index in self.ch_types_ordered:
             lbl = QLabel(index.upper())
             tbox.addRow(lbl)
             scaler = 1 if self.mne.butterfly else 2
-            uscaler = 50 if index == 'stim' else self.mne.unit_scalings[index]
             inv_norm = (scaler *
                     self.mne.scalings[index] *
-                    uscaler /
+                    self.mne.unit_scalings[index] /
                     self.mne.scale_factor)
             self.index = ComboBox(norm=inv_norm, sf=self.mne.scale_factor)
-            unit = '%' if index == 'stim' else self.mne.units[index]
-            text = '['+unit+']/monitor cm'
+            text = '['+ self.mne.units[index] +']/monitor cm'
             tbox.addRow(text, self.index)
         self.types_group.setEnabled(False)
         self.types_group.setLayout(tbox)    
@@ -1657,10 +1657,6 @@ class AmplitudeSettingsDialog(_BaseDialog):
         self.types_group.setEnabled(not flag)
 
     def _value_changed(self, new_value, type, ch_name=None):
-        print('value changed')
-        print('type',type)
-        print('new value', new_value)
-        print('chname',ch_name)
         match type:
             case 'all':
                 self.weakmain().set_scale_factor(scale=float(new_value)/100)
