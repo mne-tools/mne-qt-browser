@@ -27,6 +27,7 @@ dependencies = [
     "pyopengl; platform_system=='Darwin'",
     "darkdetect",
     "qdarkstyle",
+    "pyqt5"
 ]
 dynamic = ["version"]
 
