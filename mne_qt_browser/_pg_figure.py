@@ -48,7 +48,7 @@ from colorspacious import cspace_convert
 import scooby
 from mne.viz import plot_sensors
 from mne.viz._figure import BrowserBase
-from mne.viz.utils import _simplify_float, _merge_annotations, _figure_agg, warn
+from mne.viz.utils import _simplify_float, _merge_annotations, _figure_agg
 from mne.annotations import _sync_onset
 from mne.io.pick import (_DATA_CH_TYPES_ORDER_DEFAULT,
                          channel_indices_by_type, _DATA_CH_TYPES_SPLIT)
@@ -1579,7 +1579,7 @@ class ComboBox(QComboBox):
         super().__init__(**kwargs)
         items = [str(int(x)) for x in [norm/4, norm/2, 3*norm/4, norm, 3*norm/2, 2*norm, 5*norm/2]]
         self.addItems(items)
-        self.setCurrentText(str(int(norm)))
+        self.setCurrentText(items[3])
         self.setEditable(True)
         self.setInsertPolicy(0)
         self.setCompleter(None)
@@ -3318,21 +3318,21 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 'qt_key': Qt.Key_Minus,
                 'slot': [self.scale_all],
                 'kw': 'step',
-                'parameter': [-0.5],
+                'parameter': [4 / 5],
                 'description': ['Decrease Scale']
             },
             '+': {
                 'qt_key': Qt.Key_Plus,
                 'slot': [self.scale_all],
                 'kw': 'step',
-                'parameter': [0.5],
+                'parameter': [5 / 4],
                 'description': ['Increase Scale']
             },
             '=': {
                 'qt_key': Qt.Key_Equal,
                 'slot': [self.scale_all],
                 'kw': 'step',
-                'parameter': [0.5],
+                'parameter': [5 / 4],
                 'description': ['Increase Scale']
             },
             'a': {
