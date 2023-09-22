@@ -1633,8 +1633,11 @@ class AmplitudeSettingsDialog(_BaseDialog):
             inv_norm = (scaler *
                     self.mne.scalings[index] *
                     self.mne.unit_scalings[index])
+            setattr(self, index, None)
             self.index = ComboBox(norm=inv_norm)
             self.index.setCurrentText(str(int(inv_norm/self.mne.scale_factor)))
+            self.index.currentTextChanged.connect(_methpartial(
+                self._value_changed, type=index))
             text = '['+ self.mne.units[index] +']/monitor cm'
             tbox.addRow(text, self.index)
         self.types_group.setEnabled(False)
@@ -1656,17 +1659,17 @@ class AmplitudeSettingsDialog(_BaseDialog):
         self.types_group.setEnabled(not flag)
 
     def _value_changed(self, new_value, type):
-        match type:
-            case 'all':
-                scale = float(new_value)/100
-                self.weakmain().set_scale_factor(scale=scale)
+        print(type,' changed')
+        if type == 'all':
+            self.weakmain().set_scale_factor(scale=float(new_value)/100)
                 
-
 
     def closeEvent(self, event):
         _disconnect(self.all_radio.clicked)
         _disconnect(self.types_radio.clicked)
         _disconnect(self.all_scale_cmbx.currentTextChanged)
+        for index in self.ch_types_ordered:
+            _disconnect(self.index.currentTextChanged, allow_error=True)
         super().closeEvent(event)
 
 
