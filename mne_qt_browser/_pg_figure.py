@@ -1633,7 +1633,7 @@ class AmplitudeSettingsDialog(_BaseDialog):
             inv_norm = (scaler *
                     self.mne.scalings[index] *
                     self.mne.unit_scalings[index])
-            setattr(self, index, None)
+            #setattr(self, index, None)
             self.index = ComboBox(norm=inv_norm)
             self.index.setCurrentText(str(int(inv_norm/self.mne.scale_factor)))
             self.index.currentTextChanged.connect(_methpartial(
@@ -1659,11 +1659,10 @@ class AmplitudeSettingsDialog(_BaseDialog):
         self.types_group.setEnabled(not flag)
 
     def _value_changed(self, new_value, type):
-        print(type,' changed')
+        print(type,' changed from ', old_value, ' to ', new_value)
         if type == 'all':
             self.weakmain().set_scale_factor(scale=float(new_value)/100)
                 
-
     def closeEvent(self, event):
         _disconnect(self.all_radio.clicked)
         _disconnect(self.types_radio.clicked)
