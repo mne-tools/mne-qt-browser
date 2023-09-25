@@ -39,8 +39,8 @@ from qtpy.QtWidgets import (QAction, QColorDialog, QComboBox, QDialog,
                             QRadioButton)
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.colors import to_rgba_array
-from pyqtgraph import (AxisItem, GraphicsView, InfLineLabel, InfiniteLine,
-                       LinearRegionItem, PlotCurveItem, PlotItem,
+from pyqtgraph import (AxisItem, FillBetweenItem, GraphicsView, InfLineLabel,
+                       InfiniteLine, LinearRegionItem, PlotCurveItem, PlotItem,
                        Point, TextItem, ViewBox, mkBrush,
                        mkPen, setConfigOption, mkColor)
 from scipy.stats import zscore
@@ -2022,13 +2022,13 @@ class SelectionDialog(_BaseDialog):  # noqa: D101
 
 
 class AnnotRegion(LinearRegionItem):
-    """Graphics-Oobject for Annotations."""
+    """Graphics-Object for Annotations."""
 
     regionChangeFinished = Signal(object)
     gotSelected = Signal(object)
     removeRequested = Signal(object)
 
-    def __init__(self, mne, description, values, weakmain):
+    def __init__(self, mne, description, values, weakmain, ch_names=None):
         super().__init__(values=values, orientation='vertical',
                          movable=True, swapMode='sort',
                          bounds=(0, mne.xmax))
@@ -2046,7 +2046,21 @@ class AnnotRegion(LinearRegionItem):
         self.label_item.setFont(_q_font(10, bold=True))
         self.sigRegionChanged.connect(self.update_label_pos)
 
-        self.update_color()
+        self.update_color(all_channels=(not ch_names))
+
+        if ch_names is not None and len(ch_names):
+            # this is a dirty hack that relies on the fact that y offsets match index
+            # in self.mne.ch_names
+            yposes = np.nonzero(np.isin(self.mne.ch_names, ch_names))[0] + 1
+            color_string = self.mne.annotation_segment_colors[self.description]
+            brush = _get_color(color_string, self.mne.dark)
+            brush.setAlpha(60)
+            for _ypos in yposes:
+                ypos = np.array([-0.5, 0.5]) + _ypos
+                lower = PlotCurveItem(x=np.array(values), y=ypos[[0, 0]])
+                upper = PlotCurveItem(x=np.array(values), y=ypos[[1, 1]])
+                fill = FillBetweenItem(lower, upper, brush=brush)
+                self.mne.plt.addItem(fill, ignoreBounds=True)
 
         self.mne.plt.addItem(self, ignoreBounds=True)
         self.mne.plt.addItem(self.label_item, ignoreBounds=True)
@@ -2076,16 +2090,22 @@ class AnnotRegion(LinearRegionItem):
             self.setRegion((onset, offset))
         self.update_label_pos()
 
-    def update_color(self):
+    def update_color(self, all_channels=True):
         """Update color of annotation-region."""
         color_string = self.mne.annotation_segment_colors[self.description]
         self.base_color = _get_color(color_string, self.mne.dark)
         self.hover_color = _get_color(color_string, self.mne.dark)
         self.text_color = _get_color(color_string, self.mne.dark)
-        self.base_color.setAlpha(75)
+        self.base_color.setAlpha(75 if all_channels else 15)
         self.hover_color.setAlpha(150)
         self.text_color.setAlpha(255)
-        self.line_pen = self.mne.mkPen(color=self.hover_color, width=2)
+        kwargs = dict(color=self.hover_color, width=2)
+        if not all_channels:
+            kwargs.update(
+                style=Qt.DashLine,
+                color=_get_color(color_string, self.mne.dark).setAlpha(75)
+            )
+        self.line_pen = self.mne.mkPen(**kwargs)
         self.hover_pen = self.mne.mkPen(color=self.text_color, width=2)
         self.setBrush(self.base_color)
         self.setHoverBrush(self.hover_color)
@@ -4128,11 +4148,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     # ANNOTATIONS
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-    def _add_region(self, plot_onset, duration, description, *, region=None):
+    def _add_region(self, plot_onset, duration, description, *, ch_names=None,
+                    region=None):
         if not region:
             region = AnnotRegion(
                 self.mne,
                 description=description,
+                ch_names=ch_names,
                 values=(plot_onset, plot_onset + duration),
                 weakmain=weakref.ref(self),
             )
@@ -4239,7 +4261,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             plot_onset = _sync_onset(self.mne.inst, annot['onset'])
             duration = annot['duration']
             description = annot['description']
-            region = self._add_region(plot_onset, duration, description)
+            ch_names = annot['ch_names']
+            region = self._add_region(plot_onset, duration, description, ch_names=ch_names)
             region.update_visible(False)
 
         # Initialize showing annotation widgets
