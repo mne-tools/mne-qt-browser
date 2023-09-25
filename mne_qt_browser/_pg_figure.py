@@ -4262,7 +4262,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             duration = annot['duration']
             description = annot['description']
             ch_names = annot['ch_names']
-            region = self._add_region(plot_onset, duration, description, ch_names=ch_names)
+            region = self._add_region(
+                plot_onset, duration, description, ch_names=ch_names
+                )
             region.update_visible(False)
 
         # Initialize showing annotation widgets
