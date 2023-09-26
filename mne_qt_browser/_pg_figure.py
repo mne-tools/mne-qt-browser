@@ -4261,7 +4261,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             plot_onset = _sync_onset(self.mne.inst, annot['onset'])
             duration = annot['duration']
             description = annot['description']
-            ch_names = annot['ch_names']
+            ch_names = annot['ch_names'] if 'ch_names' in annot else None
             region = self._add_region(
                 plot_onset, duration, description, ch_names=ch_names
                 )
