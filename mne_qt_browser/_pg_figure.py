@@ -2049,9 +2049,8 @@ class AnnotRegion(LinearRegionItem):
         self.update_color(all_channels=(not ch_names))
 
         if ch_names is not None and len(ch_names):
-            # this is a dirty hack that relies on the fact that y offsets match index
-            # in self.mne.ch_names
-            yposes = np.nonzero(np.isin(self.mne.ch_names, ch_names))[0] + 1
+            ch_is_in_annot = np.isin(self.mne.ch_names[self.mne.ch_order], ch_names)
+            yposes = np.nonzero(ch_is_in_annot)[0] + 1
             color_string = self.mne.annotation_segment_colors[self.description]
             brush = _get_color(color_string, self.mne.dark)
             brush.setAlpha(60)
@@ -2101,10 +2100,15 @@ class AnnotRegion(LinearRegionItem):
         self.text_color.setAlpha(255)
         kwargs = dict(color=self.hover_color, width=2)
         if not all_channels:
+            color = _get_color(color_string, self.mne.dark)
+            color.setAlpha(75)
             kwargs.update(
-                style=Qt.DashLine,
-                color=_get_color(color_string, self.mne.dark).setAlpha(75)
+                style=Qt.CustomDashLine,
+                cap=Qt.FlatCap,
+                dash=[8, 8],
+                color=color,
             )
+            # raise RuntimeError("pdb")
         self.line_pen = self.mne.mkPen(**kwargs)
         self.hover_pen = self.mne.mkPen(color=self.text_color, width=2)
         self.setBrush(self.base_color)
