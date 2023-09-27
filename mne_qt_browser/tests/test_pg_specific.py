@@ -84,6 +84,24 @@ def test_annotations_interactions(raw_orig, pg_backend):
     fig.msg_box.close()
 
 
+def test_ch_specific_annot(raw_orig):
+    """Test plotting channel specific annotations."""
+    from mne import Annotations
+    from pyqtgraph.graphicsItems.FillBetweenItem import FillBetweenItem
+
+    ch_names = ["MEG 0133", "MEG 0142", "MEG 0143", "MEG 0423"]
+    annots = Annotations([1], [2], "some_chs", ch_names=[ch_names])
+    raw_orig.set_annotations(annots)
+    fig = raw_orig.plot()
+    fig.test_mode = True
+    # one item for each channel in a channel specific annot
+    rects = [item for item in fig.mne.plt.items if isinstance(item, FillBetweenItem)]
+    assert len(rects) == 4
+    fig.close()
+    
+
+
+
 def test_pg_settings_dialog(raw_orig, pg_backend):
     """Test Settings Dialog toggle on/off for pyqtgraph-backend."""
     fig = raw_orig.plot()
