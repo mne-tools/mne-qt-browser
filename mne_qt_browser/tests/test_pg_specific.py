@@ -108,7 +108,7 @@ def test_ch_specific_annot(raw_orig, pg_backend):
     # the +1 is needed because ypos indexing of the traces starts at 1, not 0
     want_index = fig_ch_names.index(raw_orig.annotations.ch_names[0][-1]) + 1
     # The round basically just rounds 27.5 up to 28
-    got_index = np.round(last_fill_between.yData[0],).astype(int)
+    got_index = np.round(last_fill_between.yData[0]).astype(int)
     assert got_index == want_index  # should be 28
     fig.close()
     
