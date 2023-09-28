@@ -2055,6 +2055,10 @@ class AnnotRegion(LinearRegionItem):
             brush = _get_color(color_string, self.mne.dark)
             brush.setAlpha(60)
             for _ypos in yposes:
+                logger.debug(
+                    "Adding channel specific rectangle at "
+                    f"position {_ypos} for {description}"
+                )
                 ypos = np.array([-0.5, 0.5]) + _ypos
                 lower = PlotCurveItem(x=np.array(values), y=ypos[[0, 0]])
                 upper = PlotCurveItem(x=np.array(values), y=ypos[[1, 1]])
@@ -2147,12 +2151,17 @@ class AnnotRegion(LinearRegionItem):
         else:
             self.label_item.setColor(self.text_color)
             self.label_item.fill = mkBrush(None)
+        logger.debug(
+            f"{'Selected' if self.selected else 'Deselected'} annotation: "
+            "{self.description}"
+        )
         self.label_item.update()
 
     def mouseClickEvent(self, event):
         """Customize mouse click events."""
         if self.mne.annotation_mode:
             if event.button() == Qt.LeftButton and self.movable:
+                logger.debug(f"Mouse event in annotation mode for {event.pos()}...")
                 self.select(True)
                 event.accept()
             elif event.button() == Qt.RightButton and self.movable:
