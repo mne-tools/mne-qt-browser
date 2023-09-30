@@ -2243,8 +2243,11 @@ class AnnotRegion(LinearRegionItem):
         Start and stop are time in seconds.
         """
         for fi, this_fill in enumerate(self.ch_annot_fills):
-        if fi == 0:
-            logger.debug(f"moving {len(self.ch_annot_fills} {self.description} rectangle(s) to {start} - {stop}")
+            if fi == 0:
+                logger.debug(
+                    f"Moving {len(self.ch_annot_fills)} {self.description} "
+                    f"rectangle(s) to {start} - {stop}"
+                )
             # we have to update the upper and lower curves of the FillBetweenItem
             _, upper_ypos = this_fill.curves[0].getData()
             _, lower_ypos = this_fill.curves[1].getData()
