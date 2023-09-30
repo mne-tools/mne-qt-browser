@@ -5,6 +5,8 @@
 
 import numpy as np
 from qtpy.QtTest import QTest
+from mne import Annotations
+from pyqtgraph.graphicsItems.FillBetweenItem import FillBetweenItem
 
 
 def test_annotations_interactions(raw_orig, pg_backend):
@@ -87,9 +89,6 @@ def test_annotations_interactions(raw_orig, pg_backend):
 
 def test_ch_specific_annot(raw_orig, pg_backend):
     """Test plotting channel specific annotations."""
-    from mne import Annotations
-    from pyqtgraph.graphicsItems.FillBetweenItem import FillBetweenItem
-
     ch_names = ["MEG 0133", "MEG 0142", "MEG 0143", "MEG 0423"]
     annot_onset, annot_dur = 1, 2
     annots = Annotations([annot_onset], [annot_dur], "some_chs", ch_names=[ch_names])
