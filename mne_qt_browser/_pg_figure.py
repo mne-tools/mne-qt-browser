@@ -2225,6 +2225,7 @@ class AnnotRegion(LinearRegionItem):
         )
         onset = np.min(regions_[:, 0])
         offset = np.max(regions_[:, 1])
+        logger.debug(f"New {self.description} region: {onset:.2f} - {offset:.2f}")
         # remove overlapping regions
         for region in overlapping_regions:
             self.weakmain()._remove_region(region, from_annot=False)
@@ -2232,6 +2233,9 @@ class AnnotRegion(LinearRegionItem):
         with SignalBlocker(self):
             self.setRegion((onset, offset))
         self.update_label_pos()
+        # Update the FillBetweenItem shapes for channel specific annotations
+        if self.ch_annot_fills:
+            self._update_channel_annot_fills(onset, offset)
 
     def _update_channel_annot_fills(self, start, stop):
         """Update the FillBetweenItems for channel specific annotations.
@@ -2239,6 +2243,7 @@ class AnnotRegion(LinearRegionItem):
         FillBetweenItems are used to highlight channels associated with an annotation.
         Start and stop are time in seconds.
         """
+        logger.debug(f"moving {self.description} rectangles to {start} - {stop}")
         for this_fill in self.ch_annot_fills:
             # we have to update the upper and lower curves of the FillBetweenItem
             _, upper_ypos = this_fill.curves[0].getData()
@@ -2313,7 +2318,7 @@ class AnnotRegion(LinearRegionItem):
             self.label_item.fill = mkBrush(None)
         logger.debug(
             f"{'Selected' if self.selected else 'Deselected'} annotation: "
-            "{self.description}"
+            f"{self.description}"
         )
         self.label_item.update()
 
@@ -2668,6 +2673,7 @@ class AnnotationDock(QDockWidget):
         self.mne.visible_annotations[description] = bool(state)
 
     def _select_annotations(self):
+        logger.debug("Annotation selected")
         select_dlg = QDialog(self)
         chkbxs = list()
         layout = QVBoxLayout()
@@ -2731,7 +2737,8 @@ class AnnotationDock(QDockWidget):
         if start < stop:
             self.mne.selected_region.setRegion((start, stop))
             # Make channel specific fillBetweens stay in sync with annot region
-            sel_region._update_channel_annot_fills(start, stop)
+            if sel_region.ch_annot_fills:
+                sel_region._update_channel_annot_fills(start, stop)
         else:
             self.weakmain().message_box(
                 text="Invalid value!",
@@ -2748,7 +2755,8 @@ class AnnotationDock(QDockWidget):
         if start < stop:
             sel_region.setRegion((start, stop))
             # Make channel specific fillBetweens stay in sync with annot region
-            sel_region._update_channel_annot_fills(start, stop)
+            if sel_region.ch_annot_fills:
+                sel_region._update_channel_annot_fills(start, stop)
         else:
             self.weakmain().message_box(
                 text="Invalid value!",
