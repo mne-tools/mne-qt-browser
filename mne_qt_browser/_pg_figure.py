@@ -1721,10 +1721,12 @@ class SettingsDialog(_BaseDialog):
 
         # Antialiasing
         self.antialiasing_box = QCheckBox()
-        self.antialiasing_box.setToolTip('Enable/Disable antialiasing.\n')
-        self.antialiasing_box.stateChanged.connect(_methpartial(self._toggle_antialiasing))
+        self.antialiasing_box.setToolTip("Enable/Disable antialiasing.\n")
+        self.antialiasing_box.stateChanged.connect(
+            _methpartial(self._toggle_antialiasing)
+        )
         self.antialiasing_box.setChecked(self.mne.antialiasing)
-        layout.addRow('antialiasing', self.antialiasing_box)
+        layout.addRow("antialiasing", self.antialiasing_box)
 
         # Downsampling
         self.downsampling_box = QSpinBox()
@@ -1774,16 +1776,17 @@ class SettingsDialog(_BaseDialog):
         self.scroll_sensitivity_slider = QSlider(Qt.Horizontal)
         self.scroll_sensitivity_slider.setMinimum(10)
         self.scroll_sensitivity_slider.setMaximum(1000)
-        self.scroll_sensitivity_slider.setToolTip('Set the sensitivity of the scrolling in horizontal direction. '
-                                                  'Adjust this value if the scrolling for example with an horizontal '
-                                                  'mouse wheel is too fast or too slow. Default is 100.')
+        self.scroll_sensitivity_slider.setToolTip(
+            "Set the sensitivity of the scrolling in horizontal direction. "
+            "Adjust this value if the scrolling for example with an horizontal "
+            "mouse wheel is too fast or too slow. Default is 100."
+        )
         self.scroll_sensitivity_slider.valueChanged.connect(
             _methpartial(self._value_changed, value_name="scroll_sensitivity")
         )
         # Set default
         self.scroll_sensitivity_slider.setValue(self.mne.scroll_sensitivity)
-        layout.addRow('horizontal scroll sensitivity',
-                      self.scroll_sensitivity_slider)
+        layout.addRow("horizontal scroll sensitivity", self.scroll_sensitivity_slider)
 
         self.setLayout(layout)
         self.show()
