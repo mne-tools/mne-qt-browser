@@ -2,12 +2,12 @@ name: CIs
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.number }}-${{ github.event.type }}
   cancel-in-progress: true
-on:
-    pull_request:
-    push:
-      branches: [main]
-    schedule:
-      - cron: "0 4 * * 1"  # At 04:00 on Monday
+on:  # yamllint disable-line rule:truthy
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 4 * * 1"  # At 04:00 on Monday
 
 jobs:
   pytest:
