@@ -88,6 +88,7 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.colors import to_rgba_array
 from pyqtgraph import (
     AxisItem,
+    FillBetweenItem,
     GraphicsView,
     InfLineLabel,
     InfiniteLine,
@@ -2156,13 +2157,13 @@ class SelectionDialog(_BaseDialog):  # noqa: D101
 
 
 class AnnotRegion(LinearRegionItem):
-    """Graphics-Oobject for Annotations."""
+    """Graphics-Object for Annotations."""
 
     regionChangeFinished = Signal(object)
     gotSelected = Signal(object)
     removeRequested = Signal(object)
 
-    def __init__(self, mne, description, values, weakmain):
+    def __init__(self, mne, description, values, weakmain, ch_names=None):
         super().__init__(
             values=values,
             orientation="vertical",
@@ -2184,7 +2185,25 @@ class AnnotRegion(LinearRegionItem):
         self.label_item.setFont(_q_font(10, bold=True))
         self.sigRegionChanged.connect(self.update_label_pos)
 
-        self.update_color()
+        self.update_color(all_channels=(not ch_names))
+        self.ch_annot_fills = list()  # container for FillBetween items
+        if ch_names is not None and len(ch_names):
+            ch_is_in_annot = np.isin(self.mne.ch_names[self.mne.ch_order], ch_names)
+            yposes = np.nonzero(ch_is_in_annot)[0] + 1
+            color_string = self.mne.annotation_segment_colors[self.description]
+            brush = _get_color(color_string, self.mne.dark)
+            brush.setAlpha(60)
+            for _ypos in yposes:
+                logger.debug(
+                    "Adding channel specific rectangle at "
+                    f"position {_ypos} for {description}"
+                )
+                ypos = np.array([-0.5, 0.5]) + _ypos
+                lower = PlotCurveItem(x=np.array(values), y=ypos[[0, 0]])
+                upper = PlotCurveItem(x=np.array(values), y=ypos[[1, 1]])
+                fill = FillBetweenItem(lower, upper, brush=brush)
+                self.ch_annot_fills.append(fill)
+                self.mne.plt.addItem(fill, ignoreBounds=True)
 
         self.mne.plt.addItem(self, ignoreBounds=True)
         self.mne.plt.addItem(self.label_item, ignoreBounds=True)
@@ -2206,6 +2225,7 @@ class AnnotRegion(LinearRegionItem):
         )
         onset = np.min(regions_[:, 0])
         offset = np.max(regions_[:, 1])
+        logger.debug(f"New {self.description} region: {onset:.2f} - {offset:.2f}")
         # remove overlapping regions
         for region in overlapping_regions:
             self.weakmain()._remove_region(region, from_annot=False)
@@ -2213,17 +2233,55 @@ class AnnotRegion(LinearRegionItem):
         with SignalBlocker(self):
             self.setRegion((onset, offset))
         self.update_label_pos()
+        # Update the FillBetweenItem shapes for channel specific annotations
+        self._update_channel_annot_fills(onset, offset)
 
-    def update_color(self):
-        """Update color of annotation-region."""
+    def _update_channel_annot_fills(self, start, stop):
+        """Update the FillBetweenItems for channel specific annotations.
+
+        FillBetweenItems are used to highlight channels associated with an annotation.
+        Start and stop are time in seconds.
+        """
+        for fi, this_fill in enumerate(self.ch_annot_fills):
+            if fi == 0:
+                logger.debug(
+                    f"Moving {len(self.ch_annot_fills)} {self.description} "
+                    f"rectangle(s) to {start} - {stop}"
+                )
+            # we have to update the upper and lower curves of the FillBetweenItem
+            _, upper_ypos = this_fill.curves[0].getData()
+            _, lower_ypos = this_fill.curves[1].getData()
+            new_xpos = np.array([start, stop])
+            this_fill.curves[0].setData(new_xpos, upper_ypos)
+            this_fill.curves[1].setData(new_xpos, lower_ypos)
+
+    def update_color(self, all_channels=True):
+        """Update color of annotation-region.
+
+        Parameters
+        ----------
+        all_channels : bool
+            all_channels should be False for channel specific annotations.
+            These annotations will be more transparent with a dashed outline.
+        """
         color_string = self.mne.annotation_segment_colors[self.description]
         self.base_color = _get_color(color_string, self.mne.dark)
         self.hover_color = _get_color(color_string, self.mne.dark)
         self.text_color = _get_color(color_string, self.mne.dark)
-        self.base_color.setAlpha(75)
+        self.base_color.setAlpha(75 if all_channels else 15)
         self.hover_color.setAlpha(150)
         self.text_color.setAlpha(255)
-        self.line_pen = self.mne.mkPen(color=self.hover_color, width=2)
+        kwargs = dict(color=self.hover_color, width=2)
+        if not all_channels:
+            color = _get_color(color_string, self.mne.dark)
+            color.setAlpha(75)
+            kwargs.update(
+                style=Qt.CustomDashLine,
+                cap=Qt.FlatCap,
+                dash=[8, 8],
+                color=color,
+            )
+        self.line_pen = self.mne.mkPen(**kwargs)
         self.hover_pen = self.mne.mkPen(color=self.text_color, width=2)
         self.setBrush(self.base_color)
         self.setHoverBrush(self.hover_color)
@@ -2261,12 +2319,17 @@ class AnnotRegion(LinearRegionItem):
         else:
             self.label_item.setColor(self.text_color)
             self.label_item.fill = mkBrush(None)
+        logger.debug(
+            f"{'Selected' if self.selected else 'Deselected'} annotation: "
+            f"{self.description}"
+        )
         self.label_item.update()
 
     def mouseClickEvent(self, event):
         """Customize mouse click events."""
         if self.mne.annotation_mode:
             if event.button() == Qt.LeftButton and self.movable:
+                logger.debug(f"Mouse event in annotation mode for {event.pos()}...")
                 self.select(True)
                 event.accept()
             elif event.button() == Qt.RightButton and self.movable:
@@ -2613,6 +2676,7 @@ class AnnotationDock(QDockWidget):
         self.mne.visible_annotations[description] = bool(state)
 
     def _select_annotations(self):
+        logger.debug("Annotation selected")
         select_dlg = QDialog(self)
         chkbxs = list()
         layout = QVBoxLayout()
@@ -2675,6 +2739,9 @@ class AnnotationDock(QDockWidget):
         stop = sel_region.getRegion()[1]
         if start < stop:
             self.mne.selected_region.setRegion((start, stop))
+            # Make channel specific fillBetweens stay in sync with annot region
+            if sel_region.ch_annot_fills:
+                sel_region._update_channel_annot_fills(start, stop)
         else:
             self.weakmain().message_box(
                 text="Invalid value!",
@@ -2690,6 +2757,8 @@ class AnnotationDock(QDockWidget):
         start = sel_region.getRegion()[0]
         if start < stop:
             sel_region.setRegion((start, stop))
+            # Make channel specific fillBetweens stay in sync with annot region
+            sel_region._update_channel_annot_fills(start, stop)
         else:
             self.weakmain().message_box(
                 text="Invalid value!",
@@ -4290,11 +4359,14 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     # ANNOTATIONS
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-    def _add_region(self, plot_onset, duration, description, *, region=None):
+    def _add_region(
+        self, plot_onset, duration, description, *, ch_names=None, region=None
+    ):
         if not region:
             region = AnnotRegion(
                 self.mne,
                 description=description,
+                ch_names=ch_names,
                 values=(plot_onset, plot_onset + duration),
                 weakmain=weakref.ref(self),
             )
@@ -4401,7 +4473,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             plot_onset = _sync_onset(self.mne.inst, annot["onset"])
             duration = annot["duration"]
             description = annot["description"]
-            region = self._add_region(plot_onset, duration, description)
+            ch_names = annot["ch_names"] if "ch_names" in annot else None
+            region = self._add_region(
+                plot_onset, duration, description, ch_names=ch_names
+            )
             region.update_visible(False)
 
         # Initialize showing annotation widgets
