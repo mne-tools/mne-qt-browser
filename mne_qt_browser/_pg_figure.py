@@ -2234,8 +2234,7 @@ class AnnotRegion(LinearRegionItem):
             self.setRegion((onset, offset))
         self.update_label_pos()
         # Update the FillBetweenItem shapes for channel specific annotations
-        if self.ch_annot_fills:
-            self._update_channel_annot_fills(onset, offset)
+        self._update_channel_annot_fills(onset, offset)
 
     def _update_channel_annot_fills(self, start, stop):
         """Update the FillBetweenItems for channel specific annotations.
@@ -2243,8 +2242,9 @@ class AnnotRegion(LinearRegionItem):
         FillBetweenItems are used to highlight channels associated with an annotation.
         Start and stop are time in seconds.
         """
-        logger.debug(f"moving {self.description} rectangles to {start} - {stop}")
-        for this_fill in self.ch_annot_fills:
+        for fi, this_fill in enumerate(self.ch_annot_fills):
+        if fi == 0:
+            logger.debug(f"moving {len(self.ch_annot_fills} {self.description} rectangle(s) to {start} - {stop}")
             # we have to update the upper and lower curves of the FillBetweenItem
             _, upper_ypos = this_fill.curves[0].getData()
             _, lower_ypos = this_fill.curves[1].getData()
@@ -2755,8 +2755,7 @@ class AnnotationDock(QDockWidget):
         if start < stop:
             sel_region.setRegion((start, stop))
             # Make channel specific fillBetweens stay in sync with annot region
-            if sel_region.ch_annot_fills:
-                sel_region._update_channel_annot_fills(start, stop)
+            sel_region._update_channel_annot_fills(start, stop)
         else:
             self.weakmain().message_box(
                 text="Invalid value!",
