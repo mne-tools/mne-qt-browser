@@ -2186,7 +2186,7 @@ class AnnotRegion(LinearRegionItem):
         self.sigRegionChanged.connect(self.update_label_pos)
 
         self.update_color(all_channels=(not ch_names))
-
+        self.ch_annot_fills = list()  # container for FillBetween items
         if ch_names is not None and len(ch_names):
             ch_is_in_annot = np.isin(self.mne.ch_names[self.mne.ch_order], ch_names)
             yposes = np.nonzero(ch_is_in_annot)[0] + 1
@@ -2202,6 +2202,7 @@ class AnnotRegion(LinearRegionItem):
                 lower = PlotCurveItem(x=np.array(values), y=ypos[[0, 0]])
                 upper = PlotCurveItem(x=np.array(values), y=ypos[[1, 1]])
                 fill = FillBetweenItem(lower, upper, brush=brush)
+                self.ch_annot_fills.append(fill)
                 self.mne.plt.addItem(fill, ignoreBounds=True)
 
         self.mne.plt.addItem(self, ignoreBounds=True)
@@ -2232,8 +2233,29 @@ class AnnotRegion(LinearRegionItem):
             self.setRegion((onset, offset))
         self.update_label_pos()
 
+    def _update_channel_annot_fills(self, start, stop):
+        """Update the FillBetweenItems for channel specific annotations.
+
+        FillBetweenItems are used to highlight channels associated with an annotation.
+        Start and stop are time in seconds.
+        """
+        for this_fill in self.ch_annot_fills:
+            # we have to update the upper and lower curves of the FillBetweenItem
+            _, upper_ypos = this_fill.curves[0].getData()
+            _, lower_ypos = this_fill.curves[1].getData()
+            new_xpos = np.array([start, stop])
+            this_fill.curves[0].setData(new_xpos, upper_ypos)
+            this_fill.curves[1].setData(new_xpos, lower_ypos)
+
     def update_color(self, all_channels=True):
-        """Update color of annotation-region."""
+        """Update color of annotation-region.
+
+        Parameters
+        ----------
+        all_channels : bool
+            all_channels should be False for channel specific annotations.
+            These annotations will be more transparent with a dashed outline.
+        """
         color_string = self.mne.annotation_segment_colors[self.description]
         self.base_color = _get_color(color_string, self.mne.dark)
         self.hover_color = _get_color(color_string, self.mne.dark)
@@ -2251,7 +2273,6 @@ class AnnotRegion(LinearRegionItem):
                 dash=[8, 8],
                 color=color,
             )
-            # raise RuntimeError("pdb")
         self.line_pen = self.mne.mkPen(**kwargs)
         self.hover_pen = self.mne.mkPen(color=self.text_color, width=2)
         self.setBrush(self.base_color)
@@ -2721,7 +2742,6 @@ class AnnotationDock(QDockWidget):
             self.start_bx.setValue(sel_region.getRegion()[0])
 
     def _stop_changed(self):
-        print("###### stop changed")
         stop = self.stop_bx.value()
         sel_region = self.mne.selected_region
         start = sel_region.getRegion()[0]

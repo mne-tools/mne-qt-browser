@@ -91,16 +91,19 @@ def test_ch_specific_annot(raw_orig, pg_backend):
     from pyqtgraph.graphicsItems.FillBetweenItem import FillBetweenItem
 
     ch_names = ["MEG 0133", "MEG 0142", "MEG 0143", "MEG 0423"]
-    annots = Annotations([1], [2], "some_chs", ch_names=[ch_names])
+    annot_onset, annot_dur = 1, 2
+    annots = Annotations([annot_onset], [annot_dur], "some_chs", ch_names=[ch_names])
     raw_orig.set_annotations(annots)
-    
+
     fig = raw_orig.plot()
     fig_ch_names = list(fig.mne.ch_names[fig.mne.ch_order])
     fig.test_mode = True
-    
-    # one item for each channel in a channel specific annot
+    annot_dock = fig.mne.fig_annotation
+
+    # one FillBetweenItem for each channel in a channel specific annot
     fill_betweens = [
-        item for item in fig.mne.plt.items if isinstance(item, FillBetweenItem)]
+        item for item in fig.mne.plt.items if isinstance(item, FillBetweenItem)
+    ]
     assert len(fill_betweens) == 4  # 4 channels in annots[0].ch_names
 
     # check that a channel specific annot is plotted at the correct ypos
@@ -111,9 +114,27 @@ def test_ch_specific_annot(raw_orig, pg_backend):
     # The round basically just rounds 27.5 up to 28
     got_index = np.round(last_fill_between.yData[0]).astype(int)
     assert got_index == want_index  # should be 28
-    fig.close()
-    
 
+    fig._fake_keypress("a")  # activate annotation mode
+    # make sure our annotation is selected
+    fig._fake_click((annot_onset + annot_dur / 2, 1.0), xform="data")
+    assert fig.mne.current_description == "some_chs"
+
+    # change the stop value of the annotation
+    annot_dock.stop_bx.setValue(6)
+    annot_dock.stop_bx.editingFinished.emit()
+    # does the channel specific rectangle stay in sync with the annot?
+    assert annot_dock.stop_bx.value() == 6
+    assert last_fill_between.xData[1] == 6
+
+    # now change the start value of the annotation
+    annot_dock.start_bx.setValue(4)
+    annot_dock.start_bx.editingFinished.emit()
+    # does the channel specific rectangle stay in sync with the annot?
+    assert annot_dock.start_bx.value() == 4
+    assert last_fill_between.xData[0] == 4
+
+    fig.close()
 
 
 def test_pg_settings_dialog(raw_orig, pg_backend):
