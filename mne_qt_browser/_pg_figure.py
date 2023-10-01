@@ -3372,12 +3372,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             text="Show fewer time points",
             parent=self,
         )
-        adecr_time.triggered.connect(_methpartial(self.change_duration, -0.2))
+        adecr_time.triggered.connect(_methpartial(self.change_duration, step=-0.2))
         self.mne.toolbar.addAction(adecr_time)
         aincr_time = QAction(
             icon=QIcon.fromTheme("more_time"), text="Show more time points", parent=self
         )
-        aincr_time.triggered.connect(_methpartial(self.change_duration, 0.25))
+        aincr_time.triggered.connect(_methpartial(self.change_duration, step=0.25))
         self.mne.toolbar.addAction(aincr_time)
         self.mne.toolbar.addSeparator()
 
@@ -3386,26 +3386,26 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             text="Show fewer channels",
             parent=self,
         )
-        adecr_nchan.triggered.connect(_methpartial(self.change_nchan, -10))
+        adecr_nchan.triggered.connect(_methpartial(self.change_nchan, step=-10))
         self.mne.toolbar.addAction(adecr_nchan)
         aincr_nchan = QAction(
             icon=QIcon.fromTheme("more_channels"),
             text="Show more channels",
             parent=self,
         )
-        aincr_nchan.triggered.connect(_methpartial(self.change_nchan, 10))
+        aincr_nchan.triggered.connect(_methpartial(self.change_nchan, step=10))
         self.mne.toolbar.addAction(aincr_nchan)
         self.mne.toolbar.addSeparator()
 
         adecr_nchan = QAction(
             icon=QIcon.fromTheme("zoom_out"), text="Reduce amplitude", parent=self
         )
-        adecr_nchan.triggered.connect(_methpartial(self.scale_all, 4 / 5))
+        adecr_nchan.triggered.connect(_methpartial(self.scale_all, step=4 / 5))
         self.mne.toolbar.addAction(adecr_nchan)
         aincr_nchan = QAction(
             icon=QIcon.fromTheme("zoom_in"), text="Increase amplitude", parent=self
         )
-        aincr_nchan.triggered.connect(_methpartial(self.scale_all, 5 / 4))
+        aincr_nchan.triggered.connect(_methpartial(self.scale_all, step=5 / 4))
         self.mne.toolbar.addAction(aincr_nchan)
         self.mne.toolbar.addSeparator()
 
