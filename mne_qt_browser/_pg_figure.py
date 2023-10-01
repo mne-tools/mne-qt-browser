@@ -5056,6 +5056,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             if not action.isSeparator():
                 if action.iconText() == action_name:
                     action.trigger()
+                    break
+        else:
+            raise ValueError(f"action_name={repr(action_name)} not found")
         QTest.qWait(wait_after)
 
 

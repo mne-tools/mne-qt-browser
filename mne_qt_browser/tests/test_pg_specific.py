@@ -4,9 +4,20 @@
 # License: BSD-3-Clause
 
 import numpy as np
+import pytest
 from qtpy.QtTest import QTest
 from mne import Annotations
 from pyqtgraph.graphicsItems.FillBetweenItem import FillBetweenItem
+
+
+LESS_TIME = "Show fewer time points"
+MORE_TIME = "Show more time points"
+FEWER_CHANNELS = "Show fewer channels"
+MORE_CHANNELS = "Show more channels"
+REDUCE_AMPLITUDE = "Reduce amplitude"
+INCREASE_AMPLITUDE = "Increase amplitude"
+TOGGLE_ANNOTATIONS = "Toggle annotations mode"
+SHOW_PROJECTORS = "Show projectors"
 
 
 def test_annotations_interactions(raw_orig, pg_backend):
@@ -143,6 +154,8 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
     QTest.qWaitForWindowExposed(fig)
     QTest.qWait(50)
     assert fig.mne.fig_settings is None
+    with pytest.raises(ValueError, match="FooAction"):
+        fig._fake_click_on_toolbar_action("FooAction")
     fig._fake_click_on_toolbar_action("Settings", wait_after=500)
     assert fig.mne.fig_settings is not None
     assert pg_backend._get_n_figs() == 2
@@ -263,13 +276,13 @@ def test_pg_toolbar_time_plus_minus(raw_orig, pg_backend):
     for _ in range(100):
         if xmax - xmin <= min_duration:
             break
-        fig._fake_click_on_toolbar_action("- Time", wait_after=20)
+        fig._fake_click_on_toolbar_action(LESS_TIME, wait_after=20)
         xmin, xmax = fig.mne.viewbox.viewRange()[0]
     assert xmax - xmin == min_duration
 
     eps = 0.01
     step = 0.25
-    fig._fake_click_on_toolbar_action("+ Time", wait_after=100)
+    fig._fake_click_on_toolbar_action(MORE_TIME, wait_after=100)
     xmin_new, xmax_new = fig.mne.viewbox.viewRange()[0]
     assert xmax_new - (xmax + (xmax - xmin * step)) < eps
 
@@ -277,30 +290,30 @@ def test_pg_toolbar_time_plus_minus(raw_orig, pg_backend):
     for _ in range(100):
         if xmax + fig.mne.duration * step >= fig.mne.xmax:
             break
-        fig._fake_click_on_toolbar_action("+ Time", wait_after=20)
+        fig._fake_click_on_toolbar_action(MORE_TIME, wait_after=20)
         xmin, xmax = fig.mne.viewbox.viewRange()[0]
 
-    fig._fake_click_on_toolbar_action("+ Time", wait_after=200)
-    fig._fake_click_on_toolbar_action("+ Time", wait_after=200)
+    fig._fake_click_on_toolbar_action(MORE_TIME, wait_after=200)
+    fig._fake_click_on_toolbar_action(MORE_TIME, wait_after=200)
 
     xmin, xmax = fig.mne.viewbox.viewRange()[0]
-    fig._fake_click_on_toolbar_action("+ Time", wait_after=200)
+    fig._fake_click_on_toolbar_action(MORE_TIME, wait_after=200)
     xmin_new, xmax_new = fig.mne.viewbox.viewRange()[0]
     assert xmax_new == xmax  # no effect after span maxed
 
     step = -0.2
     xmin, xmax = fig.mne.viewbox.viewRange()[0]
-    fig._fake_click_on_toolbar_action("- Time", wait_after=200)
+    fig._fake_click_on_toolbar_action(LESS_TIME, wait_after=200)
     xmin_new, xmax_new = fig.mne.viewbox.viewRange()[0]
     assert xmax_new == xmax + ((xmax - xmin) * step)
 
     xmin, xmax = fig.mne.viewbox.viewRange()[0]
-    fig._fake_click_on_toolbar_action("- Time", wait_after=200)
+    fig._fake_click_on_toolbar_action(LESS_TIME, wait_after=200)
     xmin_new, xmax_new = fig.mne.viewbox.viewRange()[0]
     assert xmax_new == xmax + ((xmax - xmin) * step)
 
     for _ in range(7):
-        fig._fake_click_on_toolbar_action("- Time", wait_after=20)
+        fig._fake_click_on_toolbar_action(LESS_TIME, wait_after=20)
 
     assert pg_backend._get_n_figs() == 1  # still alive
 
@@ -313,11 +326,11 @@ def test_pg_toolbar_channels_plus_minus(raw_orig, pg_backend):
 
     if fig.mne.butterfly is not True:
         fig._fake_keypress("b")  # toggle butterfly mode
-    fig._fake_click_on_toolbar_action("- Channels", wait_after=100)
+    fig._fake_click_on_toolbar_action(FEWER_CHANNELS, wait_after=100)
     ymin, ymax = fig.mne.viewbox.viewRange()[1]
-    fig._fake_click_on_toolbar_action("- Channels", wait_after=100)
+    fig._fake_click_on_toolbar_action(FEWER_CHANNELS, wait_after=100)
     assert [ymin, ymax] == fig.mne.viewbox.viewRange()[1]
-    fig._fake_click_on_toolbar_action("+ Channels", wait_after=100)
+    fig._fake_click_on_toolbar_action(MORE_CHANNELS, wait_after=100)
     assert [ymin, ymax] == fig.mne.viewbox.viewRange()[1]
 
     if fig.mne.butterfly is True:
@@ -326,25 +339,25 @@ def test_pg_toolbar_channels_plus_minus(raw_orig, pg_backend):
     for _ in range(10):
         if ymax - ymin <= 2:
             break
-        fig._fake_click_on_toolbar_action("- Channels", wait_after=40)
+        fig._fake_click_on_toolbar_action(FEWER_CHANNELS, wait_after=40)
         ymin, ymax = fig.mne.viewbox.viewRange()[1]
     assert ymax - ymin == 2
-    fig._fake_click_on_toolbar_action("- Channels", wait_after=40)
+    fig._fake_click_on_toolbar_action(FEWER_CHANNELS, wait_after=40)
     ymin, ymax = fig.mne.viewbox.viewRange()[1]
     assert ymax - ymin == 2
 
     step = 10
-    fig._fake_click_on_toolbar_action("+ Channels", wait_after=100)
+    fig._fake_click_on_toolbar_action(MORE_CHANNELS, wait_after=100)
     ymin_new, ymax_new = fig.mne.viewbox.viewRange()[1]
     assert ymax_new == ymax + step
 
     ymin, ymax = fig.mne.viewbox.viewRange()[1]
-    fig._fake_click_on_toolbar_action("+ Channels", wait_after=100)
+    fig._fake_click_on_toolbar_action(MORE_CHANNELS, wait_after=100)
     ymin_new, ymax_new = fig.mne.viewbox.viewRange()[1]
     assert ymax_new == ymax + step
 
     ymin, ymax = fig.mne.viewbox.viewRange()[1]
-    fig._fake_click_on_toolbar_action("+ Channels", wait_after=100)
+    fig._fake_click_on_toolbar_action(MORE_CHANNELS, wait_after=100)
     ymin_new, ymax_new = fig.mne.viewbox.viewRange()[1]
     assert ymax_new == ymax + step
 
@@ -359,21 +372,21 @@ def test_pg_toolbar_zoom(raw_orig, pg_backend):
 
     step = 4 / 5
     scale_factor = fig.mne.scale_factor
-    fig._fake_click_on_toolbar_action("Zoom out", wait_after=100)
+    fig._fake_click_on_toolbar_action(REDUCE_AMPLITUDE, wait_after=100)
     scale_factor_new = fig.mne.scale_factor
     assert scale_factor_new == scale_factor * step
 
     for _ in range(6):
-        fig._fake_click_on_toolbar_action("Zoom out", wait_after=100)
+        fig._fake_click_on_toolbar_action(REDUCE_AMPLITUDE, wait_after=100)
 
     step = 5 / 4
     scale_factor = fig.mne.scale_factor
-    fig._fake_click_on_toolbar_action("Zoom in", wait_after=100)
+    fig._fake_click_on_toolbar_action(INCREASE_AMPLITUDE, wait_after=100)
     scale_factor_new = fig.mne.scale_factor
     assert scale_factor_new == scale_factor * step
 
     for _ in range(6):
-        fig._fake_click_on_toolbar_action("Zoom in", wait_after=100)
+        fig._fake_click_on_toolbar_action(INCREASE_AMPLITUDE, wait_after=100)
 
     assert pg_backend._get_n_figs() == 1  # still alive
 
@@ -385,12 +398,12 @@ def test_pg_toolbar_annotations(raw_orig, pg_backend):
     assert pg_backend._get_n_figs() == 1
 
     state_annotation_widget = fig.mne.annotation_mode
-    fig._fake_click_on_toolbar_action("Annotations", wait_after=100)
+    fig._fake_click_on_toolbar_action(TOGGLE_ANNOTATIONS, wait_after=100)
     assert fig.mne.annotation_mode != state_annotation_widget
 
-    fig._fake_click_on_toolbar_action("Annotations", wait_after=300)
-    fig._fake_click_on_toolbar_action("Annotations", wait_after=300)
-    fig._fake_click_on_toolbar_action("Annotations", wait_after=300)
+    fig._fake_click_on_toolbar_action(TOGGLE_ANNOTATIONS, wait_after=300)
+    fig._fake_click_on_toolbar_action(TOGGLE_ANNOTATIONS, wait_after=300)
+    fig._fake_click_on_toolbar_action(TOGGLE_ANNOTATIONS, wait_after=300)
 
     assert pg_backend._get_n_figs() == 1  # still alive
 
@@ -404,7 +417,7 @@ def test_pg_toolbar_actions(raw_orig, pg_backend):
     QTest.qWaitForWindowExposed(fig)
     assert pg_backend._get_n_figs() == 1
 
-    fig._fake_click_on_toolbar_action("SSP", wait_after=200)
+    fig._fake_click_on_toolbar_action(SHOW_PROJECTORS, wait_after=200)
     assert pg_backend._get_n_figs() == 2
     fig._fake_click_on_toolbar_action("Settings", wait_after=200)
     assert pg_backend._get_n_figs() == 3
@@ -414,7 +427,7 @@ def test_pg_toolbar_actions(raw_orig, pg_backend):
     assert pg_backend._get_n_figs() == 3
     fig._fake_click_on_toolbar_action("Settings", wait_after=200)
     assert pg_backend._get_n_figs() == 4
-    fig._fake_click_on_toolbar_action("SSP", wait_after=200)
+    fig._fake_click_on_toolbar_action(SHOW_PROJECTORS, wait_after=200)
     assert pg_backend._get_n_figs() == 3
     fig._fake_click_on_toolbar_action("Settings", wait_after=100)
     assert pg_backend._get_n_figs() == 2
