@@ -39,7 +39,7 @@ except Exception as exc:
     if exc.__class__.__name__ == "QtBindingsNotFoundError":
         raise ImportError("No Qt binding found, please install PyQt6, PyQt5, PySide6, or PySide2") from None
     else:
-        raise exc
+        raise
 
 from qtpy.QtGui import (
     QFont,
