@@ -35,7 +35,6 @@ except Exception as exc:
  from qtpy.QtCore import (
     QEvent,
     QThread,
-    Qt,
     Signal,
     QRectF,
     QLineF,
