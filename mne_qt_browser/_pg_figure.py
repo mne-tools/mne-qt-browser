@@ -32,7 +32,7 @@ except Exception as exc:
     else:
         raise
 
- from qtpy.QtCore import (
+from qtpy.QtCore import (
     QEvent,
     QThread,
     Signal,
