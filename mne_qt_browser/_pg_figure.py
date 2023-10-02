@@ -21,10 +21,20 @@ import os
 from os.path import getsize
 
 import numpy as np
+
+try:
+    from qtpy.QtCore import Qt
+except Exception as exc:
+    if exc.__class__.__name__ == "QtBindingsNotFoundError":
+        raise ImportError(
+            "No Qt binding found, please install PyQt6, PyQt5, PySide6, or PySide2"
+        ) from None
+    else:
+        raise
+
 from qtpy.QtCore import (
     QEvent,
     QThread,
-    Qt,
     Signal,
     QRectF,
     QLineF,
