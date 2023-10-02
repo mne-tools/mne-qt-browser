@@ -21,18 +21,26 @@ import os
 from os.path import getsize
 
 import numpy as np
-from qtpy.QtCore import (
-    QEvent,
-    QThread,
-    Qt,
-    Signal,
-    QRectF,
-    QLineF,
-    QPointF,
-    QPoint,
-    QSettings,
-    QSignalBlocker,
-)
+
+try:
+    from qtpy.QtCore import (
+        QEvent,
+        QThread,
+        Qt,
+        Signal,
+        QRectF,
+        QLineF,
+        QPointF,
+        QPoint,
+        QSettings,
+        QSignalBlocker,
+    )
+except Exception as exc:
+    if exc.__class__.__name__ == "QtBindingsNotFoundError":
+        raise ImportError("No Qt binding found, please install pyqt5") from None
+    else:
+        raise exc
+
 from qtpy.QtGui import (
     QFont,
     QIcon,
