@@ -23,18 +23,7 @@ from os.path import getsize
 import numpy as np
 
 try:
-    from qtpy.QtCore import (
-        QEvent,
-        QThread,
-        Qt,
-        Signal,
-        QRectF,
-        QLineF,
-        QPointF,
-        QPoint,
-        QSettings,
-        QSignalBlocker,
-    )
+    from qtpy.QtCore import Qt
 except Exception as exc:
     if exc.__class__.__name__ == "QtBindingsNotFoundError":
         raise ImportError(
@@ -43,6 +32,18 @@ except Exception as exc:
     else:
         raise
 
+ from qtpy.QtCore import (
+    QEvent,
+    QThread,
+    Qt,
+    Signal,
+    QRectF,
+    QLineF,
+    QPointF,
+    QPoint,
+    QSettings,
+    QSignalBlocker,
+)
 from qtpy.QtGui import (
     QFont,
     QIcon,
