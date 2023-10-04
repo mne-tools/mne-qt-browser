@@ -1614,6 +1614,7 @@ class AmplitudeSettingsDialog(_BaseDialog):
         sprt.setFrameShape(QFrame.HLine)
         sprt.setFrameShadow(QFrame.Raised)
         general_tab.layout.addRow(sprt)
+
         #Channel Types
         self.types_radio = QRadioButton("Channel Types", self)
         self.types_radio.clicked.connect(self._radio_clicked)
@@ -1626,20 +1627,22 @@ class AmplitudeSettingsDialog(_BaseDialog):
         self.ch_types_ordered = [ordered_types[idx] for idx
                             in sorted(unique_type_idxs)]
         if 'stim' in self.ch_types_ordered: self.ch_types_ordered.remove('stim')
-        for index in self.ch_types_ordered:
-            lbl = QLabel(index.upper())
+        self.types_boxes = OrderedDict()
+
+        for chtype in self.ch_types_ordered:
+            lbl = QLabel(chtype.upper())
             tbox.addRow(lbl)
             scaler = 1 if self.mne.butterfly else 2
             inv_norm = (scaler *
-                    self.mne.scalings[index] *
-                    self.mne.unit_scalings[index])
-            #setattr(self, index, None)
-            self.index = ComboBox(norm=inv_norm)
-            self.index.setCurrentText(str(int(inv_norm/self.mne.scale_factor)))
-            self.index.currentTextChanged.connect(_methpartial(
-                self._value_changed, type=index))
-            text = '['+ self.mne.units[index] +']/monitor cm'
-            tbox.addRow(text, self.index)
+                    self.mne.scalings[chtype] *
+                    self.mne.unit_scalings[chtype])
+            box = ComboBox(norm=inv_norm)
+            box.setCurrentText(str(int(inv_norm/self.mne.scale_factor)))
+            box.currentTextChanged.connect(_methpartial(
+                self._value_changed, type=chtype))
+            text = '['+ self.mne.units[chtype] +']/monitor cm'
+            self.types_boxes[chtype] = box
+            tbox.addRow(text, box)
         self.types_group.setEnabled(False)
         self.types_group.setLayout(tbox)    
         general_tab.layout.addRow(self.types_group)
@@ -1658,7 +1661,8 @@ class AmplitudeSettingsDialog(_BaseDialog):
         self.all_scale_cmbx.setEnabled(flag)
         self.types_group.setEnabled(not flag)
 
-    def _value_changed(self, new_value, type):
+    def _value_changed(self, new_value, type, old_value='???'):
+
         print(type,' changed from ', old_value, ' to ', new_value)
         if type == 'all':
             self.weakmain().set_scale_factor(scale=float(new_value)/100)
@@ -1667,8 +1671,8 @@ class AmplitudeSettingsDialog(_BaseDialog):
         _disconnect(self.all_radio.clicked)
         _disconnect(self.types_radio.clicked)
         _disconnect(self.all_scale_cmbx.currentTextChanged)
-        for index in self.ch_types_ordered:
-            _disconnect(self.index.currentTextChanged, allow_error=True)
+        for box in self.types_boxes.values():
+            _disconnect(box.currentTextChanged)
         super().closeEvent(event)
 
 
