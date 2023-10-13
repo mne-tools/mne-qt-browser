@@ -1665,7 +1665,9 @@ class AmplitudeSettingsDialog(_BaseDialog):
 
         print(type,' changed from ', old_value, ' to ', new_value)
         if type == 'all':
-            self.weakmain().set_scale_factor(scale=float(new_value)/100)
+            self.weakmain().set_scale_factor(scale=float(new_value)/100, type=type)
+        else:
+            self.weakmain().set_scale_factor(scale=float(new_value)/100, type=type)
                 
     def closeEvent(self, event):
         _disconnect(self.all_radio.clicked)
@@ -3532,17 +3534,20 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Update Scalebars
         self._update_scalebar_values()
     
-    def set_scale_factor(self, *, scale):
+    def set_scale_factor(self, *, scale, type):
         """Set the scale factor manually."""
         self.mne.scale_factor = scale
 
         # Reapply clipping if necessary
         if self.mne.clipping is not None:
             self._update_data()
-
         # Scale Traces (by scaling the Item, not the data)
-        for line in self.mne.traces:
-            line.update_scale()
+        if type == 'all':
+            for line in self.mne.traces:
+                line.update_scale()
+        else:
+            for line in [line for line in self.mne.traces if line.ch_type == type]:
+                line.update_scale()
 
         # Update Scalebars
         self._update_scalebar_values()
