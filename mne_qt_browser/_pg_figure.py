@@ -1639,7 +1639,7 @@ class AmplitudeSettingsDialog(_BaseDialog):
             box = ComboBox(norm=inv_norm)
             box.setCurrentText(str(int(inv_norm/self.mne.scale_factor)))
             box.currentTextChanged.connect(_methpartial(
-                self._value_changed, type=chtype))
+                self._value_changed, type=chtype, norm=inv_norm))
             text = '['+ self.mne.units[chtype] +']/monitor cm'
             self.types_boxes[chtype] = box
             tbox.addRow(text, box)
@@ -1661,13 +1661,13 @@ class AmplitudeSettingsDialog(_BaseDialog):
         self.all_scale_cmbx.setEnabled(flag)
         self.types_group.setEnabled(not flag)
 
-    def _value_changed(self, new_value, type, old_value='???'):
+    def _value_changed(self, new_value, type, norm=100):
 
-        print(type,' changed from ', old_value, ' to ', new_value)
+        print('Changed ', type, ' to scale factor ', float(new_value)/norm)
         if type == 'all':
             self.weakmain().set_scale_factor(scale=float(new_value)/100, type=type)
         else:
-            self.weakmain().set_scale_factor(scale=float(new_value)/100, type=type)
+            self.weakmain().set_scale_factor(scale=float(new_value)/norm, type=type)
                 
     def closeEvent(self, event):
         _disconnect(self.all_radio.clicked)
@@ -3541,6 +3541,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Reapply clipping if necessary
         if self.mne.clipping is not None:
             self._update_data()
+        
         # Scale Traces (by scaling the Item, not the data)
         if type == 'all':
             for line in self.mne.traces:
