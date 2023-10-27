@@ -392,8 +392,10 @@ class DataTrace(PlotCurveItem):
 
     @propagate_to_children
     def update_scale(self):  # noqa: D102
+
+        print("!!! Using transformation, type ", self.ch_type, " with factor ", self.mne.sf_dict[self.ch_type])
         transform = QTransform()
-        transform.scale(1.0, self.mne.scale_factor)
+        transform.scale(1.0, self.mne.scale_factor * self.mne.sf_dict[self.ch_type])
         self.setTransform(transform)
 
         if self.mne.clipping is not None:
@@ -1633,11 +1635,14 @@ class ScaleBarText(BaseScaleBar, TextItem):  # noqa: D101
     def update_value(self):
         """Update value of ScaleBarText."""
         scaler = 1 if self.mne.butterfly else 2
+        print("---SCALEBAR UPDATE_VALUE---")
+        print("Type ", self.ch_type, " factor ", self.mne.sf_dict[self.ch_type])
         inv_norm = (
             scaler
             * self.mne.scalings[self.ch_type]
             * self.mne.unit_scalings[self.ch_type]
-            / self.mne.scale_factor
+            / (self.mne.scale_factor *
+               self.mne.sf_dict[self.ch_type])
         )
         self.setText(f"{_simplify_float(inv_norm)} " f"{self.mne.units[self.ch_type]}")
 
@@ -1781,7 +1786,6 @@ class AmplitudeSettingsDialog(_BaseDialog):
                             in sorted(unique_type_idxs)]
         if 'stim' in self.ch_types_ordered: self.ch_types_ordered.remove('stim')
         self.types_boxes = OrderedDict()
-
         for chtype in self.ch_types_ordered:
             lbl = QLabel(chtype.upper())
             tbox.addRow(lbl)
@@ -1790,7 +1794,6 @@ class AmplitudeSettingsDialog(_BaseDialog):
                     self.mne.scalings[chtype] *
                     self.mne.unit_scalings[chtype])
             box = ComboBox(norm=inv_norm)
-            box.setCurrentText(str(int(inv_norm/self.mne.scale_factor)))
             box.currentTextChanged.connect(_methpartial(
                 self._value_changed, type=chtype, norm=inv_norm))
             text = '['+ self.mne.units[chtype] +']/monitor cm'
@@ -1815,7 +1818,7 @@ class AmplitudeSettingsDialog(_BaseDialog):
         self.types_group.setEnabled(not flag)
 
     def _value_changed(self, new_value, type, norm=100):
-
+    
         print('Changed ', type, ' to scale factor ', float(new_value)/norm)
         if type == 'all':
             self.weakmain().set_scale_factor(scale=float(new_value)/100, type=type)
@@ -3245,6 +3248,19 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.traces = list()
         # Scale-Factor
         self.mne.scale_factor = 1
+        # Channel type specific scale-factor dictionary
+        self.mne.sf_dict = dict()
+
+        ordered_types = self.mne.ch_types[self.mne.ch_order]
+
+        unique_type_idxs = np.unique(ordered_types,
+                                     return_index=True)[1]
+        self.ch_types_ordered = [ordered_types[idx] for idx
+                            in sorted(unique_type_idxs)]
+
+        for ct in self.ch_types_ordered:
+            self.mne.sf_dict[ct] = 1
+
         # Stores channel-types for butterfly-mode
         self.mne.butterfly_type_order = [
             tp for tp in DATA_CH_TYPES_ORDER if tp in self.mne.ch_types
@@ -3927,18 +3943,29 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self._update_scalebar_values()
     
     def set_scale_factor(self, *, scale, type):
-        """Set the scale factor manually."""
-        self.mne.scale_factor = scale
-
+        """Set the scale factor manually, either for everything or for channel type."""
+        
         # Reapply clipping if necessary
-        if self.mne.clipping is not None:
-            self._update_data()
+        """if self.mne.clipping is not None:
+            self._update_data()"""
         
         # Scale Traces (by scaling the Item, not the data)
         if type == 'all':
+            self.mne.scale_factor = scale
+
+            # Reapply clipping if necessary
+            if self.mne.clipping is not None:
+                self._update_data()
+            
             for line in self.mne.traces:
                 line.update_scale()
         else:
+            self.mne.sf_dict[type] = scale
+
+            # Reapply clipping if necessary
+            if self.mne.clipping is not None:
+                self._update_data()
+
             for line in [line for line in self.mne.traces if line.ch_type == type]:
                 line.update_scale()
 
@@ -4166,7 +4193,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                             scaler
                             * self.mne.scalings[trace.ch_type]
                             * self.mne.unit_scalings[trace.ch_type]
-                            / self.mne.scale_factor
+                            / (self.mne.scale_factor *
+                               self.mne.sf_dict[trace.ch_type])
                         )
                         label = (
                             f"{_simplify_float(yvalue * inv_norm)} "
@@ -4278,6 +4306,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             trace.set_ch_idx(ch_idx)
             trace.update_color()
             trace.update_data()
+            trace.update_scale()
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     # DATA HANDLING
