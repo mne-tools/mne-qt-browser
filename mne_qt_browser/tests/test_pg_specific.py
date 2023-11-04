@@ -19,6 +19,7 @@ INCREASE_AMPLITUDE = "Increase amplitude"
 TOGGLE_ANNOTATIONS = "Toggle annotations mode"
 SHOW_PROJECTORS = "Show projectors"
 
+
 def test_scalings(raw_orig, pg_backend):
     """Test the correct parsing of the scalings dict to Text Boxes"""
     fig = raw_orig.plot()
@@ -29,7 +30,7 @@ def test_scalings(raw_orig, pg_backend):
         assert fig.scale_boxes[type].text() == str(fig.mne.scalings[type])
     fig.close()
     scalings = dict(mag=1.0, grad=2.0, eeg=3.0, eog=4.0)
-    fig = raw_orig.plot(scalings = scalings)
+    fig = raw_orig.plot(scalings=scalings)
     fig.test_mode = True
     QTest.qWaitForWindowExposed(fig)
     QTest.qWait(50)

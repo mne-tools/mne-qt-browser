@@ -3135,10 +3135,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.scale_factor = 1
         # Ordered channel types list, used in multiple instances
         ordered_types = self.mne.ch_types[self.mne.ch_order]
-        unique_type_idxs = np.unique(ordered_types,
-                                     return_index=True)[1]
-        self.mne.ch_types_ordered = [ordered_types[idx] for idx
-                            in sorted(unique_type_idxs)]
+        unique_type_idxs = np.unique(ordered_types, return_index=True)[1]
+        self.mne.ch_types_ordered = [
+            ordered_types[idx] for idx in sorted(unique_type_idxs)
+        ]
         # Stores channel-types for butterfly-mode
         self.mne.butterfly_type_order = [
             tp for tp in DATA_CH_TYPES_ORDER if tp in self.mne.ch_types
