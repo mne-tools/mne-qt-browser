@@ -3509,6 +3509,19 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         ahelp.triggered.connect(self._toggle_help_fig)
         self.mne.toolbar.addAction(ahelp)
 
+        # 2nd Toolbar accommodating the Text Boxes of Scalings
+        self.addToolBarBreak()
+        self.mne.toolbar2 = self.addToolBar("Scales")
+        # Scalings Text Boxes
+        self.scale_boxes = OrderedDict()
+        for chtype in [ct for ct in self.mne.ch_types_ordered if ct != "stim"]:
+            lbl = QLabel(chtype.upper())
+            self.mne.toolbar2.addWidget(lbl)
+            box = QLineEdit()
+            box.setPlaceholderText(str(self.mne.scalings[chtype]))
+            self.scale_boxes[chtype] = box
+            self.mne.toolbar2.addWidget(box)
+
         # Set Start-Range (after all necessary elements are initialized)
         self.mne.plt.setXRange(
             self.mne.t_start, self.mne.t_start + self.mne.duration, padding=0
