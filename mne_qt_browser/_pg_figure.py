@@ -392,8 +392,6 @@ class DataTrace(PlotCurveItem):
 
     @propagate_to_children
     def update_scale(self):  # noqa: D102
-
-        print("!!! Using transformation, type ", self.ch_type, " with factor ", self.mne.sf_dict[self.ch_type])
         transform = QTransform()
         transform.scale(1.0, self.mne.scale_factor * self.mne.sf_dict[self.ch_type])
         self.setTransform(transform)
@@ -1635,8 +1633,6 @@ class ScaleBarText(BaseScaleBar, TextItem):  # noqa: D101
     def update_value(self):
         """Update value of ScaleBarText."""
         scaler = 1 if self.mne.butterfly else 2
-        print("---SCALEBAR UPDATE_VALUE---")
-        print("Type ", self.ch_type, " factor ", self.mne.sf_dict[self.ch_type])
         inv_norm = (
             scaler
             * self.mne.scalings[self.ch_type]
@@ -1779,10 +1775,9 @@ class AmplitudeSettingsDialog(_BaseDialog):
         general_tab.layout.addRow(self.types_radio)
         self.types_group = QGroupBox(self)
         tbox = QFormLayout()
-        ordered_types = self.mne.ch_types[self.mne.ch_order]
-        unique_type_idxs = np.unique(ordered_types,
+        unique_type_idxs = np.unique(self.mne.ordered_types,
                                      return_index=True)[1]
-        self.ch_types_ordered = [ordered_types[idx] for idx
+        self.ch_types_ordered = [self.mne.ordered_types[idx] for idx
                             in sorted(unique_type_idxs)]
         if 'stim' in self.ch_types_ordered: self.ch_types_ordered.remove('stim')
         self.types_boxes = OrderedDict()
@@ -1818,12 +1813,11 @@ class AmplitudeSettingsDialog(_BaseDialog):
         self.types_group.setEnabled(not flag)
 
     def _value_changed(self, new_value, type, norm=100):
-    
-        print('Changed ', type, ' to scale factor ', float(new_value)/norm)
+        #Function handling the change of value in a Dropbox
         if type == 'all':
             self.weakmain().set_scale_factor(scale=float(new_value)/100, type=type)
         else:
-            self.weakmain().set_scale_factor(scale=float(new_value)/norm, type=type)
+            self.weakmain().set_scale_factor(scale=norm/float(new_value), type=type)
                 
     def closeEvent(self, event):
         _disconnect(self.all_radio.clicked)
@@ -3190,7 +3184,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Add to list to keep a reference and avoid premature
         # garbage-collection.
         _browser_instances.append(self)
-
+        print(self.mne.scalings)
         # Set the browser style
         try:
             from mne.viz.backends._utils import _qt_get_stylesheet
@@ -3208,6 +3202,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # HiDPI stuff
         self._pixel_ratio = self.devicePixelRatio()
         logger.debug(f"Desktop pixel ratio: {self._pixel_ratio:0.3f}")
+        print("Desktop Pixel Ratio is ", self._pixel_ratio)
         self.mne.mkPen = _methpartial(self._hidpi_mkPen)
 
         bgcolor = self.palette().color(self.backgroundRole()).getRgbF()[:3]
@@ -3251,11 +3246,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Channel type specific scale-factor dictionary
         self.mne.sf_dict = dict()
 
-        ordered_types = self.mne.ch_types[self.mne.ch_order]
+        self.mne.ordered_types = self.mne.ch_types[self.mne.ch_order]
 
-        unique_type_idxs = np.unique(ordered_types,
+        unique_type_idxs = np.unique(self.mne.ordered_types,
                                      return_index=True)[1]
-        self.ch_types_ordered = [ordered_types[idx] for idx
+        self.ch_types_ordered = [self.mne.ordered_types[idx] for idx
                             in sorted(unique_type_idxs)]
 
         for ct in self.ch_types_ordered:
@@ -3863,9 +3858,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         """
         self.mne.scalebars.clear()
         # To keep order (np.unique sorts)
-        ordered_types = self.mne.ch_types[self.mne.ch_order]
-        unique_type_idxs = np.unique(ordered_types, return_index=True)[1]
-        ch_types_ordered = [ordered_types[idx] for idx in sorted(unique_type_idxs)]
+        unique_type_idxs = np.unique(self.mne.ordered_types, return_index=True)[1]
+        ch_types_ordered = [self.mne.ordered_types[idx] for idx in sorted(unique_type_idxs)]
         for ch_type in [
             ct
             for ct in ch_types_ordered
@@ -3944,10 +3938,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     
     def set_scale_factor(self, *, scale, type):
         """Set the scale factor manually, either for everything or for channel type."""
-        
-        # Reapply clipping if necessary
-        """if self.mne.clipping is not None:
-            self._update_data()"""
         
         # Scale Traces (by scaling the Item, not the data)
         if type == 'all':
@@ -4515,11 +4505,17 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.data = np.clip(self.mne.data, -0.5, 0.5)
         elif self.mne.clipping is not None:
             self.mne.data = self.mne.data.copy()
-            self.mne.data[
+            """self.mne.data[
                 abs(self.mne.data * self.mne.scale_factor) > self.mne.clipping
-            ] = np.nan
+            ] = np.nan"""
 
-        # Apply Downsampling (if enabled)
+            """for idx, x in np.ndenumerate(self.mne.data):
+                if abs(x *
+                       self.mne.scale_factor *
+                       self.mne.sf_dict[self.mne.ordered_types[idx[0]]]) > self.mne.clipping:
+                    x = np.nan"""
+
+        print("updated data: ", np.shape(self.mne.data))
         self._apply_downsampling()
 
     def _get_zscore(self, data):
