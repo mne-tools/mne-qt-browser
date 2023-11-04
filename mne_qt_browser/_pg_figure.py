@@ -3518,7 +3518,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             lbl = QLabel(chtype.upper())
             self.mne.toolbar2.addWidget(lbl)
             box = QLineEdit()
-            box.setPlaceholderText(str(self.mne.scalings[chtype]))
+            box.setText(str(self.mne.scalings[chtype]))
             self.scale_boxes[chtype] = box
             self.mne.toolbar2.addWidget(box)
 

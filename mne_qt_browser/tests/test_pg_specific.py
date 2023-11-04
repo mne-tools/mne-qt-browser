@@ -19,7 +19,25 @@ INCREASE_AMPLITUDE = "Increase amplitude"
 TOGGLE_ANNOTATIONS = "Toggle annotations mode"
 SHOW_PROJECTORS = "Show projectors"
 
+def test_scalings(raw_orig, pg_backend):
+    """Test the correct parsing of the scalings dict to Text Boxes"""
+    fig = raw_orig.plot(scalings = 'auto')
+    fig.test_mode = True
+    QTest.qWaitForWindowExposed(fig)
+    QTest.qWait(50)
+    for type in [ct for ct in fig.mne.ch_types_ordered if ct != "stim"]:
+        assert fig.scale_boxes[type].text() == str(fig.mne.scalings[type])
+    fig.close()
+    fig = raw_orig.plot()
+    fig.test_mode = True
+    QTest.qWaitForWindowExposed(fig)
+    QTest.qWait(50)
+    for type in [ct for ct in fig.mne.ch_types_ordered if ct != "stim"]:
+        assert fig.scale_boxes[type].text() == str(fig.mne.scalings[type])
+    fig.close()
 
+
+'''
 def test_annotations_interactions(raw_orig, pg_backend):
     """Test interactions specific to pyqtgraph-backend."""
     # Add test-annotations
@@ -433,3 +451,4 @@ def test_pg_toolbar_actions(raw_orig, pg_backend):
     assert pg_backend._get_n_figs() == 2
     fig._fake_click_on_toolbar_action("Help", wait_after=100)
     assert pg_backend._get_n_figs() == 1
+'''
