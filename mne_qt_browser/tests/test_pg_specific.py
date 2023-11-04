@@ -21,19 +21,21 @@ SHOW_PROJECTORS = "Show projectors"
 
 def test_scalings(raw_orig, pg_backend):
     """Test the correct parsing of the scalings dict to Text Boxes"""
-    fig = raw_orig.plot(scalings = 'auto')
-    fig.test_mode = True
-    QTest.qWaitForWindowExposed(fig)
-    QTest.qWait(50)
-    for type in [ct for ct in fig.mne.ch_types_ordered if ct != "stim"]:
-        assert fig.scale_boxes[type].text() == str(fig.mne.scalings[type])
-    fig.close()
     fig = raw_orig.plot()
     fig.test_mode = True
     QTest.qWaitForWindowExposed(fig)
     QTest.qWait(50)
-    for type in [ct for ct in fig.mne.ch_types_ordered if ct != "stim"]:
+    for type in fig.scale_boxes.keys():
         assert fig.scale_boxes[type].text() == str(fig.mne.scalings[type])
+    fig.close()
+    scalings = dict(mag=1.0, grad=2.0, eeg=3.0, eog=4.0)
+    fig = raw_orig.plot(scalings = scalings)
+    fig.test_mode = True
+    QTest.qWaitForWindowExposed(fig)
+    QTest.qWait(50)
+    for type in fig.scale_boxes.keys():
+        if type in scalings.keys():
+            assert fig.scale_boxes[type].text() == str(scalings[type])
     fig.close()
 
 
