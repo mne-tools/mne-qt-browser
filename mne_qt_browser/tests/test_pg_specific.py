@@ -39,7 +39,6 @@ def test_scalings(raw_orig, pg_backend):
     fig.close()
 
 
-'''
 def test_annotations_interactions(raw_orig, pg_backend):
     """Test interactions specific to pyqtgraph-backend."""
     # Add test-annotations
@@ -453,4 +452,3 @@ def test_pg_toolbar_actions(raw_orig, pg_backend):
     assert pg_backend._get_n_figs() == 2
     fig._fake_click_on_toolbar_action("Help", wait_after=100)
     assert pg_backend._get_n_figs() == 1
-'''
