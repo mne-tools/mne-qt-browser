@@ -124,6 +124,7 @@ from mne.viz.utils import _simplify_float, _merge_annotations, _figure_agg
 from mne.annotations import _sync_onset
 from mne.io.pick import _DATA_CH_TYPES_ORDER_DEFAULT, _DATA_CH_TYPES_SPLIT
 from mne.utils import _to_rgb, logger, sizeof_fmt, warn, get_config, _check_option
+from mne.defaults import _handle_default
 
 from . import _browser_instances
 from ._fixes import capture_exceptions, _qt_raise_window, _init_mne_qtapp
@@ -3514,12 +3515,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.toolbar2 = self.addToolBar("Scales")
         # Scalings Text Boxes
         self.scale_boxes = OrderedDict()
-        for chtype in [ct for ct in self.mne.ch_types_ordered if ct != "stim"]:
-            lbl = QLabel(chtype.upper())
+        titles = _handle_default("titles")
+        for ch_type in [ct for ct in self.mne.ch_types_ordered if ct != "stim"]:
+            lbl = QLabel(titles.get(ch_type, ch_type.upper()))
             self.mne.toolbar2.addWidget(lbl)
             box = QLineEdit()
-            box.setText(str(self.mne.scalings[chtype]))
-            self.scale_boxes[chtype] = box
+            box.setText(str(self.mne.scalings[ch_type]))
+            self.scale_boxes[ch_type] = box
             self.mne.toolbar2.addWidget(box)
 
         # Set Start-Range (after all necessary elements are initialized)

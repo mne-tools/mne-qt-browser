@@ -21,7 +21,7 @@ SHOW_PROJECTORS = "Show projectors"
 
 
 def test_scalings(raw_orig, pg_backend):
-    """Test the correct parsing of the scalings dict to Text Boxes"""
+    """Test the correct parsing of the scalings dict to Text Boxes."""
     fig = raw_orig.plot()
     fig.test_mode = True
     QTest.qWaitForWindowExposed(fig)
