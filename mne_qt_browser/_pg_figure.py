@@ -42,6 +42,7 @@ from qtpy.QtCore import (
     QPoint,
     QSettings,
     QSignalBlocker,
+    QRegExp,
 )
 from qtpy.QtGui import (
     QFont,
@@ -54,6 +55,7 @@ from qtpy.QtGui import (
     QPainter,
     QPainterPath,
     QColor,
+    QRegExpValidator,
 )
 from qtpy.QtTest import QTest
 from qtpy.QtWidgets import (
@@ -3521,6 +3523,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.toolbar2.addWidget(lbl)
             box = QLineEdit()
             box.setText(str(self.mne.scalings[ch_type]))
+            rx = QRegExp("(\d+([.]\d*)?([eE][+-]?\d+)?|[.]\d+([eE][+-]?\d+)?)")
+            #validator = QRegExpValidator(rx, self)
+            box.setValidator(QRegExpValidator(rx, self))
+            box.editingFinished.connect(_methpartial(
+                self._scalings_edited, ch_type=ch_type))
             self.scale_boxes[ch_type] = box
             self.mne.toolbar2.addWidget(box)
 
@@ -3802,6 +3809,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def _toggle_scalebars(self):
         self.mne.scalebars_visible = not self.mne.scalebars_visible
         self._set_scalebars_visible(self.mne.scalebars_visible)
+
+    def _scalings_edited(self, ch_type):
+        "Pass the edited values to the scalings dict."
+        self.mne.scalings[ch_type] = float(self.scale_boxes[ch_type].text())
 
     def _overview_mode_changed(self, new_mode):
         self.mne.overview_mode = new_mode
@@ -5037,6 +5048,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def closeEvent(self, event):
         """Customize close event."""
         event.accept()
+        for box in self.scale_boxes.values():
+            _disconnect(box.editingFinished)
         if hasattr(self, "mne"):
             # Explicit disconnects to avoid reference cycles that gc can't
             # properly resolve ()
