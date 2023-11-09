@@ -8,6 +8,7 @@ import pytest
 from qtpy.QtTest import QTest
 from mne import Annotations
 from pyqtgraph.graphicsItems.FillBetweenItem import FillBetweenItem
+import random
 
 
 LESS_TIME = "Show fewer time points"
@@ -21,24 +22,28 @@ SHOW_PROJECTORS = "Show projectors"
 
 
 def test_scalings(raw_orig, pg_backend):
-    """Test the correct parsing of the scalings dict to Text Boxes."""
+    """Test the correct parsing of the scalings dict to Text Boxes and vice-versa."""
     fig = raw_orig.plot()
     fig.test_mode = True
     QTest.qWaitForWindowExposed(fig)
     QTest.qWait(50)
-    for type in fig.scale_boxes.keys():
-        assert fig.scale_boxes[type].text() == str(fig.mne.scalings[type])
+    for ch_type in fig.scale_boxes.keys():
+        assert fig.scale_boxes[ch_type].text() == str(fig.mne.scalings[ch_type])
     fig.close()
     scalings = dict(mag=1.0, grad=2.0, eeg=3.0, eog=4.0)
     fig = raw_orig.plot(scalings=scalings)
     fig.test_mode = True
     QTest.qWaitForWindowExposed(fig)
     QTest.qWait(50)
-    for type in fig.scale_boxes.keys():
-        if type in scalings.keys():
-            assert fig.scale_boxes[type].text() == str(scalings[type])
+    for ch_type in fig.scale_boxes.keys():
+        if ch_type in scalings.keys():
+            assert fig.scale_boxes[ch_type].text() == str(scalings[ch_type])
+    floats = ["1.1", ".1", "1e10", "2e-10", ".35e5"]
+    for ch_type in fig.scale_boxes.keys():
+        fig.scale_boxes[ch_type].setText(random.choice(floats))
+        fig.scale_boxes[ch_type].editingFinished.emit()
+        assert float(fig.scale_boxes[ch_type].text()) == fig.mne.scalings[ch_type]
     fig.close()
-
 
 def test_annotations_interactions(raw_orig, pg_backend):
     """Test interactions specific to pyqtgraph-backend."""

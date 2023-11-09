@@ -5051,8 +5051,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def closeEvent(self, event):
         """Customize close event."""
         event.accept()
-        for box in self.scale_boxes.values():
-            _disconnect(box.editingFinished)
+        if hasattr(self, "scale_boxes"):
+            for box in self.scale_boxes.values():
+                _disconnect(box.editingFinished)
         if hasattr(self, "mne"):
             # Explicit disconnects to avoid reference cycles that gc can't
             # properly resolve ()
