@@ -3525,8 +3525,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             box.setText(str(self.mne.scalings[ch_type]))
             rx = QRegExp("([0-9]+([.][0-9]*)?([eE][+-]?[0-9]+)?|[.][0-9]+([eE][+-]?[0-9]+)?)")
             box.setValidator(QRegExpValidator(rx, self))
-            box.editingFinished.connect(_methpartial(
-                self._scalings_edited, ch_type=ch_type))
+            box.editingFinished.connect(
+                _methpartial(self._scalings_edited, ch_type=ch_type)
+            )
             self.scale_boxes[ch_type] = box
             self.mne.toolbar2.addWidget(box)
 
