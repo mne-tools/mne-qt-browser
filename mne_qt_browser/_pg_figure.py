@@ -3523,8 +3523,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.toolbar2.addWidget(lbl)
             box = QLineEdit()
             box.setText(str(self.mne.scalings[ch_type]))
-            rx = QRegExp("(\d+([.]\d*)?([eE][+-]?\d+)?|[.]\d+([eE][+-]?\d+)?)")
-            #validator = QRegExpValidator(rx, self)
+            rx = QRegExp("([0-9]+([.][0-9]*)?([eE][+-]?[0-9]+)?|[.][0-9]+([eE][+-]?[0-9]+)?)")
             box.setValidator(QRegExpValidator(rx, self))
             box.editingFinished.connect(_methpartial(
                 self._scalings_edited, ch_type=ch_type))
@@ -3813,6 +3812,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def _scalings_edited(self, ch_type):
         "Pass the edited values to the scalings dict."
         self.mne.scalings[ch_type] = float(self.scale_boxes[ch_type].text())
+        print(self.mne.scalings)
 
     def _overview_mode_changed(self, new_mode):
         self.mne.overview_mode = new_mode
