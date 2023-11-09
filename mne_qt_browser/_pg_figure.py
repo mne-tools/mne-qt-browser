@@ -3524,10 +3524,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             box = QLineEdit()
             box.setText(str(self.mne.scalings[ch_type]))
             rx = QRegExp("(\d+([.]\d*)?([eE][+-]?\d+)?|[.]\d+([eE][+-]?\d+)?)")
-            #validator = QRegExpValidator(rx, self)
+            # validator = QRegExpValidator(rx, self)
             box.setValidator(QRegExpValidator(rx, self))
-            box.editingFinished.connect(_methpartial(
-                self._scalings_edited, ch_type=ch_type))
+            box.editingFinished.connect(
+                _methpartial(self._scalings_edited, ch_type=ch_type)
+            )
             self.scale_boxes[ch_type] = box
             self.mne.toolbar2.addWidget(box)
 
