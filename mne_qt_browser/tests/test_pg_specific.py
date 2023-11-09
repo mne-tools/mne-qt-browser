@@ -45,6 +45,7 @@ def test_scalings(raw_orig, pg_backend):
         assert float(fig.scale_boxes[ch_type].text()) == fig.mne.scalings[ch_type]
     fig.close()
 
+
 def test_annotations_interactions(raw_orig, pg_backend):
     """Test interactions specific to pyqtgraph-backend."""
     # Add test-annotations
