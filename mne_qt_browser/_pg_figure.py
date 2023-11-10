@@ -42,7 +42,7 @@ from qtpy.QtCore import (
     QPoint,
     QSettings,
     QSignalBlocker,
-    QRegExp,
+    QRegularExpression,
 )
 from qtpy.QtGui import (
     QFont,
@@ -55,7 +55,7 @@ from qtpy.QtGui import (
     QPainter,
     QPainterPath,
     QColor,
-    QRegExpValidator,
+    QRegularExpressionValidator,
 )
 from qtpy.QtTest import QTest
 from qtpy.QtWidgets import (
@@ -3523,10 +3523,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.toolbar2.addWidget(lbl)
             box = QLineEdit()
             box.setText(str(self.mne.scalings[ch_type]))
-            rx = QRegExp(
+            rx = QRegularExpression(
                 "([0-9]+([.][0-9]*)?([eE][+-]?[0-9]+)?|[.][0-9]+([eE][+-]?[0-9]+)?)"
             )
-            box.setValidator(QRegExpValidator(rx, self))
+            box.setValidator(QRegularExpressionValidator(rx, self))
             box.editingFinished.connect(
                 _methpartial(self._scalings_edited, ch_type=ch_type)
             )
