@@ -8,6 +8,7 @@
 import datetime
 import functools
 import gc
+import inspect
 import math
 import platform
 import sys
@@ -2951,10 +2952,13 @@ class LoadThread(QThread):
                 stop = start + chunk_size
             # Load epochs
             if self.mne.is_epochs:
+                kwargs = dict()
+                if "copy" in inspect.getfullargspec(self.mne.inst.get_data).kwonlyargs:
+                    kwargs["copy"] = False
                 item = slice(start, stop)
                 with self.mne.inst.info._unlock():
                     data_chunk = np.concatenate(
-                        self.mne.inst.get_data(item=item), axis=-1
+                        self.mne.inst.get_data(item=item, **kwargs), axis=-1
                     )
             # Load raw
             else:
