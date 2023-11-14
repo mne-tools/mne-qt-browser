@@ -392,7 +392,7 @@ class DataTrace(PlotCurveItem):
     @propagate_to_children
     def update_scale(self):  # noqa: D102
         transform = QTransform()
-        transform.scale(1.0, self.mne.scale_factor)
+        transform.scale(1.0, self.mne.scale_factors[self.ch_type])
         self.setTransform(transform)
 
         if self.mne.clipping is not None:
@@ -1634,9 +1634,8 @@ class ScaleBarText(BaseScaleBar, TextItem):  # noqa: D101
         scaler = 1 if self.mne.butterfly else 2
         inv_norm = (
             scaler
-            * self.mne.scalings[self.ch_type]
-            * self.mne.unit_scalings[self.ch_type]
-            / self.mne.scale_factor
+            * self.mne.norms_dict[self.ch_type]
+            / self.mne.scale_factors[self.ch_type]
         )
         self.setText(f"{_simplify_float(inv_norm)} " f"{self.mne.units[self.ch_type]}")
 
@@ -3134,14 +3133,19 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.zscore_rgba = None
         # Container for traces
         self.mne.traces = list()
-        # Scale-Factor
-        self.mne.scale_factor = 1
         # Ordered channel types list, used in multiple instances
         ordered_types = self.mne.ch_types[self.mne.ch_order]
         unique_type_idxs = np.unique(ordered_types, return_index=True)[1]
         self.mne.ch_types_ordered = [
             ordered_types[idx] for idx in sorted(unique_type_idxs)
         ]
+        # Scale factors dictionary
+        self.mne.scale_factors = dict()
+        # Inverted norms dictionary
+        self.mne.norms_dict = dict()
+        for ct in [x for x in self.mne.ch_types_ordered if x != 'stim']:
+            self.mne.scale_factors[ct] = 1
+            self.mne.norms_dict[ct] = self.mne.scalings[ct] * self.mne.unit_scalings[ct]
         # Stores channel-types for butterfly-mode
         self.mne.butterfly_type_order = [
             tp for tp in DATA_CH_TYPES_ORDER if tp in self.mne.ch_types
@@ -3518,6 +3522,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Scalings Text Boxes
         self.scale_boxes = OrderedDict()
         titles = _handle_default("titles")
+        self.mne.toolbar2.addWidget(QLabel("Scalings:"))
         for ch_type in [ct for ct in self.mne.ch_types_ordered if ct != "stim"]:
             lbl = QLabel(titles.get(ch_type, ch_type.upper()))
             self.mne.toolbar2.addWidget(lbl)
@@ -3813,9 +3818,21 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self._set_scalebars_visible(self.mne.scalebars_visible)
 
     def _scalings_edited(self, ch_type):
-        "Pass the edited values to the scalings dict."
-        self.mne.scalings[ch_type] = float(self.scale_boxes[ch_type].text())
-        print(self.mne.scalings)
+        "Pass the edited values to the scalings dict and scale accordingly."
+        new_value = float(self.scale_boxes[ch_type].text())
+        self.mne.scale_factors[ch_type] *= new_value / self.mne.scalings[ch_type]
+        self.mne.scalings[ch_type] = new_value
+
+        # Reapply clipping if necessary
+        if self.mne.clipping is not None:
+            self._update_data()
+
+        # Scale Traces (by scaling the Item, not the data)
+        for line in [line for line in self.mne.traces if line.ch_type == ch_type]:
+            line.update_scale()
+
+        # Update Scalebars
+        self._update_scalebar_values()          
 
     def _overview_mode_changed(self, new_mode):
         self.mne.overview_mode = new_mode
@@ -3829,7 +3846,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def scale_all(self, checked=False, *, step):
         """Scale all traces by multiplying with step."""
-        self.mne.scale_factor *= step
+        for ct in self.mne.scale_factors:
+            self.mne.scale_factors[ct] *= step
 
         # Reapply clipping if necessary
         if self.mne.clipping is not None:
@@ -4059,9 +4077,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                         scaler = -1 if self.mne.butterfly else -2
                         inv_norm = (
                             scaler
-                            * self.mne.scalings[trace.ch_type]
-                            * self.mne.unit_scalings[trace.ch_type]
-                            / self.mne.scale_factor
+                            * self.mne.norms_dict[trace.ch_type]
+                            / self.mne.scale_factors[trace.ch_type]
                         )
                         label = (
                             f"{_simplify_float(yvalue * inv_norm)} "
@@ -4173,6 +4190,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             trace.set_ch_idx(ch_idx)
             trace.update_color()
             trace.update_data()
+            trace.update_scale()
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     # DATA HANDLING
@@ -4377,13 +4395,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.decim_data[data_picks_mask] = self.mne.decim
 
         # Apply clipping
-        if self.mne.clipping == "clamp":
+        """if self.mne.clipping == "clamp":
             self.mne.data = np.clip(self.mne.data, -0.5, 0.5)
         elif self.mne.clipping is not None:
             self.mne.data = self.mne.data.copy()
             self.mne.data[
-                abs(self.mne.data * self.mne.scale_factor) > self.mne.clipping
-            ] = np.nan
+                abs(self.mne.data * self.mne.scale_factors) > self.mne.clipping
+            ] = np.nan"""
 
         # Apply Downsampling (if enabled)
         self._apply_downsampling()
