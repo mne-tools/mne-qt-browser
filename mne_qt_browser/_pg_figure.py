@@ -3836,15 +3836,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             for line in [line for line in self.mne.traces if line.ch_type == ch_type]:
                 line.update_scale()
 
-<<<<<<< HEAD
             # Update Scalebars
             self._update_scalebar_values()
         else:
             self.scale_boxes[ch_type].setText(str(self.mne.scalings[ch_type]))
-=======
-        # Update Scalebars
-        self._update_scalebar_values()
->>>>>>> df9c4e2e5f621c6751e9bdf1d29d5ae9474b9c5e
+
 
     def _overview_mode_changed(self, new_mode):
         self.mne.overview_mode = new_mode
