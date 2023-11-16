@@ -3841,7 +3841,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         else:
             self.scale_boxes[ch_type].setText(str(self.mne.scalings[ch_type]))
 
-
     def _overview_mode_changed(self, new_mode):
         self.mne.overview_mode = new_mode
         self.mne.overview_bar.set_background()
