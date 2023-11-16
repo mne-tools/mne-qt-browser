@@ -3147,7 +3147,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.scale_factors = dict()
         # Inverted norms dictionary
         self.mne.norms_dict = dict()
-        for ct in [x for x in self.mne.ch_types_ordered if x != 'stim']:
+        for ct in [x for x in self.mne.ch_types_ordered if x != "stim"]:
             self.mne.scale_factors[ct] = 1
             self.mne.norms_dict[ct] = self.mne.scalings[ct] * self.mne.unit_scalings[ct]
         # Stores channel-types for butterfly-mode
@@ -3824,19 +3824,22 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def _scalings_edited(self, ch_type):
         "Pass the edited values to the scalings dict and scale accordingly."
         new_value = float(self.scale_boxes[ch_type].text())
-        self.mne.scale_factors[ch_type] *= new_value / self.mne.scalings[ch_type]
-        self.mne.scalings[ch_type] = new_value
+        if new_value != 0:
+            self.mne.scale_factors[ch_type] *= new_value / self.mne.scalings[ch_type]
+            self.mne.scalings[ch_type] = new_value
 
-        # Reapply clipping if necessary
-        if self.mne.clipping is not None:
-            self._update_data()
+            # Reapply clipping if necessary
+            if self.mne.clipping is not None:
+                self._update_data()
 
-        # Scale Traces (by scaling the Item, not the data)
-        for line in [line for line in self.mne.traces if line.ch_type == ch_type]:
-            line.update_scale()
+            # Scale Traces (by scaling the Item, not the data)
+            for line in [line for line in self.mne.traces if line.ch_type == ch_type]:
+                line.update_scale()
 
-        # Update Scalebars
-        self._update_scalebar_values()          
+            # Update Scalebars
+            self._update_scalebar_values()
+        else:
+            self.scale_boxes[ch_type].setText(str(self.mne.scalings[ch_type]))
 
     def _overview_mode_changed(self, new_mode):
         self.mne.overview_mode = new_mode
