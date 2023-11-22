@@ -3150,7 +3150,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         for ct in self.mne.ch_types_ordered:
             self.mne.scale_factors[ct] = 1
             if ct != "stim":
-                self.mne.norms_dict[ct] = self.mne.scalings[ct] * self.mne.unit_scalings[ct]
+                self.mne.norms_dict[ct] = (
+                    self.mne.scalings[ct] * self.mne.unit_scalings[ct]
+                )
         # Stores channel-types for butterfly-mode
         self.mne.butterfly_type_order = [
             tp for tp in DATA_CH_TYPES_ORDER if tp in self.mne.ch_types
