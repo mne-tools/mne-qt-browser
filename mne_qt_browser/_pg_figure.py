@@ -3858,6 +3858,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         """Scale all traces by multiplying with step."""
         for ct in self.mne.scale_factors:
             self.mne.scale_factors[ct] *= step
+            if ct != "stim":
+                self.mne.scalings[ct] *= step
+                self.scale_boxes[ct].setText(str(self.mne.scalings[ct]))
 
         # Reapply clipping if necessary
         if self.mne.clipping is not None:
