@@ -27,20 +27,26 @@ def test_scalings(raw_orig, pg_backend):
     fig.test_mode = True
     QTest.qWaitForWindowExposed(fig)
     QTest.qWait(50)
+
     # Assert correct passing of scalings to the boxes
     for ch_type in fig.scale_boxes.keys():
         assert fig.scale_boxes[ch_type].text() == str(fig.mne.scalings[ch_type])
     fig.close()
-    # Assert correct passing of custom scalings to the boxes
+
+    # Assert correct passing of custom scalings to the boxes, as well
+    # as the function of scale_factors dict
     scalings = dict(mag=1.0, grad=2.0, eeg=3.0, eog=4.0)
     fig = raw_orig.plot(scalings=scalings)
     fig.test_mode = True
     QTest.qWaitForWindowExposed(fig)
     QTest.qWait(50)
-
     for ch_type in fig.scale_boxes.keys():
         if ch_type in scalings.keys():
             assert fig.scale_boxes[ch_type].text() == str(scalings[ch_type])
+            fig.scale_boxes[ch_type].setText(str(2 * scalings[ch_type]))
+            fig.scale_boxes[ch_type].editingFinished.emit()
+            assert fig.mne.scale_factors[ch_type] == 2.0
+
     # Assert correct passing of different float formats to the boxes
     floats = ["1.1", ".1", "1e10", "2e-10", ".35e5"]
     for ch_type in fig.scale_boxes.keys():
