@@ -3138,10 +3138,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Container for traces
         self.mne.traces = list()
         # Ordered channel types list, used in multiple instances
-        ordered_types = self.mne.ch_types[self.mne.ch_order]
-        unique_type_idxs = np.unique(ordered_types, return_index=True)[1]
+        self.mne.ordered_types = self.mne.ch_types[self.mne.ch_order]
+        unique_type_idxs = np.unique(self.mne.ordered_types, return_index=True)[1]
         self.mne.ch_types_ordered = [
-            ordered_types[idx] for idx in sorted(unique_type_idxs)
+            self.mne.ordered_types[idx] for idx in sorted(unique_type_idxs)
         ]
         # Scale factors dictionary
         self.mne.scale_factors = dict()
@@ -4405,13 +4405,16 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.decim_data[data_picks_mask] = self.mne.decim
 
         # Apply clipping
-        """if self.mne.clipping == "clamp":
+        if self.mne.clipping == "clamp":
             self.mne.data = np.clip(self.mne.data, -0.5, 0.5)
         elif self.mne.clipping is not None:
             self.mne.data = self.mne.data.copy()
+            factors_ordered = np.atleast_2d(np.empty(np.shape(self.mne.data)[0])).T
+            for i in range(np.shape(self.mne.data)[0]):
+                factors_ordered[i] = self.mne.scale_factors[self.mne.ordered_types[i]]
             self.mne.data[
-                abs(self.mne.data * self.mne.scale_factors) > self.mne.clipping
-            ] = np.nan"""
+                abs(self.mne.data * factors_ordered) > self.mne.clipping
+            ] = np.nan
 
         # Apply Downsampling (if enabled)
         self._apply_downsampling()
