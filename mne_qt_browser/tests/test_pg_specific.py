@@ -33,8 +33,8 @@ def test_scalings(raw_orig, pg_backend):
         assert fig.scale_boxes[ch_type].text() == str(fig.mne.scalings[ch_type])
     fig.close()
 
-    # Assert correct passing of custom scalings to the boxes, as well
-    # as the function of scale_factors dict
+    # Assert correct passing of custom scalings to the boxes,
+    # as well as the function of scale_factors dict
     scalings = dict(mag=1.0, grad=2.0, eeg=3.0, eog=4.0)
     fig = raw_orig.plot(scalings=scalings)
     fig.test_mode = True

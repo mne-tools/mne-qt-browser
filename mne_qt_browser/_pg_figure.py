@@ -5081,7 +5081,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         event.accept()
         if hasattr(self, "scale_boxes"):
             for box in self.scale_boxes.values():
-                _disconnect(box.editingFinished)
+                _disconnect(box.editingFinished, allow_error=True)
         if hasattr(self, "mne"):
             # Explicit disconnects to avoid reference cycles that gc can't
             # properly resolve ()
