@@ -393,7 +393,9 @@ class DataTrace(PlotCurveItem):
     @propagate_to_children
     def update_scale(self):  # noqa: D102
         transform = QTransform()
-        transform.scale(1.0, self.mne.scale_factors[self.ch_type])
+        transform.scale(
+            1.0, self.mne.scale_factors[self.ch_type] * self.mne.sensitivity_factor
+        )
         self.setTransform(transform)
 
         if self.mne.clipping is not None:
@@ -1654,7 +1656,14 @@ class ScaleBar(BaseScaleBar, QGraphicsLineItem):  # noqa: D101
         self.update_y_position()
 
     def _set_position(self, x, y):
-        self.setLine(QLineF(x, y - 0.5, x, y + 0.5))
+        self.setLine(
+            QLineF(
+                x,
+                y - 0.5 * self.mne.sensitivity_factor,
+                x,
+                y + 0.5 * self.mne.sensitivity_factor,
+            )
+        )
 
     def get_ydata(self):
         """Get y-data for tests."""
@@ -3143,6 +3152,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.ch_types_ordered = [
             self.mne.ordered_types[idx] for idx in sorted(unique_type_idxs)
         ]
+        # Sensitivity factor, for real lengths on monitor
+        self.mne.sensitivity_factor = 2
         # Scale factors dictionary
         self.mne.scale_factors = dict()
         # Inverted norms dictionary
