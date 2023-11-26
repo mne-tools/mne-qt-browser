@@ -3525,7 +3525,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # 2nd Toolbar accommodating the Text Boxes of Scalings
         self.addToolBarBreak()
-        self.mne.toolbar2 = self.addToolBar("Scales")
+        self.mne.toolbar2 = self.addToolBar("Scalings")
         # Scalings Text Boxes
         self.scale_boxes = OrderedDict()
         titles = _handle_default("titles")
