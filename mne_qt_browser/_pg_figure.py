@@ -1638,7 +1638,7 @@ class ScaleBarText(BaseScaleBar, TextItem):  # noqa: D101
         inv_norm = (
             scaler
             * self.mne.norms_dict[self.ch_type]
-            / self.mne.scale_factors[self.ch_type]
+            / (self.mne.scale_factors[self.ch_type] * self.mne.sensitivity_factor)
         )
         self.setText(f"{_simplify_float(inv_norm)} " f"{self.mne.units[self.ch_type]}")
 
@@ -1656,14 +1656,12 @@ class ScaleBar(BaseScaleBar, QGraphicsLineItem):  # noqa: D101
         self.update_y_position()
 
     def _set_position(self, x, y):
-        self.setLine(
-            QLineF(
-                x,
-                y - 0.5 * self.mne.sensitivity_factor,
-                x,
-                y + 0.5 * self.mne.sensitivity_factor,
-            )
-        )
+        self.setLine(QLineF(x, y - 0.5, x, y + 0.5))
+
+    def _update_scale(self):
+        transform = QTransform()
+        transform.scale(1.0, self.mne.sensitivity_factor)
+        self.setTransform(transform)
 
     def get_ydata(self):
         """Get y-data for tests."""
@@ -3153,7 +3151,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.ordered_types[idx] for idx in sorted(unique_type_idxs)
         ]
         # Sensitivity factor, for real lengths on monitor
-        self.mne.sensitivity_factor = 2
+        self.mne.sensitivity_factor = 1
+        # Starting detected sensitivity factor. Currently set to 2
+        self.mne.auto_sf = 2
         # Scale factors dictionary
         self.mne.scale_factors = dict()
         # Inverted norms dictionary
@@ -3556,6 +3556,16 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.scale_boxes[ch_type] = box
             self.mne.toolbar2.addWidget(box)
 
+        # 3rd Toolbar accommodating the Text Boxes of Sensitivity
+        self.addToolBarBreak()
+        self.mne.toolbar3 = self.addToolBar("Sensitivity")
+        # Sensitivity Text Boxes
+        self.mne.toolbar3.addWidget(QLabel("Sens:"))
+        self.allbx = QLineEdit()
+        self.allbx.setText(str(self.mne.sensitivity_factor))
+        self.allbx.editingFinished.connect(_methpartial(self._sens_edit))
+        self.mne.toolbar3.addWidget(self.allbx)
+
         # Set Start-Range (after all necessary elements are initialized)
         self.mne.plt.setXRange(
             self.mne.t_start, self.mne.t_start + self.mne.duration, padding=0
@@ -3831,9 +3841,29 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         self._update_scalebar_y_positions()
 
+    def _update_scalebars(self):
+        for scalebar in self.mne.scalebars.values():
+            scalebar._update_scale()
+
     def _toggle_scalebars(self):
         self.mne.scalebars_visible = not self.mne.scalebars_visible
         self._set_scalebars_visible(self.mne.scalebars_visible)
+
+    def _sens_edit(self):
+        """Sensitivity factor, testing purposes"""
+        self.mne.sensitivity_factor = float(self.allbx.text())
+
+        # Reapply clipping if necessary
+        if self.mne.clipping is not None:
+            self._update_data()
+
+        # Scale Traces (by scaling the Item, not the data)
+        for line in self.mne.traces:
+            line.update_scale()
+
+        # Update Scalebars
+        self._update_scalebars()
+        self._update_scalebar_values()
 
     def _scalings_edited(self, ch_type):
         "Pass the edited values to the scalings dict and scale accordingly."
@@ -4102,7 +4132,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                         inv_norm = (
                             scaler
                             * self.mne.norms_dict[trace.ch_type]
-                            / self.mne.scale_factors[trace.ch_type]
+                            / (
+                                self.mne.scale_factors[trace.ch_type]
+                                * self.mne.sensitivity_factor
+                            )
                         )
                         label = (
                             f"{_simplify_float(yvalue * inv_norm)} "
@@ -5102,6 +5135,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if hasattr(self, "scale_boxes"):
             for box in self.scale_boxes.values():
                 _disconnect(box.editingFinished, allow_error=True)
+        if hasattr(self, "allbx"):
+            _disconnect(self.allbx.editingFinished)
         if hasattr(self, "mne"):
             # Explicit disconnects to avoid reference cycles that gc can't
             # properly resolve ()
