@@ -4425,7 +4425,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.data = self.mne.data.copy()
             factors_ordered = np.atleast_2d(np.empty(np.shape(self.mne.data)[0])).T
             for i in range(np.shape(self.mne.data)[0]):
-                factors_ordered[i] = self.mne.scale_factors[self.mne.ordered_types[i]]
+                factors_ordered[i] = (
+                    self.mne.scale_factors[self.mne.ordered_types[i]]
+                    * self.mne.sensitivity_factor
+                )
             self.mne.data[
                 abs(self.mne.data * factors_ordered) > self.mne.clipping
             ] = np.nan
