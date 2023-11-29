@@ -1638,7 +1638,7 @@ class ScaleBarText(BaseScaleBar, TextItem):  # noqa: D101
         inv_norm = (
             scaler
             * self.mne.norms_dict[self.ch_type]
-            / (self.mne.scale_factors[self.ch_type] * self.mne.sensitivity_factor)
+            / self.mne.scale_factors[self.ch_type]
         )
         self.setText(f"{_simplify_float(inv_norm)} " f"{self.mne.units[self.ch_type]}")
 
@@ -3152,8 +3152,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         ]
         # Sensitivity factor, for real lengths on monitor
         self.mne.sensitivity_factor = 1
-        # Starting detected sensitivity factor. Currently set to 2
-        self.mne.auto_sf = 2
         # Scale factors dictionary
         self.mne.scale_factors = dict()
         # Inverted norms dictionary
@@ -4132,10 +4130,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                         inv_norm = (
                             scaler
                             * self.mne.norms_dict[trace.ch_type]
-                            / (
-                                self.mne.scale_factors[trace.ch_type]
-                                * self.mne.sensitivity_factor
-                            )
+                            / self.mne.scale_factors[trace.ch_type]
                         )
                         label = (
                             f"{_simplify_float(yvalue * inv_norm)} "
