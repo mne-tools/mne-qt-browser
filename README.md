@@ -24,6 +24,17 @@ or
 conda install -c conda-forge mne-base matplotlib mne-qt-browser
 ```
 
+## Update
+Refer to the [MNE-Python documentation](https://mne.tools/stable/install/updating.html) for updating MNE-Python.
+To update this package, do:
+```
+pip install -U mne-qt-browser
+```
+To update this package to the development version, do:
+```
+pip install -U --no-deps https://github.com/mne-tools/mne-qt-browser/archive/refs/heads/main.zip
+```
+
 ## Usage
 
 The backend supports plotting for the following MNE-Python methods:
