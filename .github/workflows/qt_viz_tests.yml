@@ -23,11 +23,6 @@ jobs:
         include:
           - os: ubuntu
             mne: main
-            opengl: 'opengl'
-            python: '3.8'
-            name: old 3.8
-          - os: ubuntu
-            mne: main
             opengl: ''
             python: '3.9'
             name: no opengl
