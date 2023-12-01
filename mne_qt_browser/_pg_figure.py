@@ -3535,13 +3535,27 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # 2nd Toolbar accommodating the Text Boxes of Scalings
         self.addToolBarBreak()
         self.mne.toolbar2 = self.addToolBar("Scalings")
-        # Scalings Text Boxes
-        self.scale_boxes = OrderedDict()
-        titles = _handle_default("titles")
         self.mne.toolbar2.addWidget(QLabel("Scalings:"))
+
+        # 3rd Toolbar accommodating the Text Boxes of Sensitivity
+        self.addToolBarBreak()
+        self.mne.toolbar3 = self.addToolBar("Sensitivity")
+
+        # Sensitivity Testing Box
+        self.mne.toolbar3.addWidget(QLabel("Sens:"))
+        self.allbx = QLineEdit()
+        self.allbx.setText(str(self.mne.sensitivity_factor))
+        self.allbx.editingFinished.connect(_methpartial(self._sens_edit))
+        self.mne.toolbar3.addWidget(self.allbx)
+
+        # Scalings and Sensitivity Text Boxes
+        self.scale_boxes = OrderedDict()
+        self.sensitivity_boxes = OrderedDict()
+        titles = _handle_default("titles")
         for ch_type in [ct for ct in self.mne.ch_types_ordered if ct != "stim"]:
-            lbl = QLabel(titles.get(ch_type, ch_type.upper()))
-            self.mne.toolbar2.addWidget(lbl)
+            self.mne.toolbar2.addWidget(QLabel(titles.get(ch_type, ch_type.upper())))
+            self.mne.toolbar3.addWidget(QLabel(titles.get(ch_type, ch_type.upper())))
+            # Scaling boxes
             box = QLineEdit()
             box.setText(str(self.mne.scalings[ch_type]))
             rx = QRegularExpression(
@@ -3553,16 +3567,19 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             )
             self.scale_boxes[ch_type] = box
             self.mne.toolbar2.addWidget(box)
-
-        # 3rd Toolbar accommodating the Text Boxes of Sensitivity
-        self.addToolBarBreak()
-        self.mne.toolbar3 = self.addToolBar("Sensitivity")
-        # Sensitivity Text Boxes
-        self.mne.toolbar3.addWidget(QLabel("Sens:"))
-        self.allbx = QLineEdit()
-        self.allbx.setText(str(self.mne.sensitivity_factor))
-        self.allbx.editingFinished.connect(_methpartial(self._sens_edit))
-        self.mne.toolbar3.addWidget(self.allbx)
+            # Sensitivity boxes
+            scaler = 1 if self.mne.butterfly else 2
+            inv_norm = (
+                scaler * self.mne.norms_dict[ch_type] / self.mne.scale_factors[ch_type]
+            )
+            sbox = QLineEdit()
+            sbox.setText(str(inv_norm))
+            sbox.setValidator(QRegularExpressionValidator(rx, self))
+            sbox.editingFinished.connect(
+                _methpartial(self._sensitivity_edited, ch_type=ch_type)
+            )
+            self.sensitivity_boxes[ch_type] = sbox
+            self.mne.toolbar3.addWidget(sbox)
 
         # Set Start-Range (after all necessary elements are initialized)
         self.mne.plt.setXRange(
@@ -3863,8 +3880,33 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self._update_scalebars()
         self._update_scalebar_values()
 
+    def _sensitivity_edited(self, ch_type):
+        "Determine the new scale factor and scale accordingly."
+        print("hello")
+        new_value = float(self.sensitivity_boxes[ch_type].text())
+        if new_value != 0:
+            scaler = 1 if self.mne.butterfly else 2
+            self.mne.scale_factors[ch_type] = (
+                scaler * self.mne.norms_dict[ch_type] / new_value
+            )
+            print(self.mne.scale_factors)
+
+            # Reapply clipping if necessary
+            if self.mne.clipping is not None:
+                self._update_data()
+
+            # Scale Traces (by scaling the Item, not the data)
+            for line in [line for line in self.mne.traces if line.ch_type == ch_type]:
+                line.update_scale()
+
+            # Update Scalebars
+            self._update_scalebar_values()
+        else:
+            self.sensitivity_boxes[ch_type].setText(str(self.mne.scalings[ch_type]))
+
     def _scalings_edited(self, ch_type):
         "Pass the edited values to the scalings dict and scale accordingly."
+        print(self.mne.scalebar_texts)
         new_value = float(self.scale_boxes[ch_type].text())
         if new_value != 0:
             self.mne.scale_factors[ch_type] *= new_value / self.mne.scalings[ch_type]
@@ -5129,6 +5171,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         event.accept()
         if hasattr(self, "scale_boxes"):
             for box in self.scale_boxes.values():
+                _disconnect(box.editingFinished, allow_error=True)
+        if hasattr(self, "sensitivity_boxes"):
+            for box in self.sensitivity_boxes.values():
                 _disconnect(box.editingFinished, allow_error=True)
         if hasattr(self, "allbx"):
             _disconnect(self.allbx.editingFinished)
