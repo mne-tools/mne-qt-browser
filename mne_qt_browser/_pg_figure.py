@@ -3567,6 +3567,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             )
             self.scale_boxes[ch_type] = box
             self.mne.toolbar2.addWidget(box)
+            self.mne.toolbar2.addWidget(QLabel(self.mne.units[ch_type]))
+            self.mne.toolbar2.addSeparator()
             # Sensitivity boxes
             scaler = 1 if self.mne.butterfly else 2
             inv_norm = (
@@ -3580,6 +3582,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             )
             self.sensitivity_boxes[ch_type] = sbox
             self.mne.toolbar3.addWidget(sbox)
+            self.mne.toolbar3.addWidget(QLabel(self.mne.units[ch_type] + "/cm"))
+            self.mne.toolbar3.addSeparator()
 
         # Set Start-Range (after all necessary elements are initialized)
         self.mne.plt.setXRange(
