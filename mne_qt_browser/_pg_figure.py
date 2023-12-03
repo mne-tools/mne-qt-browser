@@ -3570,12 +3570,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.toolbar2.addWidget(QLabel(self.mne.units[ch_type]))
             self.mne.toolbar2.addSeparator()
             # Sensitivity boxes
-            scaler = 1 if self.mne.butterfly else 2
-            inv_norm = (
-                scaler * self.mne.norms_dict[ch_type] / self.mne.scale_factors[ch_type]
-            )
             sbox = QLineEdit()
-            sbox.setText(str(inv_norm))
             sbox.setValidator(QRegularExpressionValidator(rx, self))
             sbox.editingFinished.connect(
                 _methpartial(self._sensitivity_edited, ch_type=ch_type)
@@ -3584,6 +3579,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.toolbar3.addWidget(sbox)
             self.mne.toolbar3.addWidget(QLabel(self.mne.units[ch_type] + "/cm"))
             self.mne.toolbar3.addSeparator()
+        self._update_sens_boxes()
 
         # Set Start-Range (after all necessary elements are initialized)
         self.mne.plt.setXRange(
@@ -3868,6 +3864,15 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.scalebars_visible = not self.mne.scalebars_visible
         self._set_scalebars_visible(self.mne.scalebars_visible)
 
+    def _update_sens_boxes(self):
+        for ch_type in self.sensitivity_boxes:
+            print(ch_type)
+            scaler = 1 if self.mne.butterfly else 2
+            inv_norm = (
+                scaler * self.mne.norms_dict[ch_type] / self.mne.scale_factors[ch_type]
+            )
+            self.sensitivity_boxes[ch_type].setText(str(inv_norm))
+
     def _sens_edit(self):
         """Sensitivity factor, testing purposes"""
         self.mne.sensitivity_factor = float(self.allbx.text())
@@ -3926,6 +3931,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
             # Update Scalebars
             self._update_scalebar_values()
+
+            # Update Sensitivity Boxes
+            self._update_sens_boxes()
         else:
             self.scale_boxes[ch_type].setText(str(self.mne.scalings[ch_type]))
 
