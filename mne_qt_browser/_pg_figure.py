@@ -3866,7 +3866,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _update_sens_boxes(self):
         for ch_type in self.sensitivity_boxes:
-            print(ch_type)
             scaler = 1 if self.mne.butterfly else 2
             inv_norm = (
                 scaler * self.mne.norms_dict[ch_type] / self.mne.scale_factors[ch_type]
@@ -3891,14 +3890,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _sensitivity_edited(self, ch_type):
         "Determine the new scale factor and scale accordingly."
-        print("hello")
         new_value = float(self.sensitivity_boxes[ch_type].text())
         if new_value != 0:
             scaler = 1 if self.mne.butterfly else 2
             self.mne.scale_factors[ch_type] = (
                 scaler * self.mne.norms_dict[ch_type] / new_value
             )
-            print(self.mne.scale_factors)
 
             # Reapply clipping if necessary
             if self.mne.clipping is not None:
@@ -3915,7 +3912,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _scalings_edited(self, ch_type):
         "Pass the edited values to the scalings dict and scale accordingly."
-        print(self.mne.scalebar_texts)
         new_value = float(self.scale_boxes[ch_type].text())
         if new_value != 0:
             self.mne.scale_factors[ch_type] *= new_value / self.mne.scalings[ch_type]
