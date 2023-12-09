@@ -1,8 +1,12 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
 [project]
 name = "mne-qt-browser"
 description = "A new backend based on pyqtgraph for the 2D-Data-Browser in MNE-Python"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 license = {file = "LICENSE"}
 keywords = ["science", "neuroscience", "psychology"]
 authors = [
@@ -13,9 +17,7 @@ classifiers = [
   "Programming Language :: Python"
 ]
 dependencies = [
-    "importlib_metadata; python_version < '3.8'",
     "packaging",
-    "setuptools >=65",
     "numpy",
     "scipy",
     "matplotlib",
@@ -50,17 +52,17 @@ homepage = "https://mne.tools/mne-bids-pipeline"
 repository = "https://github.com/mne-tools/mne-bids-pipeline"
 changelog = "http://github.com/mne-tools/mne-qt-browser/releases"
 
-[build-system]
-requires = ["setuptools>=65", "setuptools_scm[toml]>=6.2", "wheel"]
-build-backend = "setuptools.build_meta"
+[tool.hatch.build]
+exclude = [
+    "/.*",
+    "/*.yml",
+    "/screenshot.png",
+    "/CONTRIBUTING.md",
+] # tracked by git, but we don't want to ship those files
 
-[tool.setuptools_scm]
-tag_regex = "^(?P<prefix>v)?(?P<version>[0-9.]+)(?P<suffix>.*)?$"
-version_scheme = "release-branch-semver"
-write_to = "mne_qt_browser/_version.py"
-
-[tool.setuptools.packages.find]
-exclude = ["false"]  # on CircleCI this folder appears during pip install -ve. for an unknown reason
+[tool.hatch.version]
+source = "vcs"
+raw-options = { version_scheme = "release-branch-semver" }
 
 [tool.pytest.ini_options]
 addopts = "-ra --cov-report= --tb=short --junit-xml=junit-results.xml --capture=sys --durations=10"
