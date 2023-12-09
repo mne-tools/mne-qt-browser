@@ -9,7 +9,7 @@ readme = "README.md"
 requires-python = ">=3.9"
 license = { file = "LICENSE" }
 keywords = ["science", "neuroscience", "psychology"]
-authors = [{ name = "Martin Schulz", email = "dev@earthman-music.de" }]
+authors = [{ name = "Martin Schulz", email = "dev@mgschulz.de" }]
 classifiers = [
   "Intended Audience :: Science/Research",
   "Programming Language :: Python",
