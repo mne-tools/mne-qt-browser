@@ -10,5 +10,5 @@ Follow the [instructions from mne-python](https://mne.tools/dev/install/contribu
 and additionally install the dependencies for this repository:
 
 ```
-pip install -r requirements_testing.txt
+pip install -e ".[tests]"
 ```
