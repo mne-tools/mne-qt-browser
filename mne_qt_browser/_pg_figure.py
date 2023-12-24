@@ -1731,20 +1731,6 @@ class _BaseDialog(QDialog):
         event.accept()
 
 
-class CalibrationDialog(_BaseDialog):
-    """Allows for manual monitor calibration."""
-
-    def __init__(self, main, title="Calibration Settings", **kwargs):
-        super().__init__(main, title=title, **kwargs)
-        layout = QGridLayout()
-
-        self.setLayout(layout)
-        self.show()
-
-    def closeEvent(self, event):
-        super().closeEvent(event)
-
-
 class SettingsDialog(_BaseDialog):
     """Shows additional settings."""
 
@@ -3147,8 +3133,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.test_mode = False
         # A Settings-Dialog
         self.mne.fig_settings = None
-        # Monitor Calibration Dialog
-        self.mne.fig_calibration = None
         # Stores decimated data
         self.mne.decim_data = None
         # Stores ypos for selection-mode
@@ -3472,12 +3456,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         )
         aincr_nchan.triggered.connect(_methpartial(self.scale_all, step=5 / 4))
         self.mne.toolbar.addAction(aincr_nchan)
-
-        clbrsettings = QAction(
-            QIcon.fromTheme("settings"), "Calibration Settings", parent=self
-        )
-        clbrsettings.triggered.connect(self._toggle_calibration_fig)
-        self.mne.toolbar.addAction(clbrsettings)
         self.mne.toolbar.addSeparator()
 
         if not self.mne.is_epochs:
@@ -4784,13 +4762,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # If data was precomputed it needs to be precomputed again.
             self._rerun_precompute()
             self._redraw()
-
-    def _toggle_calibration_fig(self):
-        if self.mne.fig_calibration is None:
-            CalibrationDialog(self, name="fig_calibration")
-        else:
-            self.mne.fig_calibration.close()
-            self.mne.fig_calibration = None
 
     def _toggle_settings_fig(self):
         if self.mne.fig_settings is None:
