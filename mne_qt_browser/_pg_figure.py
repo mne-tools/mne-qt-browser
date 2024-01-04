@@ -2884,7 +2884,6 @@ class CalibrationDock(QDockWidget):
     """Dock-Window for monitor calibration."""
 
     def __init__(self, main):
-        print("dock init")
         super().__init__("Monitor Calibration")
         self.weakmain = weakref.ref(main)
         self.mne = main.mne
@@ -2896,7 +2895,6 @@ class CalibrationDock(QDockWidget):
         )
 
     def _init_ui(self):
-        print("init ui")
         widget = QWidget()
         layout = QHBoxLayout()
         layout.setAlignment(Qt.AlignLeft)
@@ -3263,7 +3261,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.load_thread = LoadThread(self)
 
         # Create centralWidget and layout
-        widget = QWidget()
+        self.widget = QWidget()
         layout = QGridLayout()
 
         # Initialize Axis-Items
@@ -3427,8 +3425,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.overview_bar = OverviewBar(self)
         layout.addWidget(self.mne.overview_bar, 2, 0, 1, 2)
 
-        widget.setLayout(layout)
-        self.setCentralWidget(widget)
+        self.widget.setLayout(layout)
+        self.setCentralWidget(self.widget)
 
         # Initialize Selection-Dialog
         if getattr(self.mne, "group_by", None) in ["position", "selection"]:
@@ -3438,10 +3436,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if getattr(self.mne, "show_options", False):
             self._toggle_proj_fig()
 
-        print("starting ini")
         self.mne.calibration_mode = False
         self._init_calibration_mode()
-        print("ini finished")
 
         # Initialize Toolbar
         self.mne.toolbar = self.addToolBar("Tools")
@@ -3570,7 +3566,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         )
         acalibration.triggered.connect(self._toggle_calibration_fig)
         self.mne.toolbar.addAction(acalibration)
-        print("added to toolbar")
 
         # 2nd Toolbar accommodating the Text Boxes of Scalings
         self.addToolBarBreak()
@@ -4818,7 +4813,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.fig_help = None
 
     def _init_calibration_mode(self):
-        print("ini")
         # Initialize Calibration-Dock
         existing_dock = getattr(self.mne, "fig_calibration", None)
         if existing_dock is None:
@@ -4826,19 +4820,21 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.addDockWidget(Qt.TopDockWidgetArea, self.mne.fig_calibration)
             self.mne.fig_calibration.setVisible(False)
 
-    def _change_calibration_mode(self):
-        print("change calibration")
-        # Toggle figure visibility
-        self.mne.fig_calibration.setVisible(self.mne.calibration_mode)
+    def _toggle_calibration_fig(self):
+        self.mne.calibration_mode = not self.mne.calibration_mode
+
+        # Toggle size policy and figure visibility
+        if self.mne.calibration_mode:
+            self.widget.setFixedSize(self.widget.size())
+            self.mne.fig_calibration.setVisible(self.mne.calibration_mode)
+        else:
+            self.mne.fig_calibration.setVisible(self.mne.calibration_mode)
+            self.widget.setMaximumSize(100000, 10000)
+            self.widget.setMinimumSize(0, 0)
 
         # Toggle Scale Shape Visibility
 
         # Toggle Scalebar Texts
-
-    def _toggle_calibration_fig(self):
-        print("toggle calibration")
-        self.mne.calibration_mode = not self.mne.calibration_mode
-        self._change_calibration_mode()
 
     def _set_butterfly(self, butterfly):
         self.mne.butterfly = butterfly
