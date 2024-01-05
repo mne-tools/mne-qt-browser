@@ -2899,11 +2899,20 @@ class CalibrationDock(QDockWidget):
         layout = QHBoxLayout()
         layout.setAlignment(Qt.AlignLeft)
 
-        text = QLabel("Lorem Ipsum")
+        text = QLabel("Toggle Calibration Mode")
         layout.addWidget(text)
+
+        self.mode_box = QCheckBox()
+        self.mode_box.setToolTip("Enable/Disable Calibration Mode")
+        self.mode_box.stateChanged.connect(self._box_clicked)
+        layout.addWidget(self.mode_box)
 
         widget.setLayout(layout)
         self.setWidget(widget)
+
+    def _box_clicked(self):
+        self.mne.calibration_mode = self.mode_box.isChecked()
+        self.weakmain()._toggle_calibration_mode()
 
 
 class BrowserView(GraphicsView):
@@ -3436,6 +3445,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if getattr(self.mne, "show_options", False):
             self._toggle_proj_fig()
 
+        self.mne.calibration_fig_mode = False
         self.mne.calibration_mode = False
         self._init_calibration_mode()
 
@@ -4821,17 +4831,21 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.fig_calibration.setVisible(False)
 
     def _toggle_calibration_fig(self):
-        self.mne.calibration_mode = not self.mne.calibration_mode
+        self.mne.calibration_fig_mode = not self.mne.calibration_fig_mode
 
-        # Toggle size policy and figure visibility
+        # Toggle figure visibility
+        if self.mne.calibration_fig_mode:
+            self.mne.fig_calibration.setVisible(self.mne.calibration_fig_mode)
+        else:
+            self.mne.fig_calibration.setVisible(self.mne.calibration_fig_mode)
+
+    def _toggle_calibration_mode(self):
+        # Toggle size policy
         if self.mne.calibration_mode:
             self.widget.setFixedSize(self.widget.size())
-            self.mne.fig_calibration.setVisible(self.mne.calibration_mode)
         else:
-            self.mne.fig_calibration.setVisible(self.mne.calibration_mode)
             self.widget.setMaximumSize(100000, 10000)
             self.widget.setMinimumSize(0, 0)
-
         # Toggle Scale Shape Visibility
 
         # Toggle Scalebar Texts
