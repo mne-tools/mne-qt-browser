@@ -1974,9 +1974,9 @@ class CalibrationDialog(_BaseDialog):
         super().__init__(main, title=title, **kwargs)
         layout = QFormLayout()
         self.box = QCheckBox()
-        self.box.setToolTip("Enable/Disable Calibration Mode")
-        self.box.stateChanged.connect(_methpartial(self._box_clicked))
+        self.box.stateChanged.connect(self._box_clicked)
         layout.addRow(QLabel("Enable/Disable Calibration Mode"), self.box)
+
         layout.addRow(
             QLabel("Measure the black rectangle and enter your measurements below:")
         )
@@ -1985,7 +1985,8 @@ class CalibrationDialog(_BaseDialog):
         self.show()
 
     def _box_clicked(self):
-        print(self.box.isChecked())
+        self.mne.calibration_mode = self.box.isChecked()
+        self.weakmain()._toggle_calibration_mode()
 
     def closeEvent(self, event):
         _disconnect(self.box.stateChanged)
