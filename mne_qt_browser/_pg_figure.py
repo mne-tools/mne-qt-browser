@@ -1967,6 +1967,31 @@ class ProjDialog(_BaseDialog):
             chkbx.setChecked(bool(self.mne.projs_on[idx]))
 
 
+class CalibrationDialog(_BaseDialog):
+    """Monitor Calibration."""
+
+    def __init__(self, main, title="Monitor Calibration", **kwargs):
+        super().__init__(main, title=title, **kwargs)
+        layout = QFormLayout()
+        self.box = QCheckBox()
+        self.box.setToolTip("Enable/Disable Calibration Mode")
+        self.box.stateChanged.connect(_methpartial(self._box_clicked))
+        layout.addRow(QLabel("Enable/Disable Calibration Mode"), self.box)
+        layout.addRow(
+            QLabel("Measure the black rectangle and enter your measurements below:")
+        )
+
+        self.setLayout(layout)
+        self.show()
+
+    def _box_clicked(self):
+        print(self.box.isChecked())
+
+    def closeEvent(self, event):
+        _disconnect(self.box.stateChanged)
+        super().closeEvent(event)
+
+
 class _ChannelFig(FigureCanvasQTAgg):
     def __init__(self, figure, mne):
         self.figure = figure
@@ -2880,41 +2905,6 @@ class AnnotationDock(QDockWidget):
         )
 
 
-class CalibrationDock(QDockWidget):
-    """Dock-Window for monitor calibration."""
-
-    def __init__(self, main):
-        super().__init__("Monitor Calibration")
-        self.weakmain = weakref.ref(main)
-        self.mne = main.mne
-        del main
-        self._init_ui()
-
-        self.setFeatures(
-            QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable
-        )
-
-    def _init_ui(self):
-        widget = QWidget()
-        layout = QHBoxLayout()
-        layout.setAlignment(Qt.AlignLeft)
-
-        text = QLabel("Toggle Calibration Mode")
-        layout.addWidget(text)
-
-        self.mode_box = QCheckBox()
-        self.mode_box.setToolTip("Enable/Disable Calibration Mode")
-        self.mode_box.stateChanged.connect(self._box_clicked)
-        layout.addWidget(self.mode_box)
-
-        widget.setLayout(layout)
-        self.setWidget(widget)
-
-    def _box_clicked(self):
-        self.mne.calibration_mode = self.mode_box.isChecked()
-        self.weakmain()._toggle_calibration_mode()
-
-
 class BrowserView(GraphicsView):
     """Customized View as part of GraphicsView-Framework."""
 
@@ -3168,6 +3158,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.test_mode = False
         # A Settings-Dialog
         self.mne.fig_settings = None
+        # Monitor Calibration mode and figure
+        self.mne.calibration_mode = False
+        self.mne.calibration_fig = None
         # Stores decimated data
         self.mne.decim_data = None
         # Stores ypos for selection-mode
@@ -3444,10 +3437,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Initialize Projectors-Dialog if show_options=True
         if getattr(self.mne, "show_options", False):
             self._toggle_proj_fig()
-
-        self.mne.calibration_fig_mode = False
-        self.mne.calibration_mode = False
-        self._init_calibration_mode()
 
         # Initialize Toolbar
         self.mne.toolbar = self.addToolBar("Tools")
@@ -4822,22 +4811,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.fig_help.close()
             self.mne.fig_help = None
 
-    def _init_calibration_mode(self):
-        # Initialize Calibration-Dock
-        existing_dock = getattr(self.mne, "fig_calibration", None)
-        if existing_dock is None:
-            self.mne.fig_calibration = CalibrationDock(self)
-            self.addDockWidget(Qt.TopDockWidgetArea, self.mne.fig_calibration)
-            self.mne.fig_calibration.setVisible(False)
-
     def _toggle_calibration_fig(self):
-        self.mne.calibration_fig_mode = not self.mne.calibration_fig_mode
-
-        # Toggle figure visibility
-        if self.mne.calibration_fig_mode:
-            self.mne.fig_calibration.setVisible(self.mne.calibration_fig_mode)
+        if self.mne.calibration_fig is None:
+            CalibrationDialog(self, name="calibration_fig")
         else:
-            self.mne.fig_calibration.setVisible(self.mne.calibration_fig_mode)
+            self.mne.calibration_fig.close()
+            self.mne.calibration_fig = None
 
     def _toggle_calibration_mode(self):
         # Toggle size policy
