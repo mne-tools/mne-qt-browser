@@ -4813,11 +4813,16 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.fig_help = None
 
     def _toggle_calibration_fig(self):
+        print(self.mne.n_channels)
         if self.mne.calibration_fig is None:
             CalibrationDialog(self, name="calibration_fig")
+            # self.mne.viewbox.setBorder({'color': "#000", 'width': 5})
+            self.mne.viewbox.setBackgroundColor("#000")
         else:
             self.mne.calibration_fig.close()
             self.mne.calibration_fig = None
+            # self.mne.viewbox.setBorder(None)
+            self.mne.viewbox.setBackgroundColor("#FFF")
 
     def _toggle_calibration_mode(self):
         # Toggle size policy
@@ -4826,7 +4831,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         else:
             self.widget.setMaximumSize(100000, 10000)
             self.widget.setMinimumSize(0, 0)
-        # Toggle Scale Shape Visibility
 
         # Toggle Scalebar Texts
 
