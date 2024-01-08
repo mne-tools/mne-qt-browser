@@ -1967,29 +1967,58 @@ class ProjDialog(_BaseDialog):
             chkbx.setChecked(bool(self.mne.projs_on[idx]))
 
 
+class Spinbox(QSpinBox):
+    """Custom QSpinBox Widget."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.setMinimum(10)
+        self.setMaximum(10000)
+        self.setSuffix("mm")
+        self.setValue(100)
+
+
 class CalibrationDialog(_BaseDialog):
     """Monitor Calibration."""
 
     def __init__(self, main, title="Monitor Calibration", **kwargs):
         super().__init__(main, title=title, **kwargs)
         layout = QFormLayout()
-        self.box = QCheckBox()
-        self.box.stateChanged.connect(self._box_clicked)
-        layout.addRow(QLabel("Enable/Disable Calibration Mode"), self.box)
-
         layout.addRow(
-            QLabel("Measure the black rectangle and enter your measurements below:")
+            QLabel(
+                "Measure the black rectangle of the plot and enter your measurements below:"
+            )
         )
+
+        self.height_box = Spinbox()
+        layout.addRow(QLabel("Enter the height of the black area:"), self.height_box)
+        self.width_box = Spinbox()
+        layout.addRow(QLabel("Enter the width of the black area:"), self.width_box)
+
+        btns = QHBoxLayout()
+        self.enable_btn = QPushButton("Enable")
+        self.enable_btn.clicked.connect(self._enable_mode)
+        btns.addWidget(self.enable_btn)
+        self.disable_btn = QPushButton("Disable")
+        self.disable_btn.clicked.connect(self._disable_mode)
+        btns.addWidget(self.disable_btn)
+        layout.addRow(btns)
 
         self.setLayout(layout)
         self.show()
 
-    def _box_clicked(self):
-        self.mne.calibration_mode = self.box.isChecked()
+    def _enable_mode(self):
+        self.mne.calibration_mode = True
+        self.weakmain()._toggle_calibration_mode()
+        self.weakmain()._toggle_calibration_fig()
+
+    def _disable_mode(self):
+        self.mne.calibration_mode = False
         self.weakmain()._toggle_calibration_mode()
 
     def closeEvent(self, event):
-        _disconnect(self.box.stateChanged)
+        _disconnect(self.enable_btn.clicked)
+        _disconnect(self.disable_btn.clicked)
         super().closeEvent(event)
 
 
@@ -3162,6 +3191,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Monitor Calibration mode and figure
         self.mne.calibration_mode = False
         self.mne.calibration_fig = None
+        self.mne.calibration_help_fig = None
         # Stores decimated data
         self.mne.decim_data = None
         # Stores ypos for selection-mode
@@ -3179,7 +3209,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.ch_types_ordered = [
             self.mne.ordered_types[idx] for idx in sorted(unique_type_idxs)
         ]
-        # Sensitivity factor, for real lengths on monitor
+        # DEPRECATE!!!!!!!!!!!!!!!!!!!Sensitivity factor, for real lengths on monitor
         self.mne.sensitivity_factor = 1
         # Scale factors dictionary
         self.mne.scale_factors = dict()
@@ -4813,7 +4843,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.fig_help = None
 
     def _toggle_calibration_fig(self):
-        print(self.mne.n_channels)
         if self.mne.calibration_fig is None:
             CalibrationDialog(self, name="calibration_fig")
             # self.mne.viewbox.setBorder({'color': "#000", 'width': 5})
@@ -4821,15 +4850,15 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         else:
             self.mne.calibration_fig.close()
             self.mne.calibration_fig = None
-            # self.mne.viewbox.setBorder(None)
             self.mne.viewbox.setBackgroundColor("#FFF")
+            # self.mne.viewbox.setBorder(None)
 
     def _toggle_calibration_mode(self):
         # Toggle size policy
         if self.mne.calibration_mode:
             self.widget.setFixedSize(self.widget.size())
         else:
-            self.widget.setMaximumSize(100000, 10000)
+            self.widget.setMaximumSize(100000, 100000)
             self.widget.setMinimumSize(0, 0)
 
         # Toggle Scalebar Texts
