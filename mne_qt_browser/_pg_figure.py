@@ -4856,10 +4856,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def _toggle_calibration_mode(self):
         # Toggle size policy
         if self.mne.calibration_mode:
-            self.widget.setFixedSize(self.widget.size())
+            self.setFixedSize(self.size())
         else:
-            self.widget.setMaximumSize(100000, 100000)
-            self.widget.setMinimumSize(0, 0)
+            self.setMaximumSize(100000, 100000)
+            self.setMinimumSize(0, 0)
 
         # Toggle Scalebar Texts
 
