@@ -1975,7 +1975,6 @@ class Spinbox(QSpinBox):
         self.setMinimum(10)
         self.setMaximum(10000)
         self.setSuffix("mm")
-        self.setValue(100)
 
 
 class CalibrationDialog(_BaseDialog):
@@ -1991,8 +1990,10 @@ class CalibrationDialog(_BaseDialog):
         )
 
         self.height_box = Spinbox()
+        self.height_box.setValue(self.mne.height)
         layout.addRow(QLabel("Enter the height of the black area:"), self.height_box)
         self.width_box = Spinbox()
+        self.width_box.setValue(self.mne.width)
         layout.addRow(QLabel("Enter the width of the black area:"), self.width_box)
 
         btns = QHBoxLayout()
@@ -2009,8 +2010,10 @@ class CalibrationDialog(_BaseDialog):
 
     def _enable_mode(self):
         self.mne.calibration_mode = True
+        self.mne.height = self.height_box.value()
+        self.mne.width = self.width_box.value()
         self.weakmain()._toggle_calibration_mode()
-        self.weakmain()._toggle_calibration_fig()
+        # self.weakmain()._toggle_calibration_fig()
 
     def _disable_mode(self):
         self.mne.calibration_mode = False
@@ -2019,6 +2022,7 @@ class CalibrationDialog(_BaseDialog):
     def closeEvent(self, event):
         _disconnect(self.enable_btn.clicked)
         _disconnect(self.disable_btn.clicked)
+        self.mne.viewbox.setBackgroundColor("#FFF")
         super().closeEvent(event)
 
 
@@ -3432,6 +3436,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.view.setBackground(_get_color(bgcolor, self.mne.dark))
         layout.addWidget(self.mne.view, 0, 0)
 
+        # Set inital height and width of plot, for sensitivity
+        self.mne.height = int(self.mne.viewbox.height())
+        self.mne.width = int(self.mne.viewbox.width())
+
         # Initialize Scroll-Bars
         self.mne.ax_hscroll = TimeScrollBar(self.mne)
         layout.addWidget(self.mne.ax_hscroll, 1, 0, 1, 2)
@@ -3616,6 +3624,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Scalings and Sensitivity Text Boxes
         self.scale_boxes = OrderedDict()
         self.sensitivity_boxes = OrderedDict()
+        self.mne.amplitudes = OrderedDict()
+        self.mne.sensitivities = OrderedDict()
         titles = _handle_default("titles")
         for ch_type in [ct for ct in self.mne.ch_types_ordered if ct != "stim"]:
             self.mne.toolbar2.addWidget(QLabel(titles.get(ch_type, ch_type.upper())))
@@ -4850,7 +4860,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         else:
             self.mne.calibration_fig.close()
             self.mne.calibration_fig = None
-            self.mne.viewbox.setBackgroundColor("#FFF")
             # self.mne.viewbox.setBorder(None)
 
     def _toggle_calibration_mode(self):
