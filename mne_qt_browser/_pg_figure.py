@@ -1982,25 +1982,28 @@ class ScalingDialog(_BaseDialog):
         )
         # Titles
         layout.addWidget(QLabel("Titles"), 0, 0)
-        layout.addWidget(QLabel("Amplitude"), 0, 1)
+        layout.addWidget(QLabel("Amplitude"), 0, 1, 1, 2)
         slbl = QLabel("Sensitivity")
         slbl.setEnabled(self.mne.calibration_mode)
-        layout.addWidget(slbl, 0, 2)
+        layout.addWidget(slbl, 0, 3, 1, 2)
         # Boxes
         row = 1
         for ch_type in [ct for ct in self.mne.ch_types_ordered if ct != "stim"]:
             layout.addWidget(QLabel(titles.get(ch_type, ch_type.upper())), row, 0)
             # Amplitude Box
             abox = QLineEdit()
-            self.amplitude_boxes[ch_type] = abox
             abox.setValidator(QRegularExpressionValidator(rx, self))
+            self.amplitude_boxes[ch_type] = abox
             layout.addWidget(abox, row, 1)
+            layout.addWidget(QLabel(self.mne.units[ch_type]), row, 2)
             # Sensitivity Box
             sbox = QLineEdit()
-            self.sensitivity_boxes[ch_type] = sbox
             sbox.setValidator(QRegularExpressionValidator(rx, self))
             sbox.setEnabled(self.mne.calibration_mode)
-            layout.addWidget(sbox, row, 2)
+            self.sensitivity_boxes[ch_type] = sbox
+            layout.addWidget(sbox, row, 3)
+            layout.addWidget(QLabel("[" + self.mne.units[ch_type] + "]/cm"), row, 4)
+
             row += 1
         self._update_boxes()
 
@@ -2009,6 +2012,7 @@ class ScalingDialog(_BaseDialog):
 
     def _update_boxes(self):
         pass
+        # for ch_type in [ct for ct in self.mne.ch_types_ordered if ct != "stim"]:
 
     def closeEvent(self, event):
         super().closeEvent(event)
