@@ -1967,6 +1967,53 @@ class ProjDialog(_BaseDialog):
             chkbx.setChecked(bool(self.mne.projs_on[idx]))
 
 
+class ScalingDialog(_BaseDialog):
+    """Scaling dialog for amplitude and sensitivity"""
+
+    def __init__(self, main, title="Scaling Dialog", **kwargs):
+        super().__init__(main, title=title, **kwargs)
+        layout = QGridLayout()
+        # Initialize
+        self.amplitude_boxes = OrderedDict()
+        self.sensitivity_boxes = OrderedDict()
+        titles = _handle_default("titles")
+        rx = QRegularExpression(
+            "([0-9]+([.][0-9]*)?([eE][+-]?[0-9]+)?|[.][0-9]+([eE][+-]?[0-9]+)?)"
+        )
+        # Titles
+        layout.addWidget(QLabel("Titles"), 0, 0)
+        layout.addWidget(QLabel("Amplitude"), 0, 1)
+        slbl = QLabel("Sensitivity")
+        slbl.setEnabled(self.mne.calibration_mode)
+        layout.addWidget(slbl, 0, 2)
+        # Boxes
+        row = 1
+        for ch_type in [ct for ct in self.mne.ch_types_ordered if ct != "stim"]:
+            layout.addWidget(QLabel(titles.get(ch_type, ch_type.upper())), row, 0)
+            # Amplitude Box
+            abox = QLineEdit()
+            self.amplitude_boxes[ch_type] = abox
+            abox.setValidator(QRegularExpressionValidator(rx, self))
+            layout.addWidget(abox, row, 1)
+            # Sensitivity Box
+            sbox = QLineEdit()
+            self.sensitivity_boxes[ch_type] = sbox
+            sbox.setValidator(QRegularExpressionValidator(rx, self))
+            sbox.setEnabled(self.mne.calibration_mode)
+            layout.addWidget(sbox, row, 2)
+            row += 1
+        self._update_boxes()
+
+        self.setLayout(layout)
+        self.show()
+
+    def _update_boxes(self):
+        pass
+
+    def closeEvent(self, event):
+        super().closeEvent(event)
+
+
 class Spinbox(QSpinBox):
     """Custom QSpinBox Widget."""
 
@@ -3192,6 +3239,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.test_mode = False
         # A Settings-Dialog
         self.mne.fig_settings = None
+        # Scaling dialog, with amplitudes and sensitivity
+        self.mne.scaling_fig = None
         # Monitor Calibration mode and figure
         self.mne.calibration_mode = False
         self.mne.calibration_fig = None
@@ -3523,6 +3572,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         )
         aincr_nchan.triggered.connect(_methpartial(self.scale_all, step=5 / 4))
         self.mne.toolbar.addAction(aincr_nchan)
+        ascaling = QAction(QIcon.fromTheme("settings"), "Scaling DIalog", parent=self)
+        ascaling.triggered.connect(self._toggle_scaling_fig)
+        self.mne.toolbar.addAction(ascaling)
+
         self.mne.toolbar.addSeparator()
 
         if not self.mne.is_epochs:
@@ -3624,8 +3677,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Scalings and Sensitivity Text Boxes
         self.scale_boxes = OrderedDict()
         self.sensitivity_boxes = OrderedDict()
-        self.mne.amplitudes = OrderedDict()
-        self.mne.sensitivities = OrderedDict()
         titles = _handle_default("titles")
         for ch_type in [ct for ct in self.mne.ch_types_ordered if ct != "stim"]:
             self.mne.toolbar2.addWidget(QLabel(titles.get(ch_type, ch_type.upper())))
@@ -4837,6 +4888,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # If data was precomputed it needs to be precomputed again.
             self._rerun_precompute()
             self._redraw()
+
+    def _toggle_scaling_fig(self):
+        if self.mne.scaling_fig is None:
+            ScalingDialog(self, name="scaling_fig")
+        else:
+            self.mne.scaling_fig.close()
+            self.mne.scaling_fig = None
 
     def _toggle_settings_fig(self):
         if self.mne.fig_settings is None:
