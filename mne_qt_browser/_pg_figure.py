@@ -2011,8 +2011,17 @@ class ScalingDialog(_BaseDialog):
         self.show()
 
     def _update_boxes(self):
-        pass
-        # for ch_type in [ct for ct in self.mne.ch_types_ordered if ct != "stim"]:
+        print("height ", self.mne.height)
+        print("n_channels ", self.mne.n_channels)
+        print("Scalebar= ", self.mne.height / (self.mne.n_channels + 1))
+        for ch_type in [ct for ct in self.mne.ch_types_ordered if ct != "stim"]:
+            scaler = 1 if self.mne.butterfly else 2
+            inv_norm = (
+                scaler * self.mne.norms_dict[ch_type] / self.mne.scale_factors[ch_type]
+            )
+            self.amplitude_boxes[ch_type].setText(str(round(inv_norm, 2)))
+            sens_inv_norm = 10 * inv_norm * (self.mne.n_channels + 1) / self.mne.height
+            self.sensitivity_boxes[ch_type].setText(str(round(sens_inv_norm, 2)))
 
     def closeEvent(self, event):
         super().closeEvent(event)
