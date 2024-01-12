@@ -1993,6 +1993,9 @@ class ScalingDialog(_BaseDialog):
             # Amplitude Box
             abox = QLineEdit()
             abox.setValidator(QRegularExpressionValidator(rx, self))
+            abox.editingFinished.connect(
+                _methpartial(self._amplitude_edited, ch_type=ch_type)
+            )
             self.amplitude_boxes[ch_type] = abox
             layout.addWidget(abox, row, 1)
             layout.addWidget(QLabel(self.mne.units[ch_type]), row, 2)
@@ -2000,9 +2003,12 @@ class ScalingDialog(_BaseDialog):
             sbox = QLineEdit()
             sbox.setValidator(QRegularExpressionValidator(rx, self))
             sbox.setEnabled(self.mne.calibration_mode)
+            sbox.editingFinished.connect(
+                _methpartial(self._sensitivity_edited, ch_type=ch_type)
+            )
             self.sensitivity_boxes[ch_type] = sbox
             layout.addWidget(sbox, row, 3)
-            layout.addWidget(QLabel("[" + self.mne.units[ch_type] + "]/cm"), row, 4)
+            layout.addWidget(QLabel("[" + self.mne.units[ch_type] + "]/mm"), row, 4)
 
             row += 1
         self._update_boxes()
@@ -2020,10 +2026,65 @@ class ScalingDialog(_BaseDialog):
                 scaler * self.mne.norms_dict[ch_type] / self.mne.scale_factors[ch_type]
             )
             self.amplitude_boxes[ch_type].setText(str(round(inv_norm, 2)))
-            sens_inv_norm = 10 * inv_norm * (self.mne.n_channels + 1) / self.mne.height
+            sens_inv_norm = inv_norm * (self.mne.n_channels + 1) / self.mne.height
             self.sensitivity_boxes[ch_type].setText(str(round(sens_inv_norm, 2)))
 
+    def _amplitude_edited(self, ch_type):
+        "Determine the new scale factor and scale accordingly."
+        new_value = float(self.amplitude_boxes[ch_type].text())
+        if new_value != 0:
+            scaler = 1 if self.mne.butterfly else 2
+            self.mne.scale_factors[ch_type] = (
+                scaler * self.mne.norms_dict[ch_type] / new_value
+            )
+
+            # Reapply clipping if necessary
+            if self.mne.clipping is not None:
+                self.weakmain()._update_data()
+
+            # Scale Traces (by scaling the Item, not the data)
+            for line in [line for line in self.mne.traces if line.ch_type == ch_type]:
+                line.update_scale()
+
+            # Update Scalebars
+            self.weakmain()._update_scalebar_values()
+
+            # Update the corresponding sensitivity box
+            sensitivity = new_value * (self.mne.n_channels + 1) / self.mne.height
+            self.sensitivity_boxes[ch_type].setText(str(round(sensitivity, 2)))
+
+    def _sensitivity_edited(self, ch_type):
+        "Determine the new scale factor and scale accordingly."
+        new_value = float(self.sensitivity_boxes[ch_type].text())
+        if new_value != 0:
+            scaler = 1 if self.mne.butterfly else 2
+            self.mne.scale_factors[ch_type] = (
+                scaler
+                * self.mne.norms_dict[ch_type]
+                * (self.mne.n_channels + 1)
+                / (new_value * self.mne.height)
+            )
+
+            # Reapply clipping if necessary
+            if self.mne.clipping is not None:
+                self.weakmain()._update_data()
+
+            # Scale Traces (by scaling the Item, not the data)
+            for line in [line for line in self.mne.traces if line.ch_type == ch_type]:
+                line.update_scale()
+
+            # Update Scalebars
+            self.weakmain()._update_scalebar_values()
+
+            # Update the corresponding ampplitude box
+            amplitude = new_value * self.mne.height / (self.mne.n_channels + 1)
+            self.amplitude_boxes[ch_type].setText(str(round(amplitude, 2)))
+
     def closeEvent(self, event):
+        for box in self.amplitude_boxes.values():
+            _disconnect(box.editingFinished)
+        for box in self.sensitivity_boxes.values():
+            _disconnect(box.editingFinished)
         super().closeEvent(event)
 
 
