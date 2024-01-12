@@ -2021,6 +2021,7 @@ class ScalingDialog(_BaseDialog):
             self.amplitude_boxes[ch_type].setText(str(round(inv_norm, 2)))
             sens_inv_norm = inv_norm * (self.mne.n_channels + 1) / self.mne.height
             self.sensitivity_boxes[ch_type].setText(str(round(sens_inv_norm, 2)))
+            self.sensitivity_boxes[ch_type].setEnabled(self.mne.calibration_mode)
 
     def _amplitude_edited(self, ch_type):
         "Determine the new scale factor and scale accordingly."
@@ -2261,6 +2262,9 @@ class SelectionDialog(_BaseDialog):  # noqa: D101
         self.mne.old_selection = label
         self.mne.picks = np.asarray(self.mne.ch_selections[label])
         self.mne.n_channels = len(self.mne.picks)
+        # If Scaling Dialog is open, update the boxes
+        if self.mne.scaling_fig is not None:
+            self.mne.scaling_fig._update_boxes()
         # Update highlighted sensors
         self._update_highlighted_sensors()
         # if "Vertex" is defined, some channels appear twice, so if
@@ -4028,7 +4032,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Update Scalebars
         self._update_scalebar_values()
 
-        # If Scaling Dialog is open, update it too
+        # If Scaling Dialog is open, update the boxes
         if self.mne.scaling_fig is not None:
             self.mne.scaling_fig._update_boxes()
 
@@ -4318,6 +4322,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                     round(yrange[0]), 0, len(self.mne.ch_order) - self.mne.n_channels
                 )
                 self.mne.n_channels = round(yrange[1] - yrange[0] - 1)
+                # If Scaling Dialog is open, update the boxes
+                if self.mne.scaling_fig is not None:
+                    self.mne.scaling_fig._update_boxes()
                 self._update_picks()
                 # Update Channel-Bar
                 self.mne.ax_vscroll.update_value(self.mne.ch_start)
@@ -4868,6 +4875,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         else:
             self.setMaximumSize(100000, 100000)
             self.setMinimumSize(0, 0)
+
+        # Update Scaling dialog boxes, if it is open
+        if self.mne.scaling_fig is not None:
+            self.mne.scaling_fig._update_boxes()
 
         # Toggle Scalebar Texts
 
