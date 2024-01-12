@@ -393,9 +393,7 @@ class DataTrace(PlotCurveItem):
     @propagate_to_children
     def update_scale(self):  # noqa: D102
         transform = QTransform()
-        transform.scale(
-            1.0, self.mne.scale_factors[self.ch_type] * self.mne.sensitivity_factor
-        )
+        transform.scale(1.0, self.mne.scale_factors[self.ch_type])
         self.setTransform(transform)
 
         if self.mne.clipping is not None:
@@ -1657,11 +1655,6 @@ class ScaleBar(BaseScaleBar, QGraphicsLineItem):  # noqa: D101
 
     def _set_position(self, x, y):
         self.setLine(QLineF(x, y - 0.5, x, y + 0.5))
-
-    def _update_scale(self):
-        transform = QTransform()
-        transform.scale(1.0, self.mne.sensitivity_factor)
-        self.setTransform(transform)
 
     def get_ydata(self):
         """Get y-data for tests."""
@@ -3336,8 +3329,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.ch_types_ordered = [
             self.mne.ordered_types[idx] for idx in sorted(unique_type_idxs)
         ]
-        # DEPRECATE!!!!!!!!!!!!!!!!!!!Sensitivity factor, for real lengths on monitor
-        self.mne.sensitivity_factor = 1
         # Scale factors dictionary
         self.mne.scale_factors = dict()
         # Inverted norms dictionary
@@ -3732,55 +3723,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         acalibration.triggered.connect(self._toggle_calibration_fig)
         self.mne.toolbar.addAction(acalibration)
 
-        # 2nd Toolbar accommodating the Text Boxes of Scalings
-        self.addToolBarBreak()
-        self.mne.toolbar2 = self.addToolBar("Scalings")
-        self.mne.toolbar2.addWidget(QLabel("Scalings:"))
-
-        # 3rd Toolbar accommodating the Text Boxes of Sensitivity
-        self.addToolBarBreak()
-        self.mne.toolbar3 = self.addToolBar("Sensitivity")
-
-        # Sensitivity Testing Box
-        self.mne.toolbar3.addWidget(QLabel("Sens:"))
-        self.allbx = QLineEdit()
-        self.allbx.setText(str(self.mne.sensitivity_factor))
-        self.allbx.editingFinished.connect(_methpartial(self._sens_edit))
-        self.mne.toolbar3.addWidget(self.allbx)
-
-        # Scalings and Sensitivity Text Boxes
-        self.scale_boxes = OrderedDict()
-        self.sensitivity_boxes = OrderedDict()
-        titles = _handle_default("titles")
-        for ch_type in [ct for ct in self.mne.ch_types_ordered if ct != "stim"]:
-            self.mne.toolbar2.addWidget(QLabel(titles.get(ch_type, ch_type.upper())))
-            self.mne.toolbar3.addWidget(QLabel(titles.get(ch_type, ch_type.upper())))
-            # Scaling boxes
-            box = QLineEdit()
-            box.setText(str(self.mne.scalings[ch_type]))
-            rx = QRegularExpression(
-                "([0-9]+([.][0-9]*)?([eE][+-]?[0-9]+)?|[.][0-9]+([eE][+-]?[0-9]+)?)"
-            )
-            box.setValidator(QRegularExpressionValidator(rx, self))
-            box.editingFinished.connect(
-                _methpartial(self._scalings_edited, ch_type=ch_type)
-            )
-            self.scale_boxes[ch_type] = box
-            self.mne.toolbar2.addWidget(box)
-            self.mne.toolbar2.addWidget(QLabel(self.mne.units[ch_type]))
-            self.mne.toolbar2.addSeparator()
-            # Sensitivity boxes
-            sbox = QLineEdit()
-            sbox.setValidator(QRegularExpressionValidator(rx, self))
-            sbox.editingFinished.connect(
-                _methpartial(self._sensitivity_edited, ch_type=ch_type)
-            )
-            self.sensitivity_boxes[ch_type] = sbox
-            self.mne.toolbar3.addWidget(sbox)
-            self.mne.toolbar3.addWidget(QLabel(self.mne.units[ch_type] + "/cm"))
-            self.mne.toolbar3.addSeparator()
-        self._update_sens_boxes()
-
         # Set Start-Range (after all necessary elements are initialized)
         self.mne.plt.setXRange(
             self.mne.t_start, self.mne.t_start + self.mne.duration, padding=0
@@ -4056,82 +3998,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         self._update_scalebar_y_positions()
 
-    def _update_scalebars(self):
-        for scalebar in self.mne.scalebars.values():
-            scalebar._update_scale()
-
     def _toggle_scalebars(self):
         self.mne.scalebars_visible = not self.mne.scalebars_visible
         self._set_scalebars_visible(self.mne.scalebars_visible)
-
-    def _update_sens_boxes(self):
-        for ch_type in self.sensitivity_boxes:
-            scaler = 1 if self.mne.butterfly else 2
-            inv_norm = (
-                scaler * self.mne.norms_dict[ch_type] / self.mne.scale_factors[ch_type]
-            )
-            self.sensitivity_boxes[ch_type].setText(str(inv_norm))
-
-    def _sens_edit(self):
-        """Sensitivity factor, testing purposes"""
-        self.mne.sensitivity_factor = float(self.allbx.text())
-
-        # Reapply clipping if necessary
-        if self.mne.clipping is not None:
-            self._update_data()
-
-        # Scale Traces (by scaling the Item, not the data)
-        for line in self.mne.traces:
-            line.update_scale()
-
-        # Update Scalebars
-        self._update_scalebars()
-        self._update_scalebar_values()
-
-    def _sensitivity_edited(self, ch_type):
-        "Determine the new scale factor and scale accordingly."
-        new_value = float(self.sensitivity_boxes[ch_type].text())
-        if new_value != 0:
-            scaler = 1 if self.mne.butterfly else 2
-            self.mne.scale_factors[ch_type] = (
-                scaler * self.mne.norms_dict[ch_type] / new_value
-            )
-
-            # Reapply clipping if necessary
-            if self.mne.clipping is not None:
-                self._update_data()
-
-            # Scale Traces (by scaling the Item, not the data)
-            for line in [line for line in self.mne.traces if line.ch_type == ch_type]:
-                line.update_scale()
-
-            # Update Scalebars
-            self._update_scalebar_values()
-        else:
-            self.sensitivity_boxes[ch_type].setText(str(self.mne.scalings[ch_type]))
-
-    def _scalings_edited(self, ch_type):
-        "Pass the edited values to the scalings dict and scale accordingly."
-        new_value = float(self.scale_boxes[ch_type].text())
-        if new_value != 0:
-            self.mne.scale_factors[ch_type] *= new_value / self.mne.scalings[ch_type]
-            self.mne.scalings[ch_type] = new_value
-
-            # Reapply clipping if necessary
-            if self.mne.clipping is not None:
-                self._update_data()
-
-            # Scale Traces (by scaling the Item, not the data)
-            for line in [line for line in self.mne.traces if line.ch_type == ch_type]:
-                line.update_scale()
-
-            # Update Scalebars
-            self._update_scalebar_values()
-
-            # Update Sensitivity Boxes
-            self._update_sens_boxes()
-        else:
-            self.scale_boxes[ch_type].setText(str(self.mne.scalings[ch_type]))
 
     def _overview_mode_changed(self, new_mode):
         self.mne.overview_mode = new_mode
@@ -4147,9 +4016,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         """Scale all traces by multiplying with step."""
         for ct in self.mne.scale_factors:
             self.mne.scale_factors[ct] *= step
-            if ct != "stim":
-                self.mne.scalings[ct] *= step
-                self.scale_boxes[ct].setText(str(self.mne.scalings[ct]))
 
         # Reapply clipping if necessary
         if self.mne.clipping is not None:
@@ -4161,6 +4027,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Update Scalebars
         self._update_scalebar_values()
+
+        # If Scaling Dialog is open, update it too
+        if self.mne.scaling_fig is not None:
+            self.mne.scaling_fig._update_boxes()
 
     def hscroll(self, step):
         """Scroll horizontally by step."""
@@ -4703,10 +4573,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.data = self.mne.data.copy()
             factors_ordered = np.atleast_2d(np.empty(np.shape(self.mne.data)[0])).T
             for i in range(np.shape(self.mne.data)[0]):
-                factors_ordered[i] = (
-                    self.mne.scale_factors[self.mne.ordered_types[i]]
-                    * self.mne.sensitivity_factor
-                )
+                factors_ordered[i] = self.mne.scale_factors[self.mne.ordered_types[i]]
             self.mne.data[
                 abs(self.mne.data * factors_ordered) > self.mne.clipping
             ] = np.nan
@@ -5404,14 +5271,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def closeEvent(self, event):
         """Customize close event."""
         event.accept()
-        if hasattr(self, "scale_boxes"):
-            for box in self.scale_boxes.values():
-                _disconnect(box.editingFinished, allow_error=True)
-        if hasattr(self, "sensitivity_boxes"):
-            for box in self.sensitivity_boxes.values():
-                _disconnect(box.editingFinished, allow_error=True)
-        if hasattr(self, "allbx"):
-            _disconnect(self.allbx.editingFinished)
         if hasattr(self, "mne"):
             # Explicit disconnects to avoid reference cycles that gc can't
             # properly resolve ()
