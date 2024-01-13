@@ -1638,7 +1638,18 @@ class ScaleBarText(BaseScaleBar, TextItem):  # noqa: D101
             * self.mne.norms_dict[self.ch_type]
             / self.mne.scale_factors[self.ch_type]
         )
-        self.setText(f"{_simplify_float(inv_norm)} " f"{self.mne.units[self.ch_type]}")
+        if self.mne.calibration_mode:
+            sens_norm = inv_norm * (self.mne.n_channels + 1) / self.mne.height
+            self.setText(
+                f"{_simplify_float(inv_norm)} "
+                f"{self.mne.units[self.ch_type]}\n"
+                f"{_simplify_float(sens_norm)} "
+                f"[{self.mne.units[self.ch_type]}]/mm"
+            )
+        else:
+            self.setText(
+                f"{_simplify_float(inv_norm)} " f"{self.mne.units[self.ch_type]}"
+            )
 
     def _set_position(self, x, y):
         self.setPos(x, y)
@@ -4881,6 +4892,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.scaling_fig._update_boxes()
 
         # Toggle Scalebar Texts
+        for scalebar_text in self.mne.scalebar_texts.values():
+            scalebar_text.update_value()
 
     def _set_butterfly(self, butterfly):
         self.mne.butterfly = butterfly
