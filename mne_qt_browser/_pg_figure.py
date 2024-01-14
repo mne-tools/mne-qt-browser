@@ -1971,8 +1971,42 @@ class ProjDialog(_BaseDialog):
             chkbx.setChecked(bool(self.mne.projs_on[idx]))
 
 
+rx = QRegularExpression(
+    "([0-9]+([.][0-9]*)?([eE][+-]?[0-9]+)?|[.][0-9]+([eE][+-]?[0-9]+)?)"
+)
+
+
+class TimeScalingDialog(_BaseDialog):
+    """Time scaling dialog."""
+
+    def __init__(self, main, title="Time Scaling Dialog", **kwargs):
+        super().__init__(main, title=title, **kwargs)
+        layout = QFormLayout()
+        layout.addRow(QLabel("Adjust time settings. Availabale after calibration."))
+        # Seconds/page
+        self.page_box = QLineEdit()
+        self.page_box.setValidator(QRegularExpressionValidator(rx, self))
+        layout.addRow(QLabel("Seconds/page:"), self.page_box)
+        # Seconds/mm
+        self.mm_box = QLineEdit()
+        self.mm_box.setValidator(QRegularExpressionValidator(rx, self))
+        layout.addRow(QLabel("Seconds/mm:"), self.mm_box)
+        # mm/seconds
+        self.seconds_box = QLineEdit()
+        self.seconds_box.setValidator(QRegularExpressionValidator(rx, self))
+        layout.addRow(QLabel("mm/seconds:"), self.seconds_box)
+
+        self._update_boxes()
+        self.setLayout(layout)
+        self.show()
+
+    def _update_boxes(self):
+        for box in [self.page_box, self.mm_box, self.seconds_box]:
+            box.setEnabled(self.mne.calibration_mode)
+
+
 class ScalingDialog(_BaseDialog):
-    """Scaling dialog for amplitude and sensitivity"""
+    """Scaling dialog for amplitude and sensitivity."""
 
     def __init__(self, main, title="Scaling Dialog", **kwargs):
         super().__init__(main, title=title, **kwargs)
@@ -1981,9 +2015,6 @@ class ScalingDialog(_BaseDialog):
         self.amplitude_boxes = OrderedDict()
         self.sensitivity_boxes = OrderedDict()
         titles = _handle_default("titles")
-        rx = QRegularExpression(
-            "([0-9]+([.][0-9]*)?([eE][+-]?[0-9]+)?|[.][0-9]+([eE][+-]?[0-9]+)?)"
-        )
         # Titles
         layout.addWidget(QLabel("Titles"), 0, 0)
         layout.addWidget(QLabel("Amplitude"), 0, 1, 1, 2)
@@ -2006,7 +2037,6 @@ class ScalingDialog(_BaseDialog):
             # Sensitivity Box
             sbox = QLineEdit()
             sbox.setValidator(QRegularExpressionValidator(rx, self))
-            sbox.setEnabled(self.mne.calibration_mode)
             sbox.editingFinished.connect(
                 _methpartial(self._sensitivity_edited, ch_type=ch_type)
             )
@@ -2021,9 +2051,6 @@ class ScalingDialog(_BaseDialog):
         self.show()
 
     def _update_boxes(self):
-        print("height ", self.mne.height)
-        print("n_channels ", self.mne.n_channels)
-        print("Scalebar= ", self.mne.height / (self.mne.n_channels + 1))
         for ch_type in [ct for ct in self.mne.ch_types_ordered if ct != "stim"]:
             scaler = 1 if self.mne.butterfly else 2
             inv_norm = (
@@ -3321,6 +3348,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.test_mode = False
         # A Settings-Dialog
         self.mne.fig_settings = None
+        # Time scaling dialog
+        self.mne.time_scaling_fig = None
         # Scaling dialog, with amplitudes and sensitivity
         self.mne.scaling_fig = None
         # Monitor Calibration mode and figure
@@ -3624,6 +3653,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         )
         aincr_time.triggered.connect(_methpartial(self.change_duration, step=0.25))
         self.mne.toolbar.addAction(aincr_time)
+        ascaling_time = QAction(
+            QIcon.fromTheme("settings"), "Time Scaling Dialog", parent=self
+        )
+        ascaling_time.triggered.connect(self._toggle_time_scaling_fig)
+        self.mne.toolbar.addAction(ascaling_time)
+
         self.mne.toolbar.addSeparator()
 
         adecr_nchan = QAction(
@@ -3652,7 +3687,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         )
         aincr_nchan.triggered.connect(_methpartial(self.scale_all, step=5 / 4))
         self.mne.toolbar.addAction(aincr_nchan)
-        ascaling = QAction(QIcon.fromTheme("settings"), "Scaling DIalog", parent=self)
+        ascaling = QAction(QIcon.fromTheme("settings"), "Scaling Dialog", parent=self)
         ascaling.triggered.connect(self._toggle_scaling_fig)
         self.mne.toolbar.addAction(ascaling)
 
@@ -4848,6 +4883,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self._rerun_precompute()
             self._redraw()
 
+    def _toggle_time_scaling_fig(self):
+        if self.mne.time_scaling_fig is None:
+            TimeScalingDialog(self, name="time_scaling_fig")
+        else:
+            self.mne.time_scaling_fig.close()
+            self.mne.time_scaling_fig = None
+
     def _toggle_scaling_fig(self):
         if self.mne.scaling_fig is None:
             ScalingDialog(self, name="scaling_fig")
@@ -4880,7 +4922,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # self.mne.viewbox.setBorder(None)
 
     def _toggle_calibration_mode(self):
-        # Toggle size policy
+        # Toggle window size policy
         if self.mne.calibration_mode:
             self.setFixedSize(self.size())
         else:
