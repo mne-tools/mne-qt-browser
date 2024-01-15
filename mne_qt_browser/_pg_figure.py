@@ -1986,14 +1986,19 @@ class TimeScalingDialog(_BaseDialog):
         # Seconds/page
         self.page_box = QLineEdit()
         self.page_box.setValidator(QRegularExpressionValidator(rx, self))
+        self.page_box.editingFinished.connect(_methpartial(self._edited, box="page"))
         layout.addRow(QLabel("Seconds/page:"), self.page_box)
         # Seconds/mm
         self.seconds_box = QLineEdit()
         self.seconds_box.setValidator(QRegularExpressionValidator(rx, self))
+        self.seconds_box.editingFinished.connect(
+            _methpartial(self._edited, box="seconds")
+        )
         layout.addRow(QLabel("Seconds/mm:"), self.seconds_box)
         # mm/seconds
         self.mm_box = QLineEdit()
         self.mm_box.setValidator(QRegularExpressionValidator(rx, self))
+        self.mm_box.editingFinished.connect(_methpartial(self._edited, box="mm"))
         layout.addRow(QLabel("mm/seconds:"), self.mm_box)
 
         self._update_boxes()
@@ -2001,19 +2006,37 @@ class TimeScalingDialog(_BaseDialog):
         self.show()
 
     def _update_boxes(self):
-        # Set texts
-        for box in [self.page_box, self.mm_box, self.seconds_box]:
+        # Set style
+        for box in [self.mm_box, self.seconds_box]:
             if not self.mne.calibration_mode:
                 box.setStyleSheet("color: red")
                 box.setEnabled(False)
             else:
                 box.setEnabled(True)
                 box.setStyleSheet("color: black")
-        self.page_box.setText(str(_simplify_float(self.mne.duration)))
-        self.seconds_box.setText(
-            str(_simplify_float(self.mne.duration / self.mne.width))
-        )
-        self.mm_box.setText(str(_simplify_float(self.mne.width / self.mne.duration)))
+        # Set texts
+        self.page_box.setText(str(round(self.mne.duration, 3)))
+        self.seconds_box.setText(str(round(self.mne.duration / self.mne.width, 3)))
+        self.mm_box.setText(str(round(self.mne.width / self.mne.duration, 3)))
+
+    def _edited(self, box):
+        """Find the step with wich the duration must be changed."""
+        # Determine the step
+        if box == "page":
+            step = float(self.page_box.text()) / self.mne.duration - 1
+        elif box == "seconds":
+            step = (
+                float(self.seconds_box.text()) * self.mne.width / self.mne.duration - 1
+            )
+        else:
+            step = self.mne.width / (self.mne.duration * float(self.mm_box.text())) - 1
+        # Perform the change in duration and update boxes
+        self.weakmain().change_duration(step=step)
+
+    def closeEvent(self, event):
+        for box in [self.page_box, self.seconds_box, self.mm_box]:
+            _disconnect(box.editingFinished)
+        super().closeEvent(event)
 
 
 class ScalingDialog(_BaseDialog):
@@ -4189,6 +4212,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.ax_hscroll.update_duration()
         self.mne.plt.setXRange(xmin, xmax, padding=0)
 
+        # Update the boxes of Time scaling dialog, if it is open
+        if self.mne.time_scaling_fig is not None:
+            self.mne.time_scaling_fig._update_boxes()
+
     def change_nchan(self, checked=False, *, step):
         """Change number of channels by step."""
         if not self.mne.butterfly:
@@ -4946,6 +4973,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Update Scaling dialog boxes, if it is open
         if self.mne.scaling_fig is not None:
             self.mne.scaling_fig._update_boxes()
+
+        # Update Time Scaling dialog boxes, if it is open
+        if self.mne.time_scaling_fig is not None:
+            self.mne.time_scaling_fig._update_boxes()
 
         # Toggle Scalebar Texts
         for scalebar_text in self.mne.scalebar_texts.values():
