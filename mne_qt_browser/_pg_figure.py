@@ -1988,21 +1988,32 @@ class TimeScalingDialog(_BaseDialog):
         self.page_box.setValidator(QRegularExpressionValidator(rx, self))
         layout.addRow(QLabel("Seconds/page:"), self.page_box)
         # Seconds/mm
-        self.mm_box = QLineEdit()
-        self.mm_box.setValidator(QRegularExpressionValidator(rx, self))
-        layout.addRow(QLabel("Seconds/mm:"), self.mm_box)
-        # mm/seconds
         self.seconds_box = QLineEdit()
         self.seconds_box.setValidator(QRegularExpressionValidator(rx, self))
-        layout.addRow(QLabel("mm/seconds:"), self.seconds_box)
+        layout.addRow(QLabel("Seconds/mm:"), self.seconds_box)
+        # mm/seconds
+        self.mm_box = QLineEdit()
+        self.mm_box.setValidator(QRegularExpressionValidator(rx, self))
+        layout.addRow(QLabel("mm/seconds:"), self.mm_box)
 
         self._update_boxes()
         self.setLayout(layout)
         self.show()
 
     def _update_boxes(self):
+        # Set texts
         for box in [self.page_box, self.mm_box, self.seconds_box]:
-            box.setEnabled(self.mne.calibration_mode)
+            if not self.mne.calibration_mode:
+                box.setStyleSheet("color: red")
+                box.setEnabled(False)
+            else:
+                box.setEnabled(True)
+                box.setStyleSheet("color: black")
+        self.page_box.setText(str(_simplify_float(self.mne.duration)))
+        self.seconds_box.setText(
+            str(_simplify_float(self.mne.duration / self.mne.width))
+        )
+        self.mm_box.setText(str(_simplify_float(self.mne.width / self.mne.duration)))
 
 
 class ScalingDialog(_BaseDialog):
@@ -4925,9 +4936,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Toggle window size policy
         if self.mne.calibration_mode:
             self.setFixedSize(self.size())
+            # self.widget.setFixedSize(self.widget.size())
         else:
             self.setMaximumSize(100000, 100000)
             self.setMinimumSize(0, 0)
+            # self.widget.setMaximumSize(100000, 100000)
+            # self.widget.setMinimumSize(0, 0)
 
         # Update Scaling dialog boxes, if it is open
         if self.mne.scaling_fig is not None:
