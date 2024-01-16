@@ -5,9 +5,9 @@
 # License: BSD-3-Clause
 
 import os
-import pytest
 
-from mne.conftest import raw_orig, pg_backend, garbage_collect  # noqa: F401
+import pytest
+from mne.conftest import garbage_collect, pg_backend, raw_orig  # noqa: F401
 
 _store = {"Raw": {}, "Epochs_unicolor": {}, "Epochs_multicolor": {}}
 

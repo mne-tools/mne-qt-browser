@@ -10,16 +10,16 @@ import functools
 import gc
 import inspect
 import math
+import os
 import platform
 import sys
 import weakref
-from pathlib import Path
 from ast import literal_eval
 from collections import OrderedDict
 from copy import copy
 from functools import partial
-import os
 from os.path import getsize
+from pathlib import Path
 
 import numpy as np
 
@@ -33,76 +33,23 @@ except Exception as exc:
     else:
         raise
 
-from qtpy.QtCore import (
-    QEvent,
-    QThread,
-    Signal,
-    QRectF,
-    QLineF,
-    QPointF,
-    QPoint,
-    QSettings,
-    QSignalBlocker,
-)
-from qtpy.QtGui import (
-    QFont,
-    QIcon,
-    QPixmap,
-    QTransform,
-    QGuiApplication,
-    QMouseEvent,
-    QImage,
-    QPainter,
-    QPainterPath,
-    QColor,
-)
-from qtpy.QtTest import QTest
-from qtpy.QtWidgets import (
-    QAction,
-    QColorDialog,
-    QComboBox,
-    QDialog,
-    QDockWidget,
-    QDoubleSpinBox,
-    QFormLayout,
-    QGridLayout,
-    QHBoxLayout,
-    QInputDialog,
-    QLabel,
-    QMainWindow,
-    QMessageBox,
-    QToolButton,
-    QPushButton,
-    QScrollBar,
-    QWidget,
-    QMenu,
-    QStyleOptionSlider,
-    QStyle,
-    QActionGroup,
-    QApplication,
-    QGraphicsView,
-    QProgressBar,
-    QVBoxLayout,
-    QLineEdit,
-    QCheckBox,
-    QScrollArea,
-    QGraphicsLineItem,
-    QGraphicsScene,
-    QTextEdit,
-    QSizePolicy,
-    QSpinBox,
-    QSlider,
-    QWidgetAction,
-    QRadioButton,
-)
+import scooby
+from colorspacious import cspace_convert
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.colors import to_rgba_array
+from mne import channel_indices_by_type
+from mne.annotations import _sync_onset
+from mne.io.pick import _DATA_CH_TYPES_ORDER_DEFAULT, _DATA_CH_TYPES_SPLIT
+from mne.utils import _check_option, _to_rgb, get_config, logger, sizeof_fmt, warn
+from mne.viz import plot_sensors
+from mne.viz._figure import BrowserBase
+from mne.viz.utils import _figure_agg, _merge_annotations, _simplify_float
 from pyqtgraph import (
     AxisItem,
     FillBetweenItem,
     GraphicsView,
-    InfLineLabel,
     InfiniteLine,
+    InfLineLabel,
     LinearRegionItem,
     PlotCurveItem,
     PlotItem,
@@ -110,24 +57,76 @@ from pyqtgraph import (
     TextItem,
     ViewBox,
     mkBrush,
+    mkColor,
     mkPen,
     setConfigOption,
-    mkColor,
+)
+from qtpy.QtCore import (
+    QEvent,
+    QLineF,
+    QPoint,
+    QPointF,
+    QRectF,
+    QSettings,
+    QSignalBlocker,
+    QThread,
+    Signal,
+)
+from qtpy.QtGui import (
+    QColor,
+    QFont,
+    QGuiApplication,
+    QIcon,
+    QImage,
+    QMouseEvent,
+    QPainter,
+    QPainterPath,
+    QPixmap,
+    QTransform,
+)
+from qtpy.QtTest import QTest
+from qtpy.QtWidgets import (
+    QAction,
+    QActionGroup,
+    QApplication,
+    QCheckBox,
+    QColorDialog,
+    QComboBox,
+    QDialog,
+    QDockWidget,
+    QDoubleSpinBox,
+    QFormLayout,
+    QGraphicsLineItem,
+    QGraphicsScene,
+    QGraphicsView,
+    QGridLayout,
+    QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QLineEdit,
+    QMainWindow,
+    QMenu,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QRadioButton,
+    QScrollArea,
+    QScrollBar,
+    QSizePolicy,
+    QSlider,
+    QSpinBox,
+    QStyle,
+    QStyleOptionSlider,
+    QTextEdit,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+    QWidgetAction,
 )
 from scipy.stats import zscore
-from colorspacious import cspace_convert
-
-import scooby
-from mne import channel_indices_by_type
-from mne.viz import plot_sensors
-from mne.viz._figure import BrowserBase
-from mne.viz.utils import _simplify_float, _merge_annotations, _figure_agg
-from mne.annotations import _sync_onset
-from mne.io.pick import _DATA_CH_TYPES_ORDER_DEFAULT, _DATA_CH_TYPES_SPLIT
-from mne.utils import _to_rgb, logger, sizeof_fmt, warn, get_config, _check_option
 
 from . import _browser_instances
-from ._fixes import capture_exceptions, _qt_raise_window, _init_mne_qtapp
+from ._fixes import _init_mne_qtapp, _qt_raise_window, capture_exceptions
 
 name = "pyqtgraph"
 
@@ -372,12 +371,12 @@ class DataTrace(PlotCurveItem):
 
     @propagate_to_children
     def update_range_idx(self):  # noqa: D401
-        """Should be updated when view-range or ch_idx changes."""
+        """Update when view-range or ch_idx changes."""
         self.range_idx = np.argwhere(self.mne.picks == self.ch_idx)[0][0]
 
     @propagate_to_children
     def update_ypos(self):  # noqa: D401
-        """Should be updated when butterfly is toggled or ch_idx changes."""
+        """Update when butterfly is toggled or ch_idx changes."""
         if self.mne.butterfly and self.mne.fig_selection is not None:
             self.ypos = self.mne.selection_ypos_dict[self.ch_idx]
         elif self.mne.fig_selection is not None and self.mne.old_selection == "Custom":
