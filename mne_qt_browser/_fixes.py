@@ -5,9 +5,9 @@
 #
 # License: BSD-3-Clause
 
-from contextlib import contextmanager
 import platform
 import sys
+from contextlib import contextmanager
 
 from mne.utils import logger
 
@@ -51,8 +51,8 @@ except ImportError:
         app: ``qtpy.QtWidgets.QApplication``
             Instance of QApplication.
         """
-        from qtpy.QtWidgets import QApplication
         from qtpy.QtGui import QIcon
+        from qtpy.QtWidgets import QApplication
 
         app_name = "MNE-Python"
         organization_name = "MNE"

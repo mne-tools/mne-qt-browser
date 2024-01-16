@@ -5,10 +5,9 @@
 
 import numpy as np
 import pytest
-from qtpy.QtTest import QTest
 from mne import Annotations
 from pyqtgraph.graphicsItems.FillBetweenItem import FillBetweenItem
-
+from qtpy.QtTest import QTest
 
 LESS_TIME = "Show fewer time points"
 MORE_TIME = "Show more time points"
@@ -266,6 +265,7 @@ def test_pg_help_dialog(raw_orig, pg_backend):
 
 
 def test_pg_toolbar_time_plus_minus(raw_orig, pg_backend):
+    """Test time controls."""
     fig = raw_orig.plot()
     fig.test_mode = True
     QTest.qWaitForWindowExposed(fig)
@@ -319,6 +319,7 @@ def test_pg_toolbar_time_plus_minus(raw_orig, pg_backend):
 
 
 def test_pg_toolbar_channels_plus_minus(raw_orig, pg_backend):
+    """Test channel controls."""
     fig = raw_orig.plot()
     fig.test_mode = True
     QTest.qWaitForWindowExposed(fig)
@@ -365,6 +366,7 @@ def test_pg_toolbar_channels_plus_minus(raw_orig, pg_backend):
 
 
 def test_pg_toolbar_zoom(raw_orig, pg_backend):
+    """Test zoom."""
     fig = raw_orig.plot()
     fig.test_mode = True
     QTest.qWaitForWindowExposed(fig)
@@ -392,6 +394,7 @@ def test_pg_toolbar_zoom(raw_orig, pg_backend):
 
 
 def test_pg_toolbar_annotations(raw_orig, pg_backend):
+    """Test annotations mode."""
     fig = raw_orig.plot()
     fig.test_mode = True
     QTest.qWaitForWindowExposed(fig)
@@ -410,8 +413,10 @@ def test_pg_toolbar_annotations(raw_orig, pg_backend):
 
 def test_pg_toolbar_actions(raw_orig, pg_backend):
     """Test toolbar all actions combined.
+
     Toolbar actions here create a separate QDialog window.
-    We test the state machine for each window toggle button."""
+    We test the state machine for each window toggle button.
+    """
     fig = raw_orig.plot()
     fig.test_mode = True
     QTest.qWaitForWindowExposed(fig)

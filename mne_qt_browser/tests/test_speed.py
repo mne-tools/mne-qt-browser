@@ -8,13 +8,13 @@ import sys
 from copy import copy
 from time import perf_counter
 
+import mne
 import numpy as np
 import pytest
 from qtpy.QtCore import QTimer
 
-import mne
-from mne_qt_browser.figure import MNEQtBrowser
 from mne_qt_browser._pg_figure import _methpartial
+from mne_qt_browser.figure import MNEQtBrowser
 
 try:
     import OpenGL  # noqa
@@ -146,6 +146,7 @@ def test_scroll_speed_raw(raw_orig, benchmark_param, store, pg_backend, request,
 def test_scroll_speed_epochs_unicolor(
     raw_orig, benchmark_param, store, pg_backend, request, qapp
 ):
+    """Test scrolling speed."""
     events = np.full((50, 3), [0, 0, 1])
     events[:, 0] = np.arange(0, len(raw_orig), len(raw_orig) / 50) + raw_orig.first_samp
     epochs = mne.Epochs(raw_orig, events, preload=True)
@@ -174,6 +175,7 @@ def test_scroll_speed_epochs_unicolor(
 def test_scroll_speed_epochs_multicolor(
     raw_orig, benchmark_param, store, pg_backend, request, qapp
 ):
+    """Test scrolling speed in multicolor mode."""
     events = np.full((50, 3), [0, 0, 1])
     events[:, 0] = np.arange(0, len(raw_orig), len(raw_orig) / 50) + raw_orig.first_samp
     epochs = mne.Epochs(raw_orig, events, preload=True)
