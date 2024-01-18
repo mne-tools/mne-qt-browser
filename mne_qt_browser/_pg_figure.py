@@ -2022,12 +2022,15 @@ class TimeScalingDialog(_BaseDialog):
     def _edited(self, box):
         """Find the step with wich the duration must be changed."""
         # Determine the step
+        # Seconds per page
         if box == "page":
             step = float(self.page_box.text()) / self.mne.duration - 1
+        # Seconds per mm
         elif box == "seconds":
             step = (
                 float(self.seconds_box.text()) * self.mne.width / self.mne.duration - 1
             )
+        # MM per seconds
         else:
             step = self.mne.width / (self.mne.duration * float(self.mm_box.text())) - 1
         # Perform the change in duration and update boxes
@@ -4238,6 +4241,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.ax_vscroll.update_nchan()
             self.mne.plt.setYRange(ymin, ymax, padding=0)
 
+            # Update Scaling dialog boxes, if it is open
+            if self.mne.scaling_fig is not None:
+                self.mne.scaling_fig._update_boxes()
+
     def _remove_vline(self):
         if self.mne.vline is not None:
             if self.mne.is_epochs:
@@ -4963,12 +4970,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Toggle window size policy
         if self.mne.calibration_mode:
             self.setFixedSize(self.size())
-            # self.widget.setFixedSize(self.widget.size())
+            self.mne.view.setFixedSize(self.mne.view.size())
         else:
             self.setMaximumSize(100000, 100000)
             self.setMinimumSize(0, 0)
-            # self.widget.setMaximumSize(100000, 100000)
-            # self.widget.setMinimumSize(0, 0)
+            self.mne.view.setMaximumSize(100000, 100000)
+            self.mne.view.setMinimumSize(0, 0)
 
         # Update Scaling dialog boxes, if it is open
         if self.mne.scaling_fig is not None:
