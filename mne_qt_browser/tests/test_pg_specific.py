@@ -373,19 +373,21 @@ def test_pg_toolbar_zoom(raw_orig, pg_backend):
     assert pg_backend._get_n_figs() == 1
 
     step = 4 / 5
-    scale_factor = fig.mne.scale_factor
+    scale_factors = fig.mne.scale_factors.copy()
     fig._fake_click_on_toolbar_action(REDUCE_AMPLITUDE, wait_after=100)
-    scale_factor_new = fig.mne.scale_factor
-    assert scale_factor_new == scale_factor * step
+    scale_factors_new = fig.mne.scale_factors
+    for i in scale_factors:
+        assert scale_factors_new[i] == scale_factors[i] * step
 
     for _ in range(6):
         fig._fake_click_on_toolbar_action(REDUCE_AMPLITUDE, wait_after=100)
 
     step = 5 / 4
-    scale_factor = fig.mne.scale_factor
+    scale_factors = fig.mne.scale_factors.copy()
     fig._fake_click_on_toolbar_action(INCREASE_AMPLITUDE, wait_after=100)
-    scale_factor_new = fig.mne.scale_factor
-    assert scale_factor_new == scale_factor * step
+    scale_factors_new = fig.mne.scale_factors
+    for i in scale_factors:
+        assert scale_factors_new[i] == scale_factors[i] * step
 
     for _ in range(6):
         fig._fake_click_on_toolbar_action(INCREASE_AMPLITUDE, wait_after=100)

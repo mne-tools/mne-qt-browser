@@ -39,6 +39,7 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.colors import to_rgba_array
 from mne import channel_indices_by_type
 from mne.annotations import _sync_onset
+from mne.defaults import _handle_default
 from mne.io.pick import _DATA_CH_TYPES_ORDER_DEFAULT, _DATA_CH_TYPES_SPLIT
 from mne.utils import _check_option, _to_rgb, get_config, logger, sizeof_fmt, warn
 from mne.viz import plot_sensors
@@ -67,6 +68,7 @@ from qtpy.QtCore import (
     QPoint,
     QPointF,
     QRectF,
+    QRegularExpression,
     QSettings,
     QSignalBlocker,
     QThread,
@@ -82,6 +84,7 @@ from qtpy.QtGui import (
     QPainter,
     QPainterPath,
     QPixmap,
+    QRegularExpressionValidator,
     QTransform,
 )
 from qtpy.QtTest import QTest
@@ -389,7 +392,7 @@ class DataTrace(PlotCurveItem):
     @propagate_to_children
     def update_scale(self):  # noqa: D102
         transform = QTransform()
-        transform.scale(1.0, self.mne.scale_factor)
+        transform.scale(1.0, self.mne.scale_factors[self.ch_type])
         self.setTransform(transform)
 
         if self.mne.clipping is not None:
@@ -1631,11 +1634,21 @@ class ScaleBarText(BaseScaleBar, TextItem):  # noqa: D101
         scaler = 1 if self.mne.butterfly else 2
         inv_norm = (
             scaler
-            * self.mne.scalings[self.ch_type]
-            * self.mne.unit_scalings[self.ch_type]
-            / self.mne.scale_factor
+            * self.mne.norms_dict[self.ch_type]
+            / self.mne.scale_factors[self.ch_type]
         )
-        self.setText(f"{_simplify_float(inv_norm)} " f"{self.mne.units[self.ch_type]}")
+        if self.mne.calibration_mode:
+            sens_norm = inv_norm * (self.mne.n_channels + 1) / self.mne.height
+            self.setText(
+                f"{_simplify_float(inv_norm)} "
+                f"{self.mne.units[self.ch_type]}\n"
+                f"{_simplify_float(sens_norm)} "
+                f"[{self.mne.units[self.ch_type]}]/mm"
+            )
+        else:
+            self.setText(
+                f"{_simplify_float(inv_norm)} " f"{self.mne.units[self.ch_type]}"
+            )
 
     def _set_position(self, x, y):
         self.setPos(x, y)
@@ -1957,6 +1970,251 @@ class ProjDialog(_BaseDialog):
             chkbx.setChecked(bool(self.mne.projs_on[idx]))
 
 
+rx = QRegularExpression(
+    "([0-9]+([.][0-9]*)?([eE][+-]?[0-9]+)?|[.][0-9]+([eE][+-]?[0-9]+)?)"
+)
+
+
+class TimeScalingDialog(_BaseDialog):
+    """Time scaling dialog."""
+
+    def __init__(self, main, title="Time Scaling Dialog", **kwargs):
+        super().__init__(main, title=title, **kwargs)
+        layout = QFormLayout()
+        layout.addRow(QLabel("Adjust time settings. Availabale after calibration."))
+        # Seconds/page
+        self.page_box = QLineEdit()
+        self.page_box.setValidator(QRegularExpressionValidator(rx, self))
+        self.page_box.editingFinished.connect(_methpartial(self._edited, box="page"))
+        layout.addRow(QLabel("Seconds/page:"), self.page_box)
+        # Seconds/mm
+        self.seconds_box = QLineEdit()
+        self.seconds_box.setValidator(QRegularExpressionValidator(rx, self))
+        self.seconds_box.editingFinished.connect(
+            _methpartial(self._edited, box="seconds")
+        )
+        layout.addRow(QLabel("Seconds/mm:"), self.seconds_box)
+        # mm/seconds
+        self.mm_box = QLineEdit()
+        self.mm_box.setValidator(QRegularExpressionValidator(rx, self))
+        self.mm_box.editingFinished.connect(_methpartial(self._edited, box="mm"))
+        layout.addRow(QLabel("mm/seconds:"), self.mm_box)
+
+        self._update_boxes()
+        self.setLayout(layout)
+        self.show()
+
+    def _update_boxes(self):
+        # Set style
+        for box in [self.mm_box, self.seconds_box]:
+            if not self.mne.calibration_mode:
+                box.setStyleSheet("color: red")
+                box.setEnabled(False)
+            else:
+                box.setEnabled(True)
+                box.setStyleSheet("color: black")
+        # Set texts
+        self.page_box.setText(str(round(self.mne.duration, 3)))
+        self.seconds_box.setText(str(round(self.mne.duration / self.mne.width, 3)))
+        self.mm_box.setText(str(round(self.mne.width / self.mne.duration, 3)))
+
+    def _edited(self, box):
+        """Find the step with wich the duration must be changed."""
+        # Determine the step
+        # Seconds per page
+        if box == "page":
+            step = float(self.page_box.text()) / self.mne.duration - 1
+        # Seconds per mm
+        elif box == "seconds":
+            step = (
+                float(self.seconds_box.text()) * self.mne.width / self.mne.duration - 1
+            )
+        # MM per seconds
+        else:
+            step = self.mne.width / (self.mne.duration * float(self.mm_box.text())) - 1
+        # Perform the change in duration and update boxes
+        self.weakmain().change_duration(step=step)
+
+    def closeEvent(self, event):
+        for box in [self.page_box, self.seconds_box, self.mm_box]:
+            _disconnect(box.editingFinished)
+        super().closeEvent(event)
+
+
+class ScalingDialog(_BaseDialog):
+    """Scaling dialog for amplitude and sensitivity."""
+
+    def __init__(self, main, title="Scaling Dialog", **kwargs):
+        super().__init__(main, title=title, **kwargs)
+        layout = QGridLayout()
+        # Initialize
+        self.amplitude_boxes = OrderedDict()
+        self.sensitivity_boxes = OrderedDict()
+        titles = _handle_default("titles")
+        # Titles
+        layout.addWidget(QLabel("Titles"), 0, 0)
+        layout.addWidget(QLabel("Amplitude"), 0, 1, 1, 2)
+        slbl = QLabel("Sensitivity")
+        slbl.setEnabled(self.mne.calibration_mode)
+        layout.addWidget(slbl, 0, 3, 1, 2)
+        # Boxes
+        row = 1
+        for ch_type in [ct for ct in self.mne.ch_types_ordered if ct != "stim"]:
+            layout.addWidget(QLabel(titles.get(ch_type, ch_type.upper())), row, 0)
+            # Amplitude Box
+            abox = QLineEdit()
+            abox.setValidator(QRegularExpressionValidator(rx, self))
+            abox.editingFinished.connect(
+                _methpartial(self._amplitude_edited, ch_type=ch_type)
+            )
+            self.amplitude_boxes[ch_type] = abox
+            layout.addWidget(abox, row, 1)
+            layout.addWidget(QLabel(self.mne.units[ch_type]), row, 2)
+            # Sensitivity Box
+            sbox = QLineEdit()
+            sbox.setValidator(QRegularExpressionValidator(rx, self))
+            sbox.editingFinished.connect(
+                _methpartial(self._sensitivity_edited, ch_type=ch_type)
+            )
+            self.sensitivity_boxes[ch_type] = sbox
+            layout.addWidget(sbox, row, 3)
+            layout.addWidget(QLabel("[" + self.mne.units[ch_type] + "]/mm"), row, 4)
+
+            row += 1
+        self._update_boxes()
+
+        self.setLayout(layout)
+        self.show()
+
+    def _update_boxes(self):
+        for ch_type in [ct for ct in self.mne.ch_types_ordered if ct != "stim"]:
+            scaler = 1 if self.mne.butterfly else 2
+            inv_norm = (
+                scaler * self.mne.norms_dict[ch_type] / self.mne.scale_factors[ch_type]
+            )
+            self.amplitude_boxes[ch_type].setText(str(round(inv_norm, 2)))
+            sens_inv_norm = inv_norm * (self.mne.n_channels + 1) / self.mne.height
+            self.sensitivity_boxes[ch_type].setText(str(round(sens_inv_norm, 2)))
+            self.sensitivity_boxes[ch_type].setEnabled(self.mne.calibration_mode)
+
+    def _amplitude_edited(self, ch_type):
+        """Determine the new scale factor and scale accordingly."""
+        new_value = float(self.amplitude_boxes[ch_type].text())
+        if new_value != 0:
+            scaler = 1 if self.mne.butterfly else 2
+            self.mne.scale_factors[ch_type] = (
+                scaler * self.mne.norms_dict[ch_type] / new_value
+            )
+
+            # Reapply clipping if necessary
+            if self.mne.clipping is not None:
+                self.weakmain()._update_data()
+
+            # Scale Traces (by scaling the Item, not the data)
+            for line in [line for line in self.mne.traces if line.ch_type == ch_type]:
+                line.update_scale()
+
+            # Update Scalebars
+            self.weakmain()._update_scalebar_values()
+
+            # Update the corresponding sensitivity box
+            sensitivity = new_value * (self.mne.n_channels + 1) / self.mne.height
+            self.sensitivity_boxes[ch_type].setText(str(round(sensitivity, 2)))
+
+    def _sensitivity_edited(self, ch_type):
+        """Determine the new scale factor and scale accordingly."""
+        new_value = float(self.sensitivity_boxes[ch_type].text())
+        if new_value != 0:
+            scaler = 1 if self.mne.butterfly else 2
+            self.mne.scale_factors[ch_type] = (
+                scaler
+                * self.mne.norms_dict[ch_type]
+                * (self.mne.n_channels + 1)
+                / (new_value * self.mne.height)
+            )
+
+            # Reapply clipping if necessary
+            if self.mne.clipping is not None:
+                self.weakmain()._update_data()
+
+            # Scale Traces (by scaling the Item, not the data)
+            for line in [line for line in self.mne.traces if line.ch_type == ch_type]:
+                line.update_scale()
+
+            # Update Scalebars
+            self.weakmain()._update_scalebar_values()
+
+            # Update the corresponding ampplitude box
+            amplitude = new_value * self.mne.height / (self.mne.n_channels + 1)
+            self.amplitude_boxes[ch_type].setText(str(round(amplitude, 2)))
+
+    def closeEvent(self, event):
+        for box in self.amplitude_boxes.values():
+            _disconnect(box.editingFinished)
+        for box in self.sensitivity_boxes.values():
+            _disconnect(box.editingFinished)
+        super().closeEvent(event)
+
+
+class Spinbox(QSpinBox):
+    """Custom QSpinBox Widget."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.setMinimum(10)
+        self.setMaximum(10000)
+        self.setSuffix("mm")
+
+
+class CalibrationDialog(_BaseDialog):
+    """Monitor Calibration."""
+
+    def __init__(self, main, title="Monitor Calibration", **kwargs):
+        super().__init__(main, title=title, **kwargs)
+        layout = QFormLayout()
+        layout.addRow(
+            QLabel(
+                "Measure the black area of the plot and enter your measurements below:"
+            )
+        )
+
+        self.height_box = Spinbox()
+        self.height_box.setValue(self.mne.height)
+        layout.addRow(QLabel("Enter the height of the black area:"), self.height_box)
+        self.width_box = Spinbox()
+        self.width_box.setValue(self.mne.width)
+        layout.addRow(QLabel("Enter the width of the black area:"), self.width_box)
+
+        btns = QHBoxLayout()
+        self.enable_btn = QPushButton("Enable")
+        self.enable_btn.clicked.connect(self._enable_mode)
+        btns.addWidget(self.enable_btn)
+        self.disable_btn = QPushButton("Disable")
+        self.disable_btn.clicked.connect(self._disable_mode)
+        btns.addWidget(self.disable_btn)
+        layout.addRow(btns)
+
+        self.setLayout(layout)
+        self.show()
+
+    def _enable_mode(self):
+        self.mne.calibration_mode = True
+        self.mne.height = self.height_box.value()
+        self.mne.width = self.width_box.value()
+        self.weakmain()._toggle_calibration_mode()
+        # self.weakmain()._toggle_calibration_fig()
+
+    def _disable_mode(self):
+        self.mne.calibration_mode = False
+        self.weakmain()._toggle_calibration_mode()
+
+    def closeEvent(self, event):
+        _disconnect(self.enable_btn.clicked)
+        _disconnect(self.disable_btn.clicked)
+        self.mne.viewbox.setBackgroundColor("#FFF")
+        super().closeEvent(event)
+
+
 class _ChannelFig(FigureCanvasQTAgg):
     def __init__(self, figure, mne):
         self.figure = figure
@@ -2078,6 +2336,9 @@ class SelectionDialog(_BaseDialog):  # noqa: D101
         self.mne.old_selection = label
         self.mne.picks = np.asarray(self.mne.ch_selections[label])
         self.mne.n_channels = len(self.mne.picks)
+        # If Scaling Dialog is open, update the boxes
+        if self.mne.scaling_fig is not None:
+            self.mne.scaling_fig._update_boxes()
         # Update highlighted sensors
         self._update_highlighted_sensors()
         # if "Vertex" is defined, some channels appear twice, so if
@@ -3123,6 +3384,14 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.test_mode = False
         # A Settings-Dialog
         self.mne.fig_settings = None
+        # Time scaling dialog
+        self.mne.time_scaling_fig = None
+        # Scaling dialog, with amplitudes and sensitivity
+        self.mne.scaling_fig = None
+        # Monitor Calibration mode and figure
+        self.mne.calibration_mode = False
+        self.mne.calibration_fig = None
+        self.mne.calibration_help_fig = None
         # Stores decimated data
         self.mne.decim_data = None
         # Stores ypos for selection-mode
@@ -3134,8 +3403,22 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.zscore_rgba = None
         # Container for traces
         self.mne.traces = list()
-        # Scale-Factor
-        self.mne.scale_factor = 1
+        # Ordered channel types list, used in multiple instances
+        self.mne.ordered_types = self.mne.ch_types[self.mne.ch_order]
+        unique_type_idxs = np.unique(self.mne.ordered_types, return_index=True)[1]
+        self.mne.ch_types_ordered = [
+            self.mne.ordered_types[idx] for idx in sorted(unique_type_idxs)
+        ]
+        # Scale factors dictionary
+        self.mne.scale_factors = dict()
+        # Inverted norms dictionary
+        self.mne.norms_dict = dict()
+        for ct in self.mne.ch_types_ordered:
+            self.mne.scale_factors[ct] = 1
+            if ct != "stim":
+                self.mne.norms_dict[ct] = (
+                    self.mne.scalings[ct] * self.mne.unit_scalings[ct]
+                )
         # Stores channel-types for butterfly-mode
         self.mne.butterfly_type_order = [
             tp for tp in DATA_CH_TYPES_ORDER if tp in self.mne.ch_types
@@ -3209,7 +3492,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.load_thread = LoadThread(self)
 
         # Create centralWidget and layout
-        widget = QWidget()
+        self.widget = QWidget()
         layout = QGridLayout()
 
         # Initialize Axis-Items
@@ -3347,6 +3630,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.view.setBackground(_get_color(bgcolor, self.mne.dark))
         layout.addWidget(self.mne.view, 0, 0)
 
+        # Set inital height and width of plot, for sensitivity
+        self.mne.height = int(self.mne.viewbox.height())
+        self.mne.width = int(self.mne.viewbox.width())
+
         # Initialize Scroll-Bars
         self.mne.ax_hscroll = TimeScrollBar(self.mne)
         layout.addWidget(self.mne.ax_hscroll, 1, 0, 1, 2)
@@ -3373,8 +3660,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.overview_bar = OverviewBar(self)
         layout.addWidget(self.mne.overview_bar, 2, 0, 1, 2)
 
-        widget.setLayout(layout)
-        self.setCentralWidget(widget)
+        self.widget.setLayout(layout)
+        self.setCentralWidget(self.widget)
 
         # Initialize Selection-Dialog
         if getattr(self.mne, "group_by", None) in ["position", "selection"]:
@@ -3402,6 +3689,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         )
         aincr_time.triggered.connect(_methpartial(self.change_duration, step=0.25))
         self.mne.toolbar.addAction(aincr_time)
+        ascaling_time = QAction(
+            QIcon.fromTheme("settings"), "Time Scaling Dialog", parent=self
+        )
+        ascaling_time.triggered.connect(self._toggle_time_scaling_fig)
+        self.mne.toolbar.addAction(ascaling_time)
+
         self.mne.toolbar.addSeparator()
 
         adecr_nchan = QAction(
@@ -3430,6 +3723,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         )
         aincr_nchan.triggered.connect(_methpartial(self.scale_all, step=5 / 4))
         self.mne.toolbar.addAction(aincr_nchan)
+        ascaling = QAction(QIcon.fromTheme("settings"), "Scaling Dialog", parent=self)
+        ascaling.triggered.connect(self._toggle_scaling_fig)
+        self.mne.toolbar.addAction(ascaling)
+
         self.mne.toolbar.addSeparator()
 
         if not self.mne.is_epochs:
@@ -3505,6 +3802,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         ahelp = QAction(QIcon.fromTheme("help"), "Help", parent=self)
         ahelp.triggered.connect(self._toggle_help_fig)
         self.mne.toolbar.addAction(ahelp)
+
+        acalibration = QAction(
+            QIcon.fromTheme("settings"), "Monitor Calibration", parent=self
+        )
+        acalibration.triggered.connect(self._toggle_calibration_fig)
+        self.mne.toolbar.addAction(acalibration)
 
         # Set Start-Range (after all necessary elements are initialized)
         self.mne.plt.setXRange(
@@ -3734,12 +4037,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         """
         self.mne.scalebars.clear()
         # To keep order (np.unique sorts)
-        ordered_types = self.mne.ch_types[self.mne.ch_order]
-        unique_type_idxs = np.unique(ordered_types, return_index=True)[1]
-        ch_types_ordered = [ordered_types[idx] for idx in sorted(unique_type_idxs)]
         for ch_type in [
             ct
-            for ct in ch_types_ordered
+            for ct in self.mne.ch_types_ordered
             if ct != "stim"
             and ct in self.mne.scalings
             and ct in getattr(self.mne, "units", {})
@@ -3800,7 +4100,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def scale_all(self, checked=False, *, step):
         """Scale all traces by multiplying with step."""
-        self.mne.scale_factor *= step
+        for ct in self.mne.scale_factors:
+            self.mne.scale_factors[ct] *= step
 
         # Reapply clipping if necessary
         if self.mne.clipping is not None:
@@ -3812,6 +4113,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Update Scalebars
         self._update_scalebar_values()
+
+        # If Scaling Dialog is open, update the boxes
+        if self.mne.scaling_fig is not None:
+            self.mne.scaling_fig._update_boxes()
 
     def hscroll(self, step):
         """Scroll horizontally by step."""
@@ -3909,6 +4214,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.ax_hscroll.update_duration()
         self.mne.plt.setXRange(xmin, xmax, padding=0)
 
+        # Update the boxes of Time scaling dialog, if it is open
+        if self.mne.time_scaling_fig is not None:
+            self.mne.time_scaling_fig._update_boxes()
+
     def change_nchan(self, checked=False, *, step):
         """Change number of channels by step."""
         if not self.mne.butterfly:
@@ -3930,6 +4239,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
             self.mne.ax_vscroll.update_nchan()
             self.mne.plt.setYRange(ymin, ymax, padding=0)
+
+            # Update Scaling dialog boxes, if it is open
+            if self.mne.scaling_fig is not None:
+                self.mne.scaling_fig._update_boxes()
 
     def _remove_vline(self):
         if self.mne.vline is not None:
@@ -4030,9 +4343,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                         scaler = -1 if self.mne.butterfly else -2
                         inv_norm = (
                             scaler
-                            * self.mne.scalings[trace.ch_type]
-                            * self.mne.unit_scalings[trace.ch_type]
-                            / self.mne.scale_factor
+                            * self.mne.norms_dict[trace.ch_type]
+                            / self.mne.scale_factors[trace.ch_type]
                         )
                         label = (
                             f"{_simplify_float(yvalue * inv_norm)} "
@@ -4100,6 +4412,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                     round(yrange[0]), 0, len(self.mne.ch_order) - self.mne.n_channels
                 )
                 self.mne.n_channels = round(yrange[1] - yrange[0] - 1)
+                # If Scaling Dialog is open, update the boxes
+                if self.mne.scaling_fig is not None:
+                    self.mne.scaling_fig._update_boxes()
                 self._update_picks()
                 # Update Channel-Bar
                 self.mne.ax_vscroll.update_value(self.mne.ch_start)
@@ -4144,6 +4459,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             trace.set_ch_idx(ch_idx)
             trace.update_color()
             trace.update_data()
+            trace.update_scale()
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     # DATA HANDLING
@@ -4352,8 +4668,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.data = np.clip(self.mne.data, -0.5, 0.5)
         elif self.mne.clipping is not None:
             self.mne.data = self.mne.data.copy()
+            factors_ordered = np.atleast_2d(np.empty(np.shape(self.mne.data)[0])).T
+            for i in range(np.shape(self.mne.data)[0]):
+                factors_ordered[i] = self.mne.scale_factors[self.mne.ordered_types[i]]
             self.mne.data[
-                abs(self.mne.data * self.mne.scale_factor) > self.mne.clipping
+                abs(self.mne.data * factors_ordered) > self.mne.clipping
             ] = np.nan
 
         # Apply Downsampling (if enabled)
@@ -4608,6 +4927,20 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self._rerun_precompute()
             self._redraw()
 
+    def _toggle_time_scaling_fig(self):
+        if self.mne.time_scaling_fig is None:
+            TimeScalingDialog(self, name="time_scaling_fig")
+        else:
+            self.mne.time_scaling_fig.close()
+            self.mne.time_scaling_fig = None
+
+    def _toggle_scaling_fig(self):
+        if self.mne.scaling_fig is None:
+            ScalingDialog(self, name="scaling_fig")
+        else:
+            self.mne.scaling_fig.close()
+            self.mne.scaling_fig = None
+
     def _toggle_settings_fig(self):
         if self.mne.fig_settings is None:
             SettingsDialog(self, name="fig_settings")
@@ -4621,6 +4954,39 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         else:
             self.mne.fig_help.close()
             self.mne.fig_help = None
+
+    def _toggle_calibration_fig(self):
+        if self.mne.calibration_fig is None:
+            CalibrationDialog(self, name="calibration_fig")
+            # self.mne.viewbox.setBorder({'color': "#000", 'width': 5})
+            self.mne.viewbox.setBackgroundColor("#000")
+        else:
+            self.mne.calibration_fig.close()
+            self.mne.calibration_fig = None
+            # self.mne.viewbox.setBorder(None)
+
+    def _toggle_calibration_mode(self):
+        # Toggle window size policy
+        if self.mne.calibration_mode:
+            self.setFixedSize(self.size())
+            self.mne.view.setFixedSize(self.mne.view.size())
+        else:
+            self.setMaximumSize(100000, 100000)
+            self.setMinimumSize(0, 0)
+            self.mne.view.setMaximumSize(100000, 100000)
+            self.mne.view.setMinimumSize(0, 0)
+
+        # Update Scaling dialog boxes, if it is open
+        if self.mne.scaling_fig is not None:
+            self.mne.scaling_fig._update_boxes()
+
+        # Update Time Scaling dialog boxes, if it is open
+        if self.mne.time_scaling_fig is not None:
+            self.mne.time_scaling_fig._update_boxes()
+
+        # Toggle Scalebar Texts
+        for scalebar_text in self.mne.scalebar_texts.values():
+            scalebar_text.update_value()
 
     def _set_butterfly(self, butterfly):
         self.mne.butterfly = butterfly
