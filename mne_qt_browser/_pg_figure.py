@@ -1623,7 +1623,7 @@ class ScaleBarText(BaseScaleBar, TextItem):  # noqa: D101
         BaseScaleBar.__init__(self, mne, ch_type)
         TextItem.__init__(self, color="#AA3377")
 
-        self.setFont(_q_font(10))
+        self.setFont(_q_font(13, bold=True))
         self.setZValue(2)  # To draw over RawTraceItems
 
         self.update_value()
@@ -1637,6 +1637,7 @@ class ScaleBarText(BaseScaleBar, TextItem):  # noqa: D101
             * self.mne.norms_dict[self.ch_type]
             / self.mne.scale_factors[self.ch_type]
         )
+        # If in calibration mode, also display the sensitivity in a new line.
         if self.mne.calibration_mode:
             sens_norm = inv_norm * (self.mne.n_channels + 1) / self.mne.height
             self.setText(
@@ -1970,31 +1971,45 @@ class ProjDialog(_BaseDialog):
             chkbx.setChecked(bool(self.mne.projs_on[idx]))
 
 
+# RegEx validator for float values. Accepts formats 42, 2.71, .5772, 3e8
+# Used in TimeScalingDialog and ScalingDialog
 rx = QRegularExpression(
     "([0-9]+([.][0-9]*)?([eE][+-]?[0-9]+)?|[.][0-9]+([eE][+-]?[0-9]+)?)"
 )
 
 
 class TimeScalingDialog(_BaseDialog):
-    """Time scaling dialog."""
+    """
+    Dialog for the purposes of time scaling.
+
+    After calibration, the distance-related options become available.
+    Relevant measures:
+    - duration: The total duration displayed in seconds.
+    - width: The plot width in millimeters.
+    Derived measures, and editable textboxes:
+    - spp: Seconds per page. spp = duration
+    - spmm: Seconds per millimeter. spmm = duration/width
+    - mmps: Millimeters per second. mmps = width/duration
+    """
 
     def __init__(self, main, title="Time Scaling Dialog", **kwargs):
         super().__init__(main, title=title, **kwargs)
         layout = QFormLayout()
-        layout.addRow(QLabel("Adjust time settings. Availabale after calibration."))
-        # Seconds/page
+        layout.addRow(QLabel("Adjust time settings."))
+        # Seconds per page box
         self.page_box = QLineEdit()
         self.page_box.setValidator(QRegularExpressionValidator(rx, self))
         self.page_box.editingFinished.connect(_methpartial(self._edited, box="page"))
         layout.addRow(QLabel("Seconds/page:"), self.page_box)
-        # Seconds/mm
+        # Seconds per millimeter box
+        layout.addRow(QLabel("Availabale after calibration:"))
         self.seconds_box = QLineEdit()
         self.seconds_box.setValidator(QRegularExpressionValidator(rx, self))
         self.seconds_box.editingFinished.connect(
             _methpartial(self._edited, box="seconds")
         )
         layout.addRow(QLabel("Seconds/mm:"), self.seconds_box)
-        # mm/seconds
+        # Millimeters per second box
         self.mm_box = QLineEdit()
         self.mm_box.setValidator(QRegularExpressionValidator(rx, self))
         self.mm_box.editingFinished.connect(_methpartial(self._edited, box="mm"))
@@ -2005,31 +2020,40 @@ class TimeScalingDialog(_BaseDialog):
         self.show()
 
     def _update_boxes(self):
-        # Set style
+        # Enable/Disable boxes, depending on calibration mode.
+        # The duration box is irrelevant of width.
         for box in [self.mm_box, self.seconds_box]:
-            if not self.mne.calibration_mode:
-                box.setStyleSheet("color: red")
-                box.setEnabled(False)
-            else:
-                box.setEnabled(True)
-                box.setStyleSheet("color: black")
+            box.setEnabled(self.mne.calibration_mode)
         # Set texts
         self.page_box.setText(str(round(self.mne.duration, 3)))
         self.seconds_box.setText(str(round(self.mne.duration / self.mne.width, 3)))
         self.mm_box.setText(str(round(self.mne.width / self.mne.duration, 3)))
 
     def _edited(self, box):
-        """Find the step with wich the duration must be changed."""
-        # Determine the step
+        """
+        Determine the percentile step, with which duration is scaled.
+
+        - Seconds per page:
+        new_duration = old_duration + step*old_duration <=>
+        step = new_duration/old_duration - 1
+
+        - Seconds per millimeter:
+        step = new_duration/old_duration - 1 <=>
+        step = new_spmm * width / old_duration - 1
+
+        - Millimeters per second:
+        step = new_duration/old_duration - 1 <=>
+        step = width / (old_duration * new_mmps) - 1
+        """
         # Seconds per page
         if box == "page":
             step = float(self.page_box.text()) / self.mne.duration - 1
-        # Seconds per mm
+        # Seconds per millimeter
         elif box == "seconds":
             step = (
                 float(self.seconds_box.text()) * self.mne.width / self.mne.duration - 1
             )
-        # MM per seconds
+        # Millimeters per second
         else:
             step = self.mne.width / (self.mne.duration * float(self.mm_box.text())) - 1
         # Perform the change in duration and update boxes
@@ -2042,7 +2066,20 @@ class TimeScalingDialog(_BaseDialog):
 
 
 class ScalingDialog(_BaseDialog):
-    """Scaling dialog for amplitude and sensitivity."""
+    """
+    Dialog for the purposes of scaling, either the amplitude or sensitivity.
+
+    Amplitude of the plot is considered the height of the y axis,
+    for each channel. It is identical with the Scalebar text.
+    Sensitivity is the same, but in regard to the true length on the monitor.
+    For that reason it is available only while in calibration_mode.
+    Sensitivity for a specific channel type is defined as:
+    sensitivity = amplitude / scalebar_length <=>
+    sensitivity = amplitude * (n_channels + 1) / height
+    where n_channels is the number of channels currently displayed (+1 because of
+    padding) and height is the plot height. Using the n_channels is vital,
+    because otherwise changing it would result in decalibration.
+    """
 
     def __init__(self, main, title="Scaling Dialog", **kwargs):
         super().__init__(main, title=title, **kwargs)
@@ -2052,12 +2089,11 @@ class ScalingDialog(_BaseDialog):
         self.sensitivity_boxes = OrderedDict()
         titles = _handle_default("titles")
         # Titles
-        layout.addWidget(QLabel("Titles"), 0, 0)
+        layout.addWidget(QLabel("Channel Types"), 0, 0)
         layout.addWidget(QLabel("Amplitude"), 0, 1, 1, 2)
         slbl = QLabel("Sensitivity")
-        slbl.setEnabled(self.mne.calibration_mode)
         layout.addWidget(slbl, 0, 3, 1, 2)
-        # Boxes
+        # Amplitude and Sensitivity Boxes
         row = 1
         for ch_type in [ct for ct in self.mne.ch_types_ordered if ct != "stim"]:
             layout.addWidget(QLabel(titles.get(ch_type, ch_type.upper())), row, 0)
@@ -2082,23 +2118,31 @@ class ScalingDialog(_BaseDialog):
 
             row += 1
         self._update_boxes()
-
+        text = QLabel("Sensitivity is available only after calibration.")
+        layout.addWidget(text, row, 0, 1, 5)
         self.setLayout(layout)
         self.show()
 
     def _update_boxes(self):
+        """Set the text of each box, according to definitions."""
         for ch_type in [ct for ct in self.mne.ch_types_ordered if ct != "stim"]:
             scaler = 1 if self.mne.butterfly else 2
-            inv_norm = (
+            amplitude = (
                 scaler * self.mne.norms_dict[ch_type] / self.mne.scale_factors[ch_type]
             )
-            self.amplitude_boxes[ch_type].setText(str(round(inv_norm, 2)))
-            sens_inv_norm = inv_norm * (self.mne.n_channels + 1) / self.mne.height
-            self.sensitivity_boxes[ch_type].setText(str(round(sens_inv_norm, 2)))
+            self.amplitude_boxes[ch_type].setText(str(round(amplitude, 3)))
+            sensitivity = amplitude * (self.mne.n_channels + 1) / self.mne.height
+            self.sensitivity_boxes[ch_type].setText(str(round(sensitivity, 3)))
+            # Disable sensitivity boxes if not in calibration_mode
             self.sensitivity_boxes[ch_type].setEnabled(self.mne.calibration_mode)
 
     def _amplitude_edited(self, ch_type):
-        """Determine the new scale factor and scale accordingly."""
+        """
+        Determine the new scale factor and scale accordingly.
+
+        Note that the scale factor is inversely proportional to the amplitude.
+        new_scale_factor = scale_factor * old_amplitude / new_amplitude
+        """
         new_value = float(self.amplitude_boxes[ch_type].text())
         if new_value != 0:
             scaler = 1 if self.mne.butterfly else 2
@@ -2122,7 +2166,12 @@ class ScalingDialog(_BaseDialog):
             self.sensitivity_boxes[ch_type].setText(str(round(sensitivity, 2)))
 
     def _sensitivity_edited(self, ch_type):
-        """Determine the new scale factor and scale accordingly."""
+        """
+        Determine the new scale factor and scale accordingly.
+
+        Same value with amplitude, but scaled by (n_channels + 1) / height,
+        according to the definition of sensitivity.
+        """
         new_value = float(self.sensitivity_boxes[ch_type].text())
         if new_value != 0:
             scaler = 1 if self.mne.butterfly else 2
@@ -2157,7 +2206,7 @@ class ScalingDialog(_BaseDialog):
 
 
 class Spinbox(QSpinBox):
-    """Custom QSpinBox Widget."""
+    """Custom QSpinBox widget, used in the Calibration Dialog."""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -2167,7 +2216,16 @@ class Spinbox(QSpinBox):
 
 
 class CalibrationDialog(_BaseDialog):
-    """Monitor Calibration."""
+    """
+    Monitor Calibration.
+
+    The plot is painted black and the user is asked to meaasure the visible black
+    rectangle. From this process, the height and width of the plot are recorded
+    and the calibration_mode is enabled. While in calibration_mode, the user has
+    access to sensitivity features, in the Scaling and Time Scaling dialogs,
+    and the sensitivity is displayed below the amplitude in the scalebars.
+    Also, the size of the window is locked, to prevent decalibration.
+    """
 
     def __init__(self, main, title="Monitor Calibration", **kwargs):
         super().__init__(main, title=title, **kwargs)
@@ -2177,14 +2235,14 @@ class CalibrationDialog(_BaseDialog):
                 "Measure the black area of the plot and enter your measurements below:"
             )
         )
-
+        # Spinboxes for measurements in millimeters
         self.height_box = Spinbox()
         self.height_box.setValue(self.mne.height)
         layout.addRow(QLabel("Enter the height of the black area:"), self.height_box)
         self.width_box = Spinbox()
         self.width_box.setValue(self.mne.width)
         layout.addRow(QLabel("Enter the width of the black area:"), self.width_box)
-
+        # Enable/Disable calibration_mode buttons
         btns = QHBoxLayout()
         self.enable_btn = QPushButton("Enable")
         self.enable_btn.clicked.connect(self._enable_mode)
@@ -2198,13 +2256,16 @@ class CalibrationDialog(_BaseDialog):
         self.show()
 
     def _enable_mode(self):
+        # Enable calibration mode
         self.mne.calibration_mode = True
+        # Record measurements
         self.mne.height = self.height_box.value()
         self.mne.width = self.width_box.value()
         self.weakmain()._toggle_calibration_mode()
         # self.weakmain()._toggle_calibration_fig()
 
     def _disable_mode(self):
+        # Disable calibration mode
         self.mne.calibration_mode = False
         self.weakmain()._toggle_calibration_mode()
 
@@ -2339,6 +2400,9 @@ class SelectionDialog(_BaseDialog):  # noqa: D101
         # If Scaling Dialog is open, update the boxes
         if self.mne.scaling_fig is not None:
             self.mne.scaling_fig._update_boxes()
+        # Toggle Scalebar Texts
+        for scalebar_text in self.mne.scalebar_texts.values():
+            scalebar_text.update_value()
         # Update highlighted sensors
         self._update_highlighted_sensors()
         # if "Vertex" is defined, some channels appear twice, so if
@@ -3386,12 +3450,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.fig_settings = None
         # Time scaling dialog
         self.mne.time_scaling_fig = None
-        # Scaling dialog, with amplitudes and sensitivity
+        # Scaling dialog
         self.mne.scaling_fig = None
-        # Monitor Calibration mode and figure
+        # Calibration mode and calibration dialog
         self.mne.calibration_mode = False
         self.mne.calibration_fig = None
-        self.mne.calibration_help_fig = None
+        # self.mne.calibration_help_fig = None
         # Stores decimated data
         self.mne.decim_data = None
         # Stores ypos for selection-mode
@@ -3411,7 +3475,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         ]
         # Scale factors dictionary
         self.mne.scale_factors = dict()
-        # Inverted norms dictionary
+        # Inverted norms dictionary, used in calculating amplitudes
         self.mne.norms_dict = dict()
         for ct in self.mne.ch_types_ordered:
             self.mne.scale_factors[ct] = 1
@@ -3492,7 +3556,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.load_thread = LoadThread(self)
 
         # Create centralWidget and layout
-        self.widget = QWidget()
+        widget = QWidget()
         layout = QGridLayout()
 
         # Initialize Axis-Items
@@ -3660,8 +3724,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.overview_bar = OverviewBar(self)
         layout.addWidget(self.mne.overview_bar, 2, 0, 1, 2)
 
-        self.widget.setLayout(layout)
-        self.setCentralWidget(self.widget)
+        widget.setLayout(layout)
+        self.setCentralWidget(widget)
 
         # Initialize Selection-Dialog
         if getattr(self.mne, "group_by", None) in ["position", "selection"]:
@@ -4036,7 +4100,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         range)
         """
         self.mne.scalebars.clear()
-        # To keep order (np.unique sorts)
         for ch_type in [
             ct
             for ct in self.mne.ch_types_ordered
@@ -4244,6 +4307,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             if self.mne.scaling_fig is not None:
                 self.mne.scaling_fig._update_boxes()
 
+            # Toggle Scalebar Texts
+            for scalebar_text in self.mne.scalebar_texts.values():
+                scalebar_text.update_value()
+
     def _remove_vline(self):
         if self.mne.vline is not None:
             if self.mne.is_epochs:
@@ -4415,6 +4482,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 # If Scaling Dialog is open, update the boxes
                 if self.mne.scaling_fig is not None:
                     self.mne.scaling_fig._update_boxes()
+                # Toggle Scalebar Texts
+                for scalebar_text in self.mne.scalebar_texts.values():
+                    scalebar_text.update_value()
                 self._update_picks()
                 # Update Channel-Bar
                 self.mne.ax_vscroll.update_value(self.mne.ch_start)
@@ -4668,6 +4738,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.data = np.clip(self.mne.data, -0.5, 0.5)
         elif self.mne.clipping is not None:
             self.mne.data = self.mne.data.copy()
+            # Previously scale_factor, now the scale_factors needs to be cast as an
+            # array that can be broadcasted correctly by numpy in the condition below.
             factors_ordered = np.atleast_2d(np.empty(np.shape(self.mne.data)[0])).T
             for i in range(np.shape(self.mne.data)[0]):
                 factors_ordered[i] = self.mne.scale_factors[self.mne.ordered_types[i]]
@@ -4966,6 +5038,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # self.mne.viewbox.setBorder(None)
 
     def _toggle_calibration_mode(self):
+        # Toggle everything that changes in calibration mode
         # Toggle window size policy
         if self.mne.calibration_mode:
             self.setFixedSize(self.size())
