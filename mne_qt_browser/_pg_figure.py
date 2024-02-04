@@ -2230,18 +2230,23 @@ class CalibrationDialog(_BaseDialog):
     def __init__(self, main, title="Monitor Calibration", **kwargs):
         super().__init__(main, title=title, **kwargs)
         layout = QFormLayout()
+        if self.mne.dark:
+            color = "light"
+        else:
+            color = "dark"
         layout.addRow(
             QLabel(
-                "Measure the black area of the plot and enter your measurements below:"
+                f"Measure the {color} area of the plot"
+                "and enter your measurements below:"
             )
         )
         # Spinboxes for measurements in millimeters
         self.height_box = Spinbox()
         self.height_box.setValue(self.mne.height)
-        layout.addRow(QLabel("Enter the height of the black area:"), self.height_box)
+        layout.addRow("Enter the height of the black area:", self.height_box)
         self.width_box = Spinbox()
         self.width_box.setValue(self.mne.width)
-        layout.addRow(QLabel("Enter the width of the black area:"), self.width_box)
+        layout.addRow("Enter the width of the black area:", self.width_box)
         # Enable/Disable calibration_mode buttons
         btns = QHBoxLayout()
         self.enable_btn = QPushButton("Enable")
@@ -2251,7 +2256,12 @@ class CalibrationDialog(_BaseDialog):
         self.disable_btn.clicked.connect(self._disable_mode)
         btns.addWidget(self.disable_btn)
         layout.addRow(btns)
-
+        help_text = QLabel(
+            "Please note that while in calibration mode,"
+            "the window and the plot can't be resized."
+            "To adjust the size, please disable calibration mode first."
+        )
+        layout.addRow(help_text)
         self.setLayout(layout)
         self.show()
 
@@ -2272,7 +2282,8 @@ class CalibrationDialog(_BaseDialog):
     def closeEvent(self, event):
         _disconnect(self.enable_btn.clicked)
         _disconnect(self.disable_btn.clicked)
-        self.mne.viewbox.setBackgroundColor("#FFF")
+        # bgcolor = getattr(self.mne, "bgcolor", "w")
+        self.mne.viewbox.setBackgroundColor(_get_color(self.mne.bgcolor, self.mne.dark))
         super().closeEvent(event)
 
 
@@ -5029,13 +5040,15 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _toggle_calibration_fig(self):
         if self.mne.calibration_fig is None:
+            # Change the background color
             CalibrationDialog(self, name="calibration_fig")
-            # self.mne.viewbox.setBorder({'color': "#000", 'width': 5})
-            self.mne.viewbox.setBackgroundColor("#000")
+            # bgcolor = getattr(self.mne, "bgcolor", "w")
+            self.mne.viewbox.setBackgroundColor(
+                _get_color(self.mne.bgcolor, not self.mne.dark)
+            )
         else:
             self.mne.calibration_fig.close()
             self.mne.calibration_fig = None
-            # self.mne.viewbox.setBorder(None)
 
     def _toggle_calibration_mode(self):
         # Toggle everything that changes in calibration mode
