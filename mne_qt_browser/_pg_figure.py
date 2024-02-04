@@ -2000,7 +2000,7 @@ class TimeScalingDialog(_BaseDialog):
         self.page_box = QLineEdit()
         self.page_box.setValidator(QRegularExpressionValidator(rx, self))
         self.page_box.editingFinished.connect(_methpartial(self._edited, box="page"))
-        layout.addRow(QLabel("Seconds/page:"), self.page_box)
+        layout.addRow("Seconds/page:", self.page_box)
         # Seconds per millimeter box
         layout.addRow(QLabel("Availabale after calibration:"))
         self.seconds_box = QLineEdit()
@@ -2008,12 +2008,12 @@ class TimeScalingDialog(_BaseDialog):
         self.seconds_box.editingFinished.connect(
             _methpartial(self._edited, box="seconds")
         )
-        layout.addRow(QLabel("Seconds/mm:"), self.seconds_box)
+        layout.addRow("Seconds/mm:", self.seconds_box)
         # Millimeters per second box
         self.mm_box = QLineEdit()
         self.mm_box.setValidator(QRegularExpressionValidator(rx, self))
         self.mm_box.editingFinished.connect(_methpartial(self._edited, box="mm"))
-        layout.addRow(QLabel("mm/seconds:"), self.mm_box)
+        layout.addRow("mm/seconds:", self.mm_box)
 
         self._update_boxes()
         self.setLayout(layout)
@@ -2230,6 +2230,7 @@ class CalibrationDialog(_BaseDialog):
     def __init__(self, main, title="Monitor Calibration", **kwargs):
         super().__init__(main, title=title, **kwargs)
         layout = QFormLayout()
+        layout.setRowWrapPolicy(QFormLayout.WrapLongRows)
         if self.mne.dark:
             color = "light"
         else:
@@ -2237,7 +2238,7 @@ class CalibrationDialog(_BaseDialog):
         layout.addRow(
             QLabel(
                 f"Measure the {color} area of the plot"
-                "and enter your measurements below:"
+                " and enter your measurements below:"
             )
         )
         # Spinboxes for measurements in millimeters
@@ -2257,9 +2258,8 @@ class CalibrationDialog(_BaseDialog):
         btns.addWidget(self.disable_btn)
         layout.addRow(btns)
         help_text = QLabel(
-            "Please note that while in calibration mode,"
-            "the window and the plot can't be resized."
-            "To adjust the size, please disable calibration mode first."
+            "While in calibration mode, the window and the plot can't be resized."
+            "\nTo adjust the size, please disable calibration mode first."
         )
         layout.addRow(help_text)
         self.setLayout(layout)
