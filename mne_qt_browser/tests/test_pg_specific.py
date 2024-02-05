@@ -19,6 +19,96 @@ TOGGLE_ANNOTATIONS = "Toggle annotations mode"
 SHOW_PROJECTORS = "Show projectors"
 
 
+def test_sensitivity_etc(raw_orig, pg_backend):
+    """Test monitor calibration and sensitivity related settings."""
+    fig = raw_orig.plot()
+    fig.test_mode = True
+    QTest.qWaitForWindowExposed(fig)
+    QTest.qWait(50)
+    # Calibration Dialog
+    assert fig.mne.calibration_fig is None
+    with pytest.raises(ValueError, match="FooAction"):
+        fig._fake_click_on_toolbar_action("FooAction")
+    fig._fake_click_on_toolbar_action("Monitor Calibration", wait_after=100)
+    assert fig.mne.calibration_fig is not None
+    assert pg_backend._get_n_figs() == 2
+    fig._fake_click_on_toolbar_action("Monitor Calibration", wait_after=100)
+    assert fig.mne.calibration_fig is None
+    assert pg_backend._get_n_figs() == 1
+    fig._fake_click_on_toolbar_action("Monitor Calibration", wait_after=100)
+    assert fig.mne.calibration_fig is not None
+    # Check correct value passing
+    fig.mne.calibration_fig.height_box.setValue(100)
+    fig.mne.calibration_fig.width_box.setValue(200)
+    fig.mne.calibration_fig._enable_mode()
+    assert fig.mne.height == 100
+    assert fig.mne.width == 200
+
+    # Scaling Dialog
+    assert fig.mne.scaling_fig is None
+    fig._fake_click_on_toolbar_action("Scaling Dialog", wait_after=100)
+    assert fig.mne.scaling_fig is not None
+    assert pg_backend._get_n_figs() == 3
+    fig._fake_click_on_toolbar_action("Scaling Dialog", wait_after=100)
+    assert fig.mne.scaling_fig is None
+    assert pg_backend._get_n_figs() == 2
+    fig._fake_click_on_toolbar_action("Scaling Dialog", wait_after=100)
+    assert fig.mne.scaling_fig is not None
+    # Check boxes
+    for ch_type, box in fig.mne.scaling_fig.amplitude_boxes.items():
+        # Amplitude / 2
+        amplitude = float(box.text()) / 2
+        box.setText(str(amplitude))
+        fig.mne.scaling_fig._amplitude_edited(ch_type=ch_type)
+        assert fig.mne.scale_factors[ch_type] == 2
+        sens_box = fig.mne.scaling_fig.sensitivity_boxes[ch_type]
+        sensitivity = amplitude * (fig.mne.n_channels + 1) / 100
+        assert sens_box.text() == str(round(sensitivity, 3))
+        # Sensitivity / 4
+        sens_box.setText(str(sensitivity / 4))
+        fig.mne.scaling_fig._sensitivity_edited(ch_type=ch_type)
+        assert fig.mne.scale_factors[ch_type] == 8
+
+    # Time Scaling Dialog
+    assert fig.mne.time_scaling_fig is None
+    fig._fake_click_on_toolbar_action("Time Scaling Dialog", wait_after=100)
+    assert fig.mne.time_scaling_fig is not None
+    assert pg_backend._get_n_figs() == 4
+    fig._fake_click_on_toolbar_action("Time Scaling Dialog", wait_after=100)
+    assert fig.mne.time_scaling_fig is None
+    assert pg_backend._get_n_figs() == 3
+    fig._fake_click_on_toolbar_action("Time Scaling Dialog", wait_after=100)
+    assert fig.mne.time_scaling_fig is not None
+    # Check boxes
+    value = str(round(fig.mne.duration, 3))
+    assert fig.mne.time_scaling_fig.page_box.text() == value
+    assert fig.mne.time_scaling_fig.seconds_box.text() == str(
+        round(fig.mne.duration / 200, 3)
+    )
+    assert fig.mne.time_scaling_fig.mm_box.text() == str(
+        round(200 / fig.mne.duration, 3)
+    )
+    # Seconds per page
+    fig.mne.time_scaling_fig.page_box.setText(str(7))
+    fig.mne.time_scaling_fig._edited(box="page")
+    assert fig.mne.duration == 7
+    # Seconds per millimeter
+    fig.mne.time_scaling_fig.seconds_box.setText(str(0.01))
+    fig.mne.time_scaling_fig._edited(box="seconds")
+    assert fig.mne.duration == 2
+    # Millimeters per second
+    fig.mne.time_scaling_fig.mm_box.setText(str(50))
+    fig.mne.time_scaling_fig._edited(box="mm")
+    assert fig.mne.duration == 4
+
+    # Close dialogs
+    fig._fake_click_on_toolbar_action("Monitor Calibration", wait_after=100)
+    fig._fake_click_on_toolbar_action("Scaling Dialog", wait_after=100)
+    fig._fake_click_on_toolbar_action("Time Scaling Dialog", wait_after=100)
+    assert pg_backend._get_n_figs() == 1
+    fig.close()
+
+
 def test_annotations_interactions(raw_orig, pg_backend):
     """Test interactions specific to pyqtgraph-backend."""
     # Add test-annotations

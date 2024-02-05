@@ -2230,11 +2230,7 @@ class CalibrationDialog(_BaseDialog):
     def __init__(self, main, title="Monitor Calibration", **kwargs):
         super().__init__(main, title=title, **kwargs)
         layout = QFormLayout()
-        layout.setRowWrapPolicy(QFormLayout.WrapLongRows)
-        if self.mne.dark:
-            color = "light"
-        else:
-            color = "dark"
+        color = "light" if self.mne.dark else "dark"
         layout.addRow(
             QLabel(
                 f"Measure the {color} area of the plot"
