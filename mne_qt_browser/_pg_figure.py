@@ -2219,7 +2219,7 @@ class CalibrationDialog(_BaseDialog):
     """
     Monitor Calibration.
 
-    The plot is painted black and the user is asked to meaasure the visible black
+    The plot is painted black and the user is asked to measure the visible black
     rectangle. From this process, the height and width of the plot are recorded
     and the calibration_mode is enabled. While in calibration_mode, the user has
     access to sensitivity features, in the Scaling and Time Scaling dialogs,
@@ -2268,7 +2268,6 @@ class CalibrationDialog(_BaseDialog):
         self.mne.height = self.height_box.value()
         self.mne.width = self.width_box.value()
         self.weakmain()._toggle_calibration_mode()
-        # self.weakmain()._toggle_calibration_fig()
 
     def _disable_mode(self):
         # Disable calibration mode
@@ -2278,7 +2277,6 @@ class CalibrationDialog(_BaseDialog):
     def closeEvent(self, event):
         _disconnect(self.enable_btn.clicked)
         _disconnect(self.disable_btn.clicked)
-        # bgcolor = getattr(self.mne, "bgcolor", "w")
         self.mne.viewbox.setBackgroundColor(_get_color(self.mne.bgcolor, self.mne.dark))
         super().closeEvent(event)
 
