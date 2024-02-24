@@ -3460,7 +3460,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Calibration mode and calibration dialog
         self.mne.calibration_mode = False
         self.mne.calibration_fig = None
-        # self.mne.calibration_help_fig = None
         # Stores decimated data
         self.mne.decim_data = None
         # Stores ypos for selection-mode
