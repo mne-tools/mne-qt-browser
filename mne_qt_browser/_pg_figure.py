@@ -5035,7 +5035,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if self.mne.calibration_fig is None:
             # Change the background color
             CalibrationDialog(self, name="calibration_fig")
-            # bgcolor = getattr(self.mne, "bgcolor", "w")
             self.mne.viewbox.setBackgroundColor(
                 _get_color(self.mne.bgcolor, not self.mne.dark)
             )
