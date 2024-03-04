@@ -1,20 +1,48 @@
----
-name: Feature request
-about: Suggest an idea for this project
-title: ''
-labels: ''
-assignees: ''
+name: 🛠️ Feature request
 
----
+# See the json schema to help you create / update this form
+# https://json.schemastore.org/github-issue-forms.json
 
-**Is your feature request related to a problem? Please describe.**
-A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+description: Suggest an idea for this project
 
-**Describe the solution you'd like**
-A clear and concise description of what you want to happen.
+labels: ["enhancement"]
 
-**Describe alternatives you've considered**
-A clear and concise description of any alternative solutions or features you've considered.
+body:
 
-**Additional context**
-Add any other context or screenshots about the feature request here.
+  - type: markdown
+    attributes:
+      value: |
+        Please use the [MNE-Python forum](https://mne.discourse.group/) to ask (and answer)
+        concrete technical questions or about usage of MNE-BIDS.
+        Use this form if you want to suggest new features.
+
+  - type: textarea
+    attributes:
+      label: Describe the problem
+      description: |
+        Please provide a clear and concise description of the problem.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Describe your solution
+      description: |
+        A clear and concise description of what you want to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Describe possible alternatives
+      description: |
+        A clear and concise description of any alternative solutions or features you have considered.
+    validations:
+      required: true
+
+
+  - type: textarea
+    attributes:
+      label: Additional context
+      description: |
+        Add any other context or screenshots about the feature request here.
