@@ -125,8 +125,9 @@ from qtpy.QtWidgets import (
 )
 from scipy.stats import zscore
 
-from . import _browser_instances
-from ._fixes import _init_mne_qtapp, _qt_raise_window, capture_exceptions
+import mne_qt_browser.rc_icons  # noqa: F401
+from mne_qt_browser import _browser_instances
+from mne_qt_browser._fixes import _init_mne_qtapp, _qt_raise_window, capture_exceptions
 
 name = "pyqtgraph"
 
@@ -2595,9 +2596,9 @@ class AnnotationDock(QDockWidget):
         self.mne.visible_annotations[new_des] = self.mne.visible_annotations.pop(
             old_des
         )
-        self.mne.annotation_segment_colors[
-            new_des
-        ] = self.mne.annotation_segment_colors.pop(old_des)
+        self.mne.annotation_segment_colors[new_des] = (
+            self.mne.annotation_segment_colors.pop(old_des)
+        )
 
         # Update related widgets
         self.weakmain()._setup_annotation_colors()
@@ -2622,9 +2623,9 @@ class AnnotationDock(QDockWidget):
         if old_des not in self.mne.inst.annotations.description:
             self.mne.new_annotation_labels.remove(old_des)
             self.mne.visible_annotations.pop(old_des)
-            self.mne.annotation_segment_colors[
-                new_des
-            ] = self.mne.annotation_segment_colors.pop(old_des)
+            self.mne.annotation_segment_colors[new_des] = (
+                self.mne.annotation_segment_colors.pop(old_des)
+            )
 
         # Update related widgets
         self.weakmain()._setup_annotation_colors()
@@ -3104,7 +3105,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.dark = cspace_convert(bgcolor, "sRGB1", "CIELab")[0] < 50
 
         # update icon theme
-        _qt_init_icons()
         if self.mne.dark:
             QIcon.setThemeName("dark")
         else:
@@ -5157,14 +5157,6 @@ def _setup_ipython(ipython=None):
 
         QtGui.QApplication.instance()
     return ipython
-
-
-def _qt_init_icons():
-    from qtpy.QtGui import QIcon
-
-    icons_path = f"{Path(__file__).parent}/icons"
-    QIcon.setThemeSearchPaths([icons_path])
-    return icons_path
 
 
 def _init_browser(**kwargs):

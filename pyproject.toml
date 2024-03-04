@@ -66,13 +66,15 @@ testpaths = ["mne_qt_browser"]
 junit_family = "xunit2"
 
 [tool.ruff]
+exclude = ["__init__.py", "rc_icons.py"]
+
+[tool.ruff.lint]
 select = ["E", "F", "W", "D", "I"]
-exclude = ["__init__.py"]
 ignore = [
     "D100", # Missing docstring in public module
     "D104", # Missing docstring in public package
     "D413", # Missing blank line after last section
 ]
 
-[tool.ruff.pydocstyle]
+[tool.ruff.lint.pydocstyle]
 convention = "numpy"

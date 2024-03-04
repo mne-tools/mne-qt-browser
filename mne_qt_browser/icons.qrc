@@ -1,0 +1,30 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource prefix="/">
+    <file>icons/dark/index.theme</file>
+    <file>icons/dark/actions/annotations.svg</file>
+    <file>icons/dark/actions/fullscreen.svg</file>
+    <file>icons/dark/actions/help.svg</file>
+    <file>icons/dark/actions/less_channels.svg</file>
+    <file>icons/dark/actions/less_time.svg</file>
+    <file>icons/dark/actions/more_channels.svg</file>
+    <file>icons/dark/actions/more_time.svg</file>
+    <file>icons/dark/actions/overview_bar.svg</file>
+    <file>icons/dark/actions/settings.svg</file>
+    <file>icons/dark/actions/ssp.svg</file>
+    <file>icons/dark/actions/zoom_in.svg</file>
+    <file>icons/dark/actions/zoom_out.svg</file>
+    <file>icons/light/index.theme</file>
+    <file>icons/light/actions/annotations.svg</file>
+    <file>icons/light/actions/fullscreen.svg</file>
+    <file>icons/light/actions/help.svg</file>
+    <file>icons/light/actions/less_channels.svg</file>
+    <file>icons/light/actions/less_time.svg</file>
+    <file>icons/light/actions/more_channels.svg</file>
+    <file>icons/light/actions/more_time.svg</file>
+    <file>icons/light/actions/overview_bar.svg</file>
+    <file>icons/light/actions/settings.svg</file>
+    <file>icons/light/actions/ssp.svg</file>
+    <file>icons/light/actions/zoom_in.svg</file>
+    <file>icons/light/actions/zoom_out.svg</file>
+</qresource>
+</RCC>
