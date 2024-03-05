@@ -3103,6 +3103,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         bgcolor = self.palette().color(self.backgroundRole()).getRgbF()[:3]
         self.mne.dark = cspace_convert(bgcolor, "sRGB1", "CIELab")[0] < 50
 
+        # Prepend our icon search path
+        icons_path = f"{Path(__file__).parent}/icons"
+        QIcon.setThemeSearchPaths([icons_path] + QIcon.themeSearchPaths())
+
         # control raising with _qt_raise_window
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
 
@@ -5078,10 +5082,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         QTest.qWait(wait_after)
 
     def _qicon(self, name):
+        # Try to pull from the theme first but fall back to the local one
         kind = "dark" if self.mne.dark else "light"
         path = Path(__file__).parent / "icons" / kind / "actions" / f"{name}.svg"
         path = path.resolve(strict=True)
-        return QIcon(str(path))
+        return QIcon.fromTheme(name, QIcon(str(path)))
 
 
 def _get_n_figs():
