@@ -3103,9 +3103,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         bgcolor = self.palette().color(self.backgroundRole()).getRgbF()[:3]
         self.mne.dark = cspace_convert(bgcolor, "sRGB1", "CIELab")[0] < 50
 
-        # Prepend our icon search path
+        # Prepend our icon search path and set fallback name
         icons_path = f"{Path(__file__).parent}/icons"
         QIcon.setThemeSearchPaths([icons_path] + QIcon.themeSearchPaths())
+        QIcon.setFallbackThemeName("light")
 
         # control raising with _qt_raise_window
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
