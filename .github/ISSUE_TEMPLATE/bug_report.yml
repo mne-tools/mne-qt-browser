@@ -15,7 +15,7 @@ body:
           **READ THIS FIRST:** If you are having trouble getting MNE-Python to work with
           your own data, you should ask for help on the
           [MNE Forum](https://mne.discourse.group).
-          
+
           Our GitHub issue tracker is only used to report bugs and suggest improvements
           to MNE-Python. For any other questions, please use the forum.
           Usage questions that are posted as GitHub issues are usually closed without
@@ -28,7 +28,7 @@ body:
           [the GitHub guide to markdown](https://guides.github.com/features/mastering-markdown/#GitHub-flavored-markdown)
           for help with issue formatting). Alternatively, you can put your MWE in a
           [public gist](https://gist.github.com) and link to it in this issue.
-          
+
   - type: textarea
     attributes:
       label: Description of the problem
