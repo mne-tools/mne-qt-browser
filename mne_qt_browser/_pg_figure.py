@@ -3103,12 +3103,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         bgcolor = self.palette().color(self.backgroundRole()).getRgbF()[:3]
         self.mne.dark = cspace_convert(bgcolor, "sRGB1", "CIELab")[0] < 50
 
-        # update icon theme
-        _qt_init_icons()
-        if self.mne.dark:
-            QIcon.setThemeName("dark")
-        else:
-            QIcon.setThemeName("light")
+        # Prepend our icon search path and set fallback name
+        icons_path = f"{Path(__file__).parent}/icons"
+        QIcon.setThemeSearchPaths([icons_path] + QIcon.themeSearchPaths())
+        QIcon.setFallbackThemeName("light")
 
         # control raising with _qt_raise_window
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
@@ -3391,28 +3389,28 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.toolbar.setToolButtonStyle(tool_button_style)
 
         adecr_time = QAction(
-            icon=QIcon.fromTheme("less_time"),
+            icon=self._qicon("less_time"),
             text="Show fewer time points",
             parent=self,
         )
         adecr_time.triggered.connect(_methpartial(self.change_duration, step=-0.2))
         self.mne.toolbar.addAction(adecr_time)
         aincr_time = QAction(
-            icon=QIcon.fromTheme("more_time"), text="Show more time points", parent=self
+            icon=self._qicon("more_time"), text="Show more time points", parent=self
         )
         aincr_time.triggered.connect(_methpartial(self.change_duration, step=0.25))
         self.mne.toolbar.addAction(aincr_time)
         self.mne.toolbar.addSeparator()
 
         adecr_nchan = QAction(
-            icon=QIcon.fromTheme("less_channels"),
+            icon=self._qicon("less_channels"),
             text="Show fewer channels",
             parent=self,
         )
         adecr_nchan.triggered.connect(_methpartial(self.change_nchan, step=-10))
         self.mne.toolbar.addAction(adecr_nchan)
         aincr_nchan = QAction(
-            icon=QIcon.fromTheme("more_channels"),
+            icon=self._qicon("more_channels"),
             text="Show more channels",
             parent=self,
         )
@@ -3421,12 +3419,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.toolbar.addSeparator()
 
         adecr_nchan = QAction(
-            icon=QIcon.fromTheme("zoom_out"), text="Reduce amplitude", parent=self
+            icon=self._qicon("zoom_out"), text="Reduce amplitude", parent=self
         )
         adecr_nchan.triggered.connect(_methpartial(self.scale_all, step=4 / 5))
         self.mne.toolbar.addAction(adecr_nchan)
         aincr_nchan = QAction(
-            icon=QIcon.fromTheme("zoom_in"), text="Increase amplitude", parent=self
+            icon=self._qicon("zoom_in"), text="Increase amplitude", parent=self
         )
         aincr_nchan.triggered.connect(_methpartial(self.scale_all, step=5 / 4))
         self.mne.toolbar.addAction(aincr_nchan)
@@ -3434,7 +3432,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         if not self.mne.is_epochs:
             atoggle_annot = QAction(
-                icon=QIcon.fromTheme("annotations"),
+                icon=self._qicon("annotations"),
                 text="Toggle annotations mode",
                 parent=self,
             )
@@ -3442,7 +3440,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.toolbar.addAction(atoggle_annot)
 
         atoggle_proj = QAction(
-            icon=QIcon.fromTheme("ssp"), text="Show projectors", parent=self
+            icon=self._qicon("ssp"), text="Show projectors", parent=self
         )
         atoggle_proj.triggered.connect(self._toggle_proj_fig)
         self.mne.toolbar.addAction(atoggle_proj)
@@ -3464,7 +3462,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             'enabled with "auto" and enough free RAM is available.</li>'
         )
         button.setText("Overview Bar")
-        button.setIcon(QIcon.fromTheme("overview_bar"))
+        button.setIcon(self._qicon("overview_bar"))
         button.setToolButtonStyle(tool_button_style)
         menu = self.mne.overview_menu = QMenu(button)
         group = QActionGroup(menu)
@@ -3498,11 +3496,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         self.mne.toolbar.addSeparator()
 
-        asettings = QAction(QIcon.fromTheme("settings"), "Settings", parent=self)
+        asettings = QAction(self._qicon("settings"), "Settings", parent=self)
         asettings.triggered.connect(self._toggle_settings_fig)
         self.mne.toolbar.addAction(asettings)
 
-        ahelp = QAction(QIcon.fromTheme("help"), "Help", parent=self)
+        ahelp = QAction(self._qicon("help"), "Help", parent=self)
         ahelp.triggered.connect(self._toggle_help_fig)
         self.mne.toolbar.addAction(ahelp)
 
@@ -5084,6 +5082,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             raise ValueError(f"action_name={repr(action_name)} not found")
         QTest.qWait(wait_after)
 
+    def _qicon(self, name):
+        # Try to pull from the theme first but fall back to the local one
+        kind = "dark" if self.mne.dark else "light"
+        path = Path(__file__).parent / "icons" / kind / "actions" / f"{name}.svg"
+        path = path.resolve(strict=True)
+        return QIcon.fromTheme(name, QIcon(str(path)))
+
 
 def _get_n_figs():
     # Wait for a short time to let the Qt-loop clean up
@@ -5157,14 +5162,6 @@ def _setup_ipython(ipython=None):
 
         QtGui.QApplication.instance()
     return ipython
-
-
-def _qt_init_icons():
-    from qtpy.QtGui import QIcon
-
-    icons_path = f"{Path(__file__).parent}/icons"
-    QIcon.setThemeSearchPaths([icons_path])
-    return icons_path
 
 
 def _init_browser(**kwargs):
