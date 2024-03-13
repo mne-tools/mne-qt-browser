@@ -2595,9 +2595,9 @@ class AnnotationDock(QDockWidget):
         self.mne.visible_annotations[new_des] = self.mne.visible_annotations.pop(
             old_des
         )
-        self.mne.annotation_segment_colors[
-            new_des
-        ] = self.mne.annotation_segment_colors.pop(old_des)
+        self.mne.annotation_segment_colors[new_des] = (
+            self.mne.annotation_segment_colors.pop(old_des)
+        )
 
         # Update related widgets
         self.weakmain()._setup_annotation_colors()
@@ -2622,9 +2622,9 @@ class AnnotationDock(QDockWidget):
         if old_des not in self.mne.inst.annotations.description:
             self.mne.new_annotation_labels.remove(old_des)
             self.mne.visible_annotations.pop(old_des)
-            self.mne.annotation_segment_colors[
-                new_des
-            ] = self.mne.annotation_segment_colors.pop(old_des)
+            self.mne.annotation_segment_colors[new_des] = (
+                self.mne.annotation_segment_colors.pop(old_des)
+            )
 
         # Update related widgets
         self.weakmain()._setup_annotation_colors()
