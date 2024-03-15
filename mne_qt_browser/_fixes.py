@@ -57,18 +57,6 @@ except ImportError:
         app_name = "MNE-Python"
         organization_name = "MNE"
 
-        # Fix from cbrnr/mnelab for app name in menu bar
-        if sys.platform.startswith("darwin"):
-            try:
-                # set bundle name on macOS (app name shown in the menu bar)
-                from Foundation import NSBundle
-
-                bundle = NSBundle.mainBundle()
-                info = bundle.localizedInfoDictionary() or bundle.infoDictionary()
-                info["CFBundleName"] = app_name
-            except ModuleNotFoundError:
-                pass
-
         if pg_app:
             from pyqtgraph import mkQApp
 
