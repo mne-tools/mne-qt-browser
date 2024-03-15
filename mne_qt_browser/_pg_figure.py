@@ -43,6 +43,7 @@ from mne.io.pick import _DATA_CH_TYPES_ORDER_DEFAULT, _DATA_CH_TYPES_SPLIT
 from mne.utils import _check_option, _to_rgb, get_config, logger, sizeof_fmt, warn
 from mne.viz import plot_sensors
 from mne.viz._figure import BrowserBase
+from mne.viz.backends._utils import _init_mne_qtapp, _qt_raise_window
 from mne.viz.utils import _figure_agg, _merge_annotations, _simplify_float
 from pyqtgraph import (
     AxisItem,
@@ -126,7 +127,7 @@ from qtpy.QtWidgets import (
 from scipy.stats import zscore
 
 from . import _browser_instances
-from ._fixes import _init_mne_qtapp, _qt_raise_window, capture_exceptions
+from ._fixes import capture_exceptions
 
 name = "pyqtgraph"
 
