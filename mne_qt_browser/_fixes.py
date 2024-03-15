@@ -5,12 +5,9 @@
 #
 # License: BSD-3-Clause
 
-import platform
-import sys
 from contextlib import contextmanager
 
 from mne.utils import logger
-from mne.viz.backends._utils import _init_mne_qtapp, _qt_raise_window
 
 # pytestqt
 try:
