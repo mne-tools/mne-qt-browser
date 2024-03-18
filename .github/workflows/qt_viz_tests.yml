@@ -75,7 +75,7 @@ jobs:
           python -m pip install -ve .${PIP_OPTION} PyQt5
           if [[ "${{ matrix.pip }}" == "pre" ]]; then
             echo "Upgrading to pre-release NumPy, SciPy, and matplotlib"
-            python -m pip install --upgrade --pre --only-binary ":all:" --default-timeout=60 --extra-index-url "https://pypi.anaconda.org/scientific-python-nightly-wheels/simple" numpy scipy matplotlib
+            python -m pip install --upgrade --pre --only-binary ":all:" --default-timeout=60 --extra-index-url "https://pypi.anaconda.org/scientific-python-nightly-wheels/simple" numpy "scipy==1.12.0" matplotlib
           fi
       - run: ./tools/get_testing_version.sh
         name: 'Get testing version'
