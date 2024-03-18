@@ -1,0 +1,71 @@
+name: 🐛 Bug report
+
+# See the json schema to help you create / update this form
+# https://json.schemastore.org/github-issue-forms.json
+
+description: Create a report to help us improve
+
+labels: ["BUG"]
+
+body:
+
+  - type: markdown
+    attributes:
+      value: |
+          **READ THIS FIRST:** If you are having trouble getting MNE-Python to work with
+          your own data, you should ask for help on the
+          [MNE Forum](https://mne.discourse.group).
+
+          Our GitHub issue tracker is only used to report bugs and suggest improvements
+          to MNE-Python. For any other questions, please use the forum.
+          Usage questions that are posted as GitHub issues are usually closed without
+          being answered. See
+          [the FAQ entry on filing bug reports](https://mne.tools/dev/overview/faq.html#i-think-i-found-a-bug-what-do-i-do)
+          for more guidance. If you're pretty sure your problem is a bug in MNE-Python,
+          please **delete this section** and fill in the headings below, replacing the
+          placeholder text with your own responses. Surround any code samples with triple
+          backticks above and below the code block (see
+          [the GitHub guide to markdown](https://guides.github.com/features/mastering-markdown/#GitHub-flavored-markdown)
+          for help with issue formatting). Alternatively, you can put your MWE in a
+          [public gist](https://gist.github.com) and link to it in this issue.
+
+  - type: textarea
+    attributes:
+      label: Description of the problem
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Steps to reproduce
+      description: |
+        Paste here a code snippet or minimal working example
+        ([MWE](https://en.wikipedia.org/wiki/Minimal_Working_Example))
+        to replicate your problem, using one of the
+        [datasets shipped with MNE-Python](https://mne.tools/dev/overview/datasets_index.html),
+        preferably the one called [sample](https://mne.tools/dev/overview/datasets_index.html#sample).
+      render: Python
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Expected results
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Actual results
+      description: |
+        Please provide the actual output, traceback, screenshot, or another description of the results.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Additional information
+      description: |
+        Tell us about your system: paste the output of `mne.sys_info()` here.
+    validations:
+      required: true
