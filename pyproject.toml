@@ -15,7 +15,6 @@ classifiers = [
   "Programming Language :: Python",
 ]
 dependencies = [
-  "packaging",
   "numpy",
   "scipy",
   "matplotlib",
