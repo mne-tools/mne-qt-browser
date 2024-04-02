@@ -15,9 +15,9 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu, windows, macos]
-        mne: [main, maint/1.4]
+        mne: [main, maint/1.6]
         opengl: ['opengl']
-        python: ['3.11']
+        python: ['3.12']
         name: [matrix]
         pip: ['']
         include:
@@ -27,7 +27,7 @@ jobs:
             python: '3.12'
             name: no opengl
           - os: ubuntu
-            mne: maint/1.4
+            mne: maint/1.6
             opengl: ''
             python: '3.12'
             name: no opengl
@@ -167,9 +167,6 @@ jobs:
             PIP_OPTION="[tests]"
           fi
           python -m pip install -ve .${PIP_OPTION} ${QT_LIB_INSTALL}
-      - name: Patch MNE 1.4 test
-        if: ${{ matrix.mne == '1.4' }}
-        run: patch -d ../mne-python < .github/workflows/mne_1_4.patch
       - shell: bash -e {0}
         run: ./tools/get_testing_version.sh
         name: 'Get testing version'
