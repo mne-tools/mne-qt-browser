@@ -24,12 +24,12 @@ jobs:
           - os: ubuntu
             mne: main
             opengl: ''
-            python: '3.9'
+            python: '3.12'
             name: no opengl
           - os: ubuntu
             mne: maint/1.4
             opengl: ''
-            python: '3.9'
+            python: '3.12'
             name: no opengl
           - os: ubuntu
             mne: maint/1.5
@@ -39,7 +39,7 @@ jobs:
           - os: ubuntu
             mne: main
             opengl: 'opengl'
-            python: '3.11'
+            python: '3.12'
             pip: pre
             name: pip-pre
     name: pytest ${{ matrix.name }} / ${{ matrix.os }} / MNE ${{ matrix.mne }}
