@@ -2168,7 +2168,6 @@ class SelectionDialog(_BaseDialog):  # noqa: D101
     def closeEvent(self, event):  # noqa: D102
         super().closeEvent(event)
         if hasattr(self.channel_fig.lasso, "callbacks"):
-            # MNE >= 1.0
             self.channel_fig.lasso.callbacks.clear()
         for chkbx in self.chkbxs.values():
             _disconnect(chkbx.clicked, allow_error=True)
@@ -5177,10 +5176,6 @@ def _init_browser(**kwargs):
     browser = MNEQtBrowser(**kwargs)
 
     return browser
-
-
-class PyQtGraphBrowser(MNEQtBrowser):  # noqa: D101
-    pass  # just for backward compat with MNE 1.0 scraping
 
 
 class SignalBlocker(QSignalBlocker):
