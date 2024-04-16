@@ -72,7 +72,7 @@ jobs:
           else
             PIP_OPTION="[tests]"
           fi
-          python -m pip install -ve .${PIP_OPTION} "PyQt6!=6.6.1,!=6.6.2" "PyQt6-Qt6!=6.6.1,!=6.6.2"
+          python -m pip install -ve .${PIP_OPTION} "PyQt6!=6.6.1" "PyQt6-Qt6!=6.6.1,!=6.6.2,!=6.6.3"
           if [[ "${{ matrix.pip }}" == "pre" ]]; then
             echo "Upgrading to pre-release NumPy, SciPy, and matplotlib"
             python -m pip install --upgrade --pre --only-binary ":all:" --default-timeout=60 --extra-index-url "https://pypi.anaconda.org/scientific-python-nightly-wheels/simple" "numpy>=2.0.0.dev0" "scipy>=1.14.0.dev0" "matplotlib>=3.9.0.dev0" "scikit-learn>=1.5.dev0"
