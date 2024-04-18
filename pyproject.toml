@@ -43,7 +43,7 @@ tests = [
 ]
 
 [project.urls]
-homepage = "https://github.com/mne-tools/mne-qt-browser"
+homepage = "https://mne.tools/"
 repository = "https://github.com/mne-tools/mne-qt-browser"
 changelog = "https://github.com/mne-tools/mne-qt-browser/releases"
 
