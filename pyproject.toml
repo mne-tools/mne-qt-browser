@@ -43,9 +43,9 @@ tests = [
 ]
 
 [project.urls]
-homepage = "https://mne.tools/mne-bids-pipeline"
-repository = "https://github.com/mne-tools/mne-bids-pipeline"
-changelog = "http://github.com/mne-tools/mne-qt-browser/releases"
+homepage = "https://github.com/mne-tools/mne-qt-browser"
+repository = "https://github.com/mne-tools/mne-qt-browser"
+changelog = "https://github.com/mne-tools/mne-qt-browser/releases"
 
 [tool.hatch.build]
 exclude = [
