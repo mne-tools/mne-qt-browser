@@ -63,6 +63,10 @@ raw-options = { version_scheme = "release-branch-semver" }
 addopts = "-ra --cov-report= --tb=short --junit-xml=junit-results.xml --capture=sys --durations=10"
 testpaths = ["mne_qt_browser"]
 junit_family = "xunit2"
+filterwarnings = [
+  "error",
+  "ignore:Failed to disconnect.*:RuntimeWarning",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "D", "I"]
