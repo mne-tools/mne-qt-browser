@@ -2261,6 +2261,8 @@ class AnnotRegion(LinearRegionItem):
 
         FillBetweenItems are used to highlight channels associated with an annotation.
         Start and stop are time in seconds.
+
+        Currently only updates when region boundaries change
         """
         for fi, this_fill in enumerate(self.ch_annot_fills):
             if fi == 0:
@@ -2272,8 +2274,9 @@ class AnnotRegion(LinearRegionItem):
             _, upper_ypos = this_fill.curves[0].getData()
             _, lower_ypos = this_fill.curves[1].getData()
             new_xpos = np.array([start, stop])
-            this_fill.curves[0].setData(new_xpos, upper_ypos)
-            this_fill.curves[1].setData(new_xpos, lower_ypos)
+            this_fill.curves[0].setData(x=new_xpos, y=upper_ypos)
+            this_fill.curves[1].setData(x=new_xpos, y=lower_ypos)
+
 
     def update_color(self, all_channels=True):
         """Update color of annotation-region.
@@ -2328,6 +2331,9 @@ class AnnotRegion(LinearRegionItem):
         vb = self.mne.viewbox
         if vb and self.label_item in vb.addedItems:
             vb.removeItem(self.label_item)
+        if self.ch_annot_fills:
+            for ch_annot in self.ch_annot_fills:
+                vb.removeItem(ch_annot)
 
     def select(self, selected):
         """Update select-state of annotation-region."""
