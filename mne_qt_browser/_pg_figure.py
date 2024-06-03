@@ -2324,6 +2324,9 @@ class AnnotRegion(LinearRegionItem):
         """Update if annotation-region is visible."""
         self.setVisible(visible)
         self.label_item.setVisible(visible)
+        if self.ch_annot_fills:
+            for ch_annot in self.ch_annot_fills:
+                ch_annot.setVisible(visible)
 
     def remove(self):
         """Remove annotation-region."""
