@@ -2277,7 +2277,6 @@ class AnnotRegion(LinearRegionItem):
             this_fill.curves[0].setData(x=new_xpos, y=upper_ypos)
             this_fill.curves[1].setData(x=new_xpos, y=lower_ypos)
 
-
     def update_color(self, all_channels=True):
         """Update color of annotation-region.
 
