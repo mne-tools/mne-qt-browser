@@ -61,6 +61,7 @@ from pyqtgraph import (
     mkColor,
     mkPen,
     setConfigOption,
+    RectROI
 )
 from qtpy.QtCore import (
     QEvent,
@@ -2176,12 +2177,69 @@ class SelectionDialog(_BaseDialog):  # noqa: D101
             main.close()
 
 
+class SingleChannelAnnot(FillBetweenItem):
+
+    def __init__(self, mne, weakmain, annot, ch_name):
+        super().__init__()
+        self.weakmain = weakmain
+        self.mne = mne
+        self.annot = annot
+        self.ch_name = ch_name
+
+        ypos = np.where(self.mne.ch_names[self.mne.ch_order]==self.ch_name)[0] + 1
+        print(ypos)
+        self.ypos = ypos + np.array([-0.5, 0.5])
+
+        self.lower = PlotCurveItem()
+        self.upper = PlotCurveItem()
+        self.setCurves(self.lower,self.upper)
+        self.update_plot_curves()
+
+        self.update_color()
+
+        self.mne.plt.addItem(self, ignoreBounds=True)
+
+        self.annot.removeRequested.connect(self.remove)
+        self.annot.sigRegionChangeFinished.connect(self.update_plot_curves)
+        self.annot.sigToggleVisibility.connect(self.update_visible)
+        self.annot.sigUpdateColor.connect(self.update_color)
+
+    def update_plot_curves(self):
+        """Update the lower and upper bounds of the region"""
+        annot_range = np.array(self.annot.getRegion())
+        self.lower.setData(x=annot_range, y=self.ypos[[0, 0]])
+        self.upper.setData(x=annot_range, y=self.ypos[[1, 1]])
+
+    def update_visible(self,visible):
+        """Update visibility to match the annot"""
+        self.setVisible(visible)
+        # if visible is None:
+        #     self.setVisible(self.annot.isVisible())
+        # else:
+        #     self.setVisible(visible)
+
+    def update_color(self, color_string=None):
+        if color_string is not None:
+            color_string = color_string
+        else:
+            color_string = self.mne.annotation_segment_colors[self.annot.description]
+        brush = _get_color(color_string, self.mne.dark)
+        brush.setAlpha(60)
+        self.setBrush(brush)
+
+    def remove(self):
+        """Remove this from plot"""
+        vb = self.mne.viewbox
+        vb.removeItem(self)
+
 class AnnotRegion(LinearRegionItem):
     """Graphics-Object for Annotations."""
 
     regionChangeFinished = Signal(object)
     gotSelected = Signal(object)
     removeRequested = Signal(object)
+    sigToggleVisibility = Signal(bool)
+    sigUpdateColor = Signal(str)
 
     def __init__(self, mne, description, values, weakmain, ch_names=None):
         super().__init__(
@@ -2206,24 +2264,11 @@ class AnnotRegion(LinearRegionItem):
         self.sigRegionChanged.connect(self.update_label_pos)
 
         self.update_color(all_channels=(not ch_names))
-        self.ch_annot_fills = list()  # container for FillBetween items
+
+        self.ch_annot_fills = {}
         if ch_names is not None and len(ch_names):
-            ch_is_in_annot = np.isin(self.mne.ch_names[self.mne.ch_order], ch_names)
-            yposes = np.nonzero(ch_is_in_annot)[0] + 1
-            color_string = self.mne.annotation_segment_colors[self.description]
-            brush = _get_color(color_string, self.mne.dark)
-            brush.setAlpha(60)
-            for _ypos in yposes:
-                logger.debug(
-                    "Adding channel specific rectangle at "
-                    f"position {_ypos} for {description}"
-                )
-                ypos = np.array([-0.5, 0.5]) + _ypos
-                lower = PlotCurveItem(x=np.array(values), y=ypos[[0, 0]])
-                upper = PlotCurveItem(x=np.array(values), y=ypos[[1, 1]])
-                fill = FillBetweenItem(lower, upper, brush=brush)
-                self.ch_annot_fills.append(fill)
-                self.mne.plt.addItem(fill, ignoreBounds=True)
+            for ch in ch_names:
+                self._add_single_channel_annot(ch)
 
         self.mne.plt.addItem(self, ignoreBounds=True)
         self.mne.plt.addItem(self.label_item, ignoreBounds=True)
@@ -2253,30 +2298,14 @@ class AnnotRegion(LinearRegionItem):
         with SignalBlocker(self):
             self.setRegion((onset, offset))
         self.update_label_pos()
-        # Update the FillBetweenItem shapes for channel specific annotations
-        self._update_channel_annot_fills(onset, offset)
 
-    def _update_channel_annot_fills(self, start, stop):
-        """Update the FillBetweenItems for channel specific annotations.
-
-        FillBetweenItems are used to highlight channels associated with an annotation.
-        Start and stop are time in seconds.
-
-        Currently only updates when region boundaries change
-        """
-        for fi, this_fill in enumerate(self.ch_annot_fills):
-            if fi == 0:
-                logger.debug(
-                    f"Moving {len(self.ch_annot_fills)} {self.description} "
-                    f"rectangle(s) to {start} - {stop}"
-                )
-            # we have to update the upper and lower curves of the FillBetweenItem
-            _, upper_ypos = this_fill.curves[0].getData()
-            _, lower_ypos = this_fill.curves[1].getData()
-            new_xpos = np.array([start, stop])
-            this_fill.curves[0].setData(x=new_xpos, y=upper_ypos)
-            this_fill.curves[1].setData(x=new_xpos, y=lower_ypos)
-
+    def _add_single_channel_annot(self, ch_name):
+        self.ch_annot_fills[ch_name] = SingleChannelAnnot(
+            self.mne,
+            self.weakmain,
+            self,
+            ch_name
+        )
 
     def update_color(self, all_channels=True):
         """Update color of annotation-region.
@@ -2313,6 +2342,7 @@ class AnnotRegion(LinearRegionItem):
             line.setPen(self.line_pen)
             line.setHoverPen(self.hover_pen)
         self.update()
+        self.sigUpdateColor.emit(color_string)
 
     def update_description(self, description):
         """Update description of annoation-region."""
@@ -2324,9 +2354,7 @@ class AnnotRegion(LinearRegionItem):
         """Update if annotation-region is visible."""
         self.setVisible(visible)
         self.label_item.setVisible(visible)
-        if self.ch_annot_fills:
-            for ch_annot in self.ch_annot_fills:
-                ch_annot.setVisible(visible)
+        self.sigToggleVisibility.emit(visible)
 
     def remove(self):
         """Remove annotation-region."""
@@ -2334,9 +2362,6 @@ class AnnotRegion(LinearRegionItem):
         vb = self.mne.viewbox
         if vb and self.label_item in vb.addedItems:
             vb.removeItem(self.label_item)
-        if self.ch_annot_fills:
-            for ch_annot in self.ch_annot_fills:
-                vb.removeItem(ch_annot)
 
     def select(self, selected):
         """Update select-state of annotation-region."""
@@ -2415,6 +2440,7 @@ class AnnotRegion(LinearRegionItem):
             self.sigRegionChangeFinished.emit(self)
         else:
             self.sigRegionChanged.emit(self)
+
 
     def update_label_pos(self):
         """Update position of description-label from annotation-region."""
