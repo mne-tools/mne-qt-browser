@@ -2299,14 +2299,6 @@ class AnnotRegion(LinearRegionItem):
             self.setRegion((onset, offset))
         self.update_label_pos()
 
-    def _add_single_channel_annot(self, ch_name):
-        self.ch_annot_fills[ch_name] = SingleChannelAnnot(
-            self.mne,
-            self.weakmain,
-            self,
-            ch_name
-        )
-
     def update_color(self, all_channels=True):
         """Update color of annotation-region.
 
