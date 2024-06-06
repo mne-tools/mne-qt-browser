@@ -61,7 +61,6 @@ from pyqtgraph import (
     mkColor,
     mkPen,
     setConfigOption,
-    RectROI
 )
 from qtpy.QtCore import (
     QEvent,
@@ -2178,7 +2177,6 @@ class SelectionDialog(_BaseDialog):  # noqa: D101
 
 
 class SingleChannelAnnot(FillBetweenItem):
-
     def __init__(self, mne, weakmain, annot, ch_name):
         super().__init__()
         self.weakmain = weakmain
@@ -2186,13 +2184,13 @@ class SingleChannelAnnot(FillBetweenItem):
         self.annot = annot
         self.ch_name = ch_name
 
-        ypos = np.where(self.mne.ch_names[self.mne.ch_order]==self.ch_name)[0] + 1
+        ypos = np.where(self.mne.ch_names[self.mne.ch_order] == self.ch_name)[0] + 1
         print(ypos)
         self.ypos = ypos + np.array([-0.5, 0.5])
 
         self.lower = PlotCurveItem()
         self.upper = PlotCurveItem()
-        self.setCurves(self.lower,self.upper)
+        self.setCurves(self.lower, self.upper)
         self.update_plot_curves()
 
         self.update_color()
@@ -2210,7 +2208,7 @@ class SingleChannelAnnot(FillBetweenItem):
         self.lower.setData(x=annot_range, y=self.ypos[[0, 0]])
         self.upper.setData(x=annot_range, y=self.ypos[[1, 1]])
 
-    def update_visible(self,visible):
+    def update_visible(self, visible):
         """Update visibility to match the annot"""
         self.setVisible(visible)
         # if visible is None:
@@ -2231,6 +2229,7 @@ class SingleChannelAnnot(FillBetweenItem):
         """Remove this from plot"""
         vb = self.mne.viewbox
         vb.removeItem(self)
+
 
 class AnnotRegion(LinearRegionItem):
     """Graphics-Object for Annotations."""
@@ -2432,7 +2431,6 @@ class AnnotRegion(LinearRegionItem):
             self.sigRegionChangeFinished.emit(self)
         else:
             self.sigRegionChanged.emit(self)
-
 
     def update_label_pos(self):
         """Update position of description-label from annotation-region."""
