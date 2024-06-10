@@ -34,7 +34,6 @@ except Exception as exc:
         raise
 
 import scooby
-from colorspacious import cspace_convert
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.colors import to_rgba_array
 from mne import channel_indices_by_type
@@ -127,6 +126,7 @@ from qtpy.QtWidgets import (
 from scipy.stats import zscore
 
 from . import _browser_instances
+from ._colors import _lab_to_rgb, _rgb_to_lab
 from ._fixes import capture_exceptions
 
 name = "pyqtgraph"
@@ -206,9 +206,9 @@ def _get_color_cached(*, color_spec, invert):
         else:
             logger.debug(f"Missed {key} from {orig_spec}")
             rgba = np.array(color.getRgbF())
-            lab = cspace_convert(rgba[:3], "sRGB1", "CIELab")
+            lab = _rgb_to_lab(rgba[:3])
             lab[0] = 100.0 - lab[0]
-            rgba[:3] = np.clip(cspace_convert(lab, "CIELab", "sRGB1"), 0, 1)
+            rgba[:3] = _lab_to_rgb(lab)
             color.setRgbF(*rgba)
 
     return color
@@ -3101,7 +3101,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.mkPen = _methpartial(self._hidpi_mkPen)
 
         bgcolor = self.palette().color(self.backgroundRole()).getRgbF()[:3]
-        self.mne.dark = cspace_convert(bgcolor, "sRGB1", "CIELab")[0] < 50
+        self.mne.dark = _rgb_to_lab(bgcolor)[0] < 50
 
         # Prepend our icon search path and set fallback name
         icons_path = f"{Path(__file__).parent}/icons"
