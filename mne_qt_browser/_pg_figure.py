@@ -2231,6 +2231,7 @@ class SingleChannelAnnot(FillBetweenItem):
 
     def remove(self):
         """Remove this from plot"""
+        self._toggle_single_channel_annot(self.ch_name)
         vb = self.mne.viewbox
         vb.removeItem(self)
 
@@ -2314,6 +2315,11 @@ class AnnotRegion(LinearRegionItem):
         self.single_channel_annots[ch_name].remove()
         self.single_channel_annots.pop(ch_name)
 
+    def _toggle_single_channel_annot(self, ch_name):
+        """Add or remove single channel annotations"""
+        self.mne._toggle_single_channel_annotation(ch_name)
+        self.update_color(all_channels=(not list(self.single_channel_annots.keys())))
+
     def update_color(self, all_channels=True):
         """Update color of annotation-region.
 
@@ -2393,22 +2399,14 @@ class AnnotRegion(LinearRegionItem):
             and (event.button() == Qt.LeftButton and event.modifiers() & Qt.ShiftModifier)
         ):
             scene_pos = self.mapToScene(event.pos())
-            single_channels_list = list(self.single_channel_annots.keys())
 
             for t in self.mne.traces:
-
                 trace_path = t.shape()
                 trace_point = t.mapFromScene(scene_pos)
-                if trace_path.contains(trace_point) and t.ch_name not in single_channels_list:
-                    self._add_single_channel_annot(t.ch_name)
+                if trace_path.contains(trace_point):
+                    self._toggle_single_channel_annot(t.ch_name)
                     event.accept()
                     break
-                elif trace_path.contains(trace_point) and t.ch_name in single_channels_list:
-                    self._remove_single_channel_annot(t.ch_name)
-                    event.accept()
-                    break
-
-            event.ignore()
 
         elif self.mne.annotation_mode:
             if event.button() == Qt.LeftButton and self.movable:
