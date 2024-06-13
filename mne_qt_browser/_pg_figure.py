@@ -2317,7 +2317,12 @@ class AnnotRegion(LinearRegionItem):
 
     def _toggle_single_channel_annot(self, ch_name):
         """Add or remove single channel annotations"""
-        self.mne._toggle_single_channel_annotation(ch_name)
+        #self.mne._toggle_single_channel_annotation(ch_name)
+        if ch_name not in self.single_channel_annots.keys():
+            self._add_single_channel_annot(ch_name)
+        else:
+            self._remove_single_channel_annot(ch_name)
+
         self.update_color(all_channels=(not list(self.single_channel_annots.keys())))
 
     def update_color(self, all_channels=True):
