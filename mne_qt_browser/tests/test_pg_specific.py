@@ -6,8 +6,11 @@
 import numpy as np
 import pytest
 from mne import Annotations
+from numpy.testing import assert_allclose
 from pyqtgraph.graphicsItems.FillBetweenItem import FillBetweenItem
 from qtpy.QtTest import QTest
+
+from mne_qt_browser._colors import _lab_to_rgb, _rgb_to_lab
 
 LESS_TIME = "Show fewer time points"
 MORE_TIME = "Show more time points"
@@ -438,3 +441,37 @@ def test_pg_toolbar_actions(raw_orig, pg_backend):
     assert pg_backend._get_n_figs() == 2
     fig._fake_click_on_toolbar_action("Help", wait_after=100)
     assert pg_backend._get_n_figs() == 1
+
+
+# LAB values taken from colorspacious on 2024/06/10
+@pytest.mark.parametrize(
+    "rgb, lab",
+    [
+        [(0, 0, 1), (32.30269787, 79.19228008, -107.86329661)],  # green
+        [(1, 1, 1), (100, 0, 0)],  # white
+        [(0, 0, 0), (0, 0, 0)],  # black
+        # np.random.default_rng(0).uniform(0, 1, (4, 3))
+        [
+            (0.63696169, 0.26978671, 0.04097352),
+            (41.18329695, 36.11095837, 48.52748511),
+        ],
+        [
+            (0.01652764, 0.81327024, 0.91275558),
+            (76.50078586, -33.20150417, -24.47911354),
+        ],
+        [
+            (0.60663578, 0.72949656, 0.54362499),
+            (72.17250521, -19.45430481, 20.62037424),
+        ],
+        [
+            (0.93507242, 0.81585355, 0.0027385),
+            (83.64455095, -5.45852637, 84.04513029),
+        ],
+    ],
+)
+def test_color_conversion(rgb, lab):
+    """Test color conversions against manually run ones."""
+    our_lab = _rgb_to_lab(rgb)
+    assert_allclose(our_lab, lab, atol=2e-2)
+    rgb_2 = _lab_to_rgb(lab)
+    assert_allclose(rgb, rgb_2, atol=2e-2)
