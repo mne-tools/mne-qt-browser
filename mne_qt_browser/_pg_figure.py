@@ -2178,7 +2178,6 @@ class SelectionDialog(_BaseDialog):  # noqa: D101
 
 
 class SingleChannelAnnot(FillBetweenItem):
-
     def __init__(self, mne, weakmain, annot, ch_name):
         super().__init__()
         self.weakmain = weakmain
@@ -2189,8 +2188,8 @@ class SingleChannelAnnot(FillBetweenItem):
         ypos = np.where(self.mne.ch_names[self.mne.ch_order] == self.ch_name)[0] + 1
         self.ypos = ypos + np.array([-0.5, 0.5])
 
-        #self.lower = PlotCurveItem()
-        #self.upper = PlotCurveItem()
+        # self.lower = PlotCurveItem()
+        # self.upper = PlotCurveItem()
         self.upper = PlotDataItem()
         self.lower = PlotDataItem()
         self.setCurves(self.lower, self.upper)
@@ -2208,16 +2207,15 @@ class SingleChannelAnnot(FillBetweenItem):
 
     def update_plot_curves(self):
         """Update the lower and upper bounds of the region"""
-
         # When using PlotCurveItem
-        #annot_range = np.array(self.annot.getRegion())
-        #self.lower.setData(x=annot_range, y=self.ypos[[0, 0]])
-        #self.upper.setData(x=annot_range, y=self.ypos[[1, 1]])
+        # annot_range = np.array(self.annot.getRegion())
+        # self.lower.setData(x=annot_range, y=self.ypos[[0, 0]])
+        # self.upper.setData(x=annot_range, y=self.ypos[[1, 1]])
 
         # When using PlotDataItem
         x_min, x_max = self.annot.getRegion()
         y_min, y_max = self.ypos
-        self.upper.setData(x=(x_min,x_max), y=(y_max, y_max))
+        self.upper.setData(x=(x_min, x_max), y=(y_max, y_max))
         self.lower.setData(x=(x_min, x_max), y=(y_min, y_min))
 
     def update_visible(self, visible):
@@ -2233,6 +2231,7 @@ class SingleChannelAnnot(FillBetweenItem):
         """Remove this from plot"""
         vb = self.mne.viewbox
         vb.removeItem(self)
+
 
 class AnnotRegion(LinearRegionItem):
     """Graphics-Object for Annotations."""
@@ -2301,16 +2300,12 @@ class AnnotRegion(LinearRegionItem):
             self.setRegion((onset, offset))
         self.update_label_pos()
 
-
-    def _add_single_channel_annot(self,ch_name):
+    def _add_single_channel_annot(self, ch_name):
         self.single_channel_annots[ch_name] = SingleChannelAnnot(
-            self.mne,
-            self.weakmain,
-            self,
-            ch_name
+            self.mne, self.weakmain, self, ch_name
         )
 
-    def _remove_single_channel_annot(self,ch_name):
+    def _remove_single_channel_annot(self, ch_name):
         self.single_channel_annots[ch_name].remove()
         self.single_channel_annots.pop(ch_name)
 
@@ -2399,9 +2394,8 @@ class AnnotRegion(LinearRegionItem):
 
     def mouseClickEvent(self, event):
         """Customize mouse click events."""
-        if (
-            self.mne.annotation_mode
-            and (event.button() == Qt.LeftButton and event.modifiers() & Qt.ShiftModifier)
+        if self.mne.annotation_mode and (
+            event.button() == Qt.LeftButton and event.modifiers() & Qt.ShiftModifier
         ):
             scene_pos = self.mapToScene(event.pos())
 
@@ -2472,7 +2466,6 @@ class AnnotRegion(LinearRegionItem):
             self.sigRegionChangeFinished.emit(self)
         else:
             self.sigRegionChanged.emit(self)
-
 
     def update_label_pos(self):
         """Update position of description-label from annotation-region."""
