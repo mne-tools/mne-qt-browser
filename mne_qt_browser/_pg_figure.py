@@ -2231,7 +2231,6 @@ class SingleChannelAnnot(FillBetweenItem):
 
     def remove(self):
         """Remove this from plot"""
-        self._toggle_single_channel_annot(self.ch_name)
         vb = self.mne.viewbox
         vb.removeItem(self)
 
@@ -2317,7 +2316,8 @@ class AnnotRegion(LinearRegionItem):
 
     def _toggle_single_channel_annot(self, ch_name):
         """Add or remove single channel annotations"""
-        #self.mne._toggle_single_channel_annotation(ch_name)
+        region_idx = self.weakmain()._get_onset_idx(self.getRegion()[0])
+        self.weakmain()._toggle_single_channel_annotation(ch_name, region_idx)
         if ch_name not in self.single_channel_annots.keys():
             self._add_single_channel_annot(ch_name)
         else:
