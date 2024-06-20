@@ -2206,7 +2206,7 @@ class SingleChannelAnnot(FillBetweenItem):
         self.annot.sigUpdateColor.connect(self.update_color)
 
     def update_plot_curves(self):
-        """Update the lower and upper bounds of the region"""
+        """Update the lower and upper bounds of the region."""
         # When using PlotCurveItem
         # annot_range = np.array(self.annot.getRegion())
         # self.lower.setData(x=annot_range, y=self.ypos[[0, 0]])
@@ -2219,7 +2219,7 @@ class SingleChannelAnnot(FillBetweenItem):
         self.lower.setData(x=(x_min, x_max), y=(y_min, y_min))
 
     def update_visible(self, visible):
-        """Update visibility to match the annot"""
+        """Update visibility to match the annot."""
         self.setVisible(visible)
 
     def update_color(self, color_string=None):
@@ -2228,7 +2228,7 @@ class SingleChannelAnnot(FillBetweenItem):
         self.setBrush(brush)
 
     def remove(self):
-        """Remove this from plot"""
+        """Remove this from plot."""
         vb = self.mne.viewbox
         vb.removeItem(self)
 
@@ -2310,7 +2310,7 @@ class AnnotRegion(LinearRegionItem):
         self.single_channel_annots.pop(ch_name)
 
     def _toggle_single_channel_annot(self, ch_name):
-        """Add or remove single channel annotations"""
+        """Add or remove single channel annotations."""
         region_idx = self.weakmain()._get_onset_idx(self.getRegion()[0])
         self.weakmain()._toggle_single_channel_annotation(ch_name, region_idx)
         if ch_name not in self.single_channel_annots.keys():
