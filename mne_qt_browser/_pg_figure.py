@@ -2179,7 +2179,6 @@ class SelectionDialog(_BaseDialog):  # noqa: D101
 
 class SingleChannelAnnot(FillBetweenItem):
     def __init__(self, mne, weakmain, annot, ch_name):
-        super().__init__()
         self.weakmain = weakmain
         self.mne = mne
         self.annot = annot
