@@ -2192,7 +2192,12 @@ class SingleChannelAnnot(FillBetweenItem):
         # self.upper = PlotCurveItem()
         self.upper = PlotDataItem()
         self.lower = PlotDataItem()
-        self.setCurves(self.lower, self.upper)
+
+        # init
+        super().__init__(self.lower, self.upper)
+
+        # self.setCurves(self.lower, self.upper)
+
         self.update_plot_curves()
 
         color_string = self.mne.annotation_segment_colors[self.annot.description]
@@ -2202,6 +2207,7 @@ class SingleChannelAnnot(FillBetweenItem):
 
         self.annot.removeRequested.connect(self.remove)
         self.annot.sigRegionChangeFinished.connect(self.update_plot_curves)
+        self.annot.sigRegionChanged.connect(self.update_plot_curves)
         self.annot.sigToggleVisibility.connect(self.update_visible)
         self.annot.sigUpdateColor.connect(self.update_color)
 
@@ -2820,8 +2826,8 @@ class AnnotationDock(QDockWidget):
         if start < stop:
             self.mne.selected_region.setRegion((start, stop))
             # Make channel specific fillBetweens stay in sync with annot region
-            if sel_region.ch_annot_fills:
-                sel_region._update_channel_annot_fills(start, stop)
+            # if len(sel_region.single_channel_annots.keys()) > 0:
+            #    sel_region.single_channel_annots(start, stop)
         else:
             self.weakmain().message_box(
                 text="Invalid value!",
