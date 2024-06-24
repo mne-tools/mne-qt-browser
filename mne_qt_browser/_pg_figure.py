@@ -4949,6 +4949,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         xform="ax",
         button=1,
         kind="press",
+        modifier=None,
     ):
         add_points = add_points or list()
         # Wait until Window is fully shown.
@@ -5010,13 +5011,20 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 # always click because most interactivity comes form
                 # mouseClickEvent from pyqtgraph (just press doesn't suffice
                 # here).
-                _mouseClick(widget=widget, pos=point, button=button)
+                _mouseClick(widget=widget, pos=point, button=button, modifier=modifier)
             elif kind == "release":
-                _mouseRelease(widget=widget, pos=point, button=button)
+                _mouseRelease(
+                    widget=widget, pos=point, button=button, modifier=modifier
+                )
             elif kind == "motion":
-                _mouseMove(widget=widget, pos=point, buttons=button)
+                _mouseMove(widget=widget, pos=point, buttons=button, modifier=modifier)
             elif kind == "drag":
-                _mouseDrag(widget=widget, positions=[point] + add_points, button=button)
+                _mouseDrag(
+                    widget=widget,
+                    positions=[point] + add_points,
+                    button=button,
+                    modifier=modifier,
+                )
 
         for exc in exceptions:
             raise RuntimeError(
