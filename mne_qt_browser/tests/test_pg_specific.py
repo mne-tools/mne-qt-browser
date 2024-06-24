@@ -147,7 +147,7 @@ def test_ch_specific_annot(raw_orig, pg_backend):
     # test if shift click an existing annotation removes object
     ch_index = np.mean(annot.single_channel_annots["MEG 0133"].ypos).astype(int)
     fig._fake_click(
-        (annot_onset + annot_dur / 2, ch_index),
+        (4 + 2 / 2, ch_index),
         xform="data",
         button=1,
         modifier=Qt.ShiftModifier,
@@ -156,7 +156,7 @@ def test_ch_specific_annot(raw_orig, pg_backend):
 
     # test if shift click on channel adds annotation
     fig._fake_click(
-        (annot_onset + annot_dur / 2, ch_index),
+        (4 + 2 / 2, ch_index),
         xform="data",
         button=1,
         modifier=Qt.ShiftModifier,
