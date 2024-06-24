@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 from mne import Annotations
 from numpy.testing import assert_allclose
+from qtpy.QtCore import Qt
 from qtpy.QtTest import QTest
 
 from mne_qt_browser._colors import _lab_to_rgb, _rgb_to_lab
@@ -144,8 +145,23 @@ def test_ch_specific_annot(raw_orig, pg_backend):
     assert single_channel_annot.lower.xData[0] == 4
 
     # test if shift click an existing annotation removes object
+    ch_index = np.mean(annot.single_channel_annots["MEG 0133"].ypos).astype(int)
+    fig._fake_click(
+        (annot_onset + annot_dur / 2, ch_index),
+        xform="data",
+        button=1,
+        modifier=Qt.ShiftModifier,
+    )
+    assert "MEG 0133" not in annot.single_channel_annots.keys()
 
     # test if shift click on channel adds annotation
+    fig._fake_click(
+        (annot_onset + annot_dur / 2, ch_index),
+        xform="data",
+        button=1,
+        modifier=Qt.ShiftModifier,
+    )
+    assert "MEG 0133" in annot.single_channel_annots.keys()
 
     fig.close()
 
