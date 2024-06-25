@@ -15,7 +15,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu, windows, macos]
-        mne: [main, maint/1.6]
+        mne: [main, maint/1.7]
         opengl: ['opengl']
         python: ['3.12']
         name: [matrix]
@@ -27,7 +27,7 @@ jobs:
             python: '3.12'
             name: no opengl
           - os: ubuntu
-            mne: maint/1.6
+            mne: maint/1.7
             opengl: ''
             python: '3.12'
             name: no opengl
