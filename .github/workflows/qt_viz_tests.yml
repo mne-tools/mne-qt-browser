@@ -15,7 +15,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu, windows, macos]
-        mne: [main, maint/1.6]
+        mne: [main, maint/1.7]
         opengl: ['opengl']
         python: ['3.12']
         name: [matrix]
@@ -27,7 +27,7 @@ jobs:
             python: '3.12'
             name: no opengl
           - os: ubuntu
-            mne: maint/1.6
+            mne: maint/1.7
             opengl: ''
             python: '3.12'
             name: no opengl
@@ -54,11 +54,11 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install dependencies
@@ -80,7 +80,7 @@ jobs:
       - run: ./tools/get_testing_version.sh
         name: 'Get testing version'
         working-directory: ../mne-python
-      - uses: actions/cache@v3
+      - uses: actions/cache@v4
         with:
           key: ${{ env.TESTING_VERSION }}
           path: ~/mne_data
@@ -104,7 +104,7 @@ jobs:
       - run: pytest mne_qt_browser/tests/test_speed.py
         name: Run benchmarks
         if: runner.os != 'macOS'
-      - uses: codecov/codecov-action@v1
+      - uses: codecov/codecov-action@v4
         if: always()
         name: 'Upload coverage to CodeCov'
   qt:
@@ -141,11 +141,11 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install dependencies
@@ -171,7 +171,7 @@ jobs:
         run: ./tools/get_testing_version.sh
         name: 'Get testing version'
         working-directory: ../mne-python
-      - uses: actions/cache@v3
+      - uses: actions/cache@v4
         with:
           key: ${{ env.TESTING_VERSION }}
           path: ~/mne_data
@@ -197,6 +197,6 @@ jobs:
       - run: pytest mne_qt_browser/tests/test_speed.py
         name: Run benchmarks
         if: runner.os != 'Linux' || (matrix.qt != 'PySide2' && matrix.qt != 'PyQt5')
-      - uses: codecov/codecov-action@v1
+      - uses: codecov/codecov-action@v4
         if: always()
         name: 'Upload coverage to CodeCov'
