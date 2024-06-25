@@ -3,6 +3,7 @@
 #
 # License: BSD-3-Clause
 
+import mne.viz._figure
 import numpy as np
 import pytest
 from mne import Annotations
@@ -100,7 +101,7 @@ def test_annotations_interactions(raw_orig, pg_backend):
     fig.msg_box.close()
 
 
-def test_ch_specific_annot(raw_orig, pg_backend):
+def test_ch_specific_annot_display(raw_orig, pg_backend):
     """Test plotting channel specific annotations."""
     ch_names = ["MEG 0133", "MEG 0142", "MEG 0143", "MEG 0423"]
     annot_onset, annot_dur = 1, 2
@@ -144,10 +145,30 @@ def test_ch_specific_annot(raw_orig, pg_backend):
     assert annot_dock.start_bx.value() == 4
     assert single_channel_annot.lower.xData[0] == 4
 
+    fig.close()
+
+
+@pytest.mark.skipif(
+    not hasattr(mne.viz._figure.BrowserBase, "_toggle_single_channel_annotation"),
+    reason="needs MNE 1.8",
+)
+def test_ch_specific_annot_interactions(raw_orig, pg_backend):
+    """Test interactiveness and responsiveness of channel specific annotations."""
+    ch_names = ["MEG 0133", "MEG 0142", "MEG 0143", "MEG 0423"]
+    annot_onset, annot_dur = 1, 2
+    annots = Annotations([annot_onset], [annot_dur], "some_chs", ch_names=[ch_names])
+    raw_orig.set_annotations(annots)
+
+    fig = raw_orig.plot()
+    fig.test_mode = True
+    annot = fig.mne.regions[0]
+
+    fig._fake_keypress("a")  # activate annotation mode
+
     # test if shift click an existing annotation removes object
     ch_index = np.mean(annot.single_channel_annots["MEG 0133"].ypos).astype(int)
     fig._fake_click(
-        (4 + 2 / 2, ch_index),
+        ((annot_onset + annot_dur) / 2, ch_index),
         xform="data",
         button=1,
         modifier=Qt.ShiftModifier,
@@ -156,7 +177,7 @@ def test_ch_specific_annot(raw_orig, pg_backend):
 
     # test if shift click on channel adds annotation
     fig._fake_click(
-        (4 + 2 / 2, ch_index),
+        ((annot_onset + annot_dur) / 2, ch_index),
         xform="data",
         button=1,
         modifier=Qt.ShiftModifier,
