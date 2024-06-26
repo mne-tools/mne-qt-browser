@@ -2316,6 +2316,14 @@ class AnnotRegion(LinearRegionItem):
 
     def _toggle_single_channel_annot(self, ch_name):
         """Add or remove single channel annotations."""
+        # Exit if mne-python not updated to support shift-click
+        if not hasattr(self.weakmain(), "_toggle_single_channel_annotation"):
+            warn(
+                "MNE must be updated to version 1.8 or above "
+                "to support add/remove channels from annotation. "
+            )
+            return
+
         region_idx = self.weakmain()._get_onset_idx(self.getRegion()[0])
         self.weakmain()._toggle_single_channel_annotation(ch_name, region_idx)
         if ch_name not in self.single_channel_annots.keys():
