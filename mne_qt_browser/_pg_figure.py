@@ -2319,8 +2319,8 @@ class AnnotRegion(LinearRegionItem):
         # Exit if mne-python not updated to support shift-click
         if not hasattr(self.weakmain(), "_toggle_single_channel_annotation"):
             warn(
-                "MNE must be updated to version 1.8 or above "
-                "to support add/remove channels from annotation. "
+                "MNE must be updated to version 1.8 or above to "
+                "support add/remove channels from annotation."
             )
             return
 
