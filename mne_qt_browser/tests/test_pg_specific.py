@@ -3,7 +3,6 @@
 #
 # License: BSD-3-Clause
 
-import warnings
 
 import numpy as np
 import pytest
@@ -147,34 +146,37 @@ def test_ch_specific_annot(raw_orig, pg_backend):
     assert annot_dock.start_bx.value() == 4
     assert single_channel_annot.lower.xData[0] == 4
 
+    def test_interactions():
+        ch_index = np.mean(annot.single_channel_annots["MEG 0133"].ypos).astype(int)
+        fig._fake_click(
+            (4 + 2 / 2, ch_index),
+            xform="data",
+            button=1,
+            modifier=Qt.ShiftModifier,
+        )
+        assert "MEG 0133" not in annot.single_channel_annots.keys()
+
+        # test if shift click on channel adds annotation
+        fig._fake_click(
+            (4 + 2 / 2, ch_index),
+            xform="data",
+            button=1,
+            modifier=Qt.ShiftModifier,
+        )
+        assert "MEG 0133" in annot.single_channel_annots.keys()
+
     # MNE >= 1.8
-    if not check_version("mne", "1.8"):
+    if check_version("mne", "1.8"):
+        # test if shift click an existing annotation removes object
+        test_interactions()
+
+    else:
         warning_message = (
             "must update MNE to >= 1.8 to test single channel annots interactions"
         )
         # emit a warning if the user tries to test single channel annots
-        with pytest.warns(UserWarning, match=warning_message):
-            warnings.warn(warning_message, UserWarning)
-            return
-
-    # test if shift click an existing annotation removes object
-    ch_index = np.mean(annot.single_channel_annots["MEG 0133"].ypos).astype(int)
-    fig._fake_click(
-        (4 + 2 / 2, ch_index),
-        xform="data",
-        button=1,
-        modifier=Qt.ShiftModifier,
-    )
-    assert "MEG 0133" not in annot.single_channel_annots.keys()
-
-    # test if shift click on channel adds annotation
-    fig._fake_click(
-        (4 + 2 / 2, ch_index),
-        xform="data",
-        button=1,
-        modifier=Qt.ShiftModifier,
-    )
-    assert "MEG 0133" in annot.single_channel_annots.keys()
+        with pytest.warns(RuntimeWarning, match=warning_message):
+            test_interactions()
 
     fig.close()
 
