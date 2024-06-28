@@ -3,11 +3,13 @@
 #
 # License: BSD-3-Clause
 
+
 import numpy as np
 import pytest
 from mne import Annotations
+from mne.utils import check_version
 from numpy.testing import assert_allclose
-from pyqtgraph.graphicsItems.FillBetweenItem import FillBetweenItem
+from qtpy.QtCore import Qt
 from qtpy.QtTest import QTest
 
 from mne_qt_browser._colors import _lab_to_rgb, _rgb_to_lab
@@ -113,18 +115,16 @@ def test_ch_specific_annot(raw_orig, pg_backend):
     annot_dock = fig.mne.fig_annotation
 
     # one FillBetweenItem for each channel in a channel specific annot
-    fill_betweens = [
-        item for item in fig.mne.plt.items if isinstance(item, FillBetweenItem)
-    ]
-    assert len(fill_betweens) == 4  # 4 channels in annots[0].ch_names
+    annot = fig.mne.regions[0]
+    assert (
+        len(annot.single_channel_annots) == 4
+    )  # 4 channels in annots[0].single_channel_annots
 
     # check that a channel specific annot is plotted at the correct ypos
-    last_fill_between = fill_betweens[-1].curves[0]
-    # "MEG 0423" should be the 28th channel in the plot.
+    single_channel_annot = annot.single_channel_annots["MEG 0423"]
     # the +1 is needed because ypos indexing of the traces starts at 1, not 0
     want_index = fig_ch_names.index(raw_orig.annotations.ch_names[0][-1]) + 1
-    # The round basically just rounds 27.5 up to 28
-    got_index = np.round(last_fill_between.yData[0]).astype(int)
+    got_index = np.mean(single_channel_annot.ypos).astype(int)
     assert got_index == want_index  # should be 28
 
     fig._fake_keypress("a")  # activate annotation mode
@@ -135,16 +135,48 @@ def test_ch_specific_annot(raw_orig, pg_backend):
     # change the stop value of the annotation
     annot_dock.stop_bx.setValue(6)
     annot_dock.stop_bx.editingFinished.emit()
-    # does the channel specific rectangle stay in sync with the annot?
+    # does the single channel annot stay within the annot
     assert annot_dock.stop_bx.value() == 6
-    assert last_fill_between.xData[1] == 6
+    assert single_channel_annot.lower.xData[1] == 6
 
     # now change the start value of the annotation
     annot_dock.start_bx.setValue(4)
     annot_dock.start_bx.editingFinished.emit()
     # does the channel specific rectangle stay in sync with the annot?
     assert annot_dock.start_bx.value() == 4
-    assert last_fill_between.xData[0] == 4
+    assert single_channel_annot.lower.xData[0] == 4
+
+    ch_index = np.mean(annot.single_channel_annots["MEG 0133"].ypos).astype(int)
+
+    # MNE >= 1.8
+    if check_version("mne", "1.8"):
+        # test if shift click an existing annotation removes object
+        fig._fake_click(
+            (4 + 2 / 2, ch_index),
+            xform="data",
+            button=1,
+            modifier=Qt.ShiftModifier,
+        )
+        assert "MEG 0133" not in annot.single_channel_annots.keys()
+
+        # test if shift click on channel adds annotation
+        fig._fake_click(
+            (4 + 2 / 2, ch_index),
+            xform="data",
+            button=1,
+            modifier=Qt.ShiftModifier,
+        )
+        assert "MEG 0133" in annot.single_channel_annots.keys()
+    else:
+        # emit a warning if the user tries to test single channel annots
+        with pytest.warns(RuntimeWarning, match="updated"):
+            fig._fake_click(
+                (4 + 2 / 2, ch_index),
+                xform="data",
+                button=1,
+                modifier=Qt.ShiftModifier,
+            )
+            assert "MEG 0133" not in annot.single_channel_annots.keys()
 
     fig.close()
 

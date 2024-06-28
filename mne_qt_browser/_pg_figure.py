@@ -52,6 +52,7 @@ from pyqtgraph import (
     InfLineLabel,
     LinearRegionItem,
     PlotCurveItem,
+    PlotDataItem,
     PlotItem,
     Point,
     TextItem,
@@ -2176,12 +2177,75 @@ class SelectionDialog(_BaseDialog):  # noqa: D101
             main.close()
 
 
+class SingleChannelAnnot(FillBetweenItem):
+    def __init__(self, mne, weakmain, annot, ch_name):
+        self.weakmain = weakmain
+        self.mne = mne
+        self.annot = annot
+        self.ch_name = ch_name
+
+        ypos = np.where(self.mne.ch_names[self.mne.ch_order] == self.ch_name)[0] + 1
+        self.ypos = ypos + np.array([-0.5, 0.5])
+
+        # self.lower = PlotCurveItem()
+        # self.upper = PlotCurveItem()
+        self.upper = PlotDataItem()
+        self.lower = PlotDataItem()
+
+        # init
+        super().__init__(self.lower, self.upper)
+
+        # self.setCurves(self.lower, self.upper)
+
+        self.update_plot_curves()
+
+        color_string = self.mne.annotation_segment_colors[self.annot.description]
+        self.update_color(color_string)
+
+        self.mne.plt.addItem(self, ignoreBounds=True)
+
+        self.annot.removeRequested.connect(self.remove)
+        self.annot.sigRegionChangeFinished.connect(self.update_plot_curves)
+        self.annot.sigRegionChanged.connect(self.update_plot_curves)
+        self.annot.sigToggleVisibility.connect(self.update_visible)
+        self.annot.sigUpdateColor.connect(self.update_color)
+
+    def update_plot_curves(self):
+        """Update the lower and upper bounds of the region."""
+        # When using PlotCurveItem
+        # annot_range = np.array(self.annot.getRegion())
+        # self.lower.setData(x=annot_range, y=self.ypos[[0, 0]])
+        # self.upper.setData(x=annot_range, y=self.ypos[[1, 1]])
+
+        # When using PlotDataItem
+        x_min, x_max = self.annot.getRegion()
+        y_min, y_max = self.ypos
+        self.upper.setData(x=(x_min, x_max), y=(y_max, y_max))
+        self.lower.setData(x=(x_min, x_max), y=(y_min, y_min))
+
+    def update_visible(self, visible):
+        """Update visibility to match the annot."""
+        self.setVisible(visible)
+
+    def update_color(self, color_string=None):
+        brush = _get_color(color_string, self.mne.dark)
+        brush.setAlpha(60)
+        self.setBrush(brush)
+
+    def remove(self):
+        """Remove this from plot."""
+        vb = self.mne.viewbox
+        vb.removeItem(self)
+
+
 class AnnotRegion(LinearRegionItem):
     """Graphics-Object for Annotations."""
 
     regionChangeFinished = Signal(object)
     gotSelected = Signal(object)
     removeRequested = Signal(object)
+    sigToggleVisibility = Signal(bool)
+    sigUpdateColor = Signal(str)
 
     def __init__(self, mne, description, values, weakmain, ch_names=None):
         super().__init__(
@@ -2206,24 +2270,11 @@ class AnnotRegion(LinearRegionItem):
         self.sigRegionChanged.connect(self.update_label_pos)
 
         self.update_color(all_channels=(not ch_names))
-        self.ch_annot_fills = list()  # container for FillBetween items
+
+        self.single_channel_annots = {}
         if ch_names is not None and len(ch_names):
-            ch_is_in_annot = np.isin(self.mne.ch_names[self.mne.ch_order], ch_names)
-            yposes = np.nonzero(ch_is_in_annot)[0] + 1
-            color_string = self.mne.annotation_segment_colors[self.description]
-            brush = _get_color(color_string, self.mne.dark)
-            brush.setAlpha(60)
-            for _ypos in yposes:
-                logger.debug(
-                    "Adding channel specific rectangle at "
-                    f"position {_ypos} for {description}"
-                )
-                ypos = np.array([-0.5, 0.5]) + _ypos
-                lower = PlotCurveItem(x=np.array(values), y=ypos[[0, 0]])
-                upper = PlotCurveItem(x=np.array(values), y=ypos[[1, 1]])
-                fill = FillBetweenItem(lower, upper, brush=brush)
-                self.ch_annot_fills.append(fill)
-                self.mne.plt.addItem(fill, ignoreBounds=True)
+            for ch in ch_names:
+                self._add_single_channel_annot(ch)
 
         self.mne.plt.addItem(self, ignoreBounds=True)
         self.mne.plt.addItem(self.label_item, ignoreBounds=True)
@@ -2253,27 +2304,34 @@ class AnnotRegion(LinearRegionItem):
         with SignalBlocker(self):
             self.setRegion((onset, offset))
         self.update_label_pos()
-        # Update the FillBetweenItem shapes for channel specific annotations
-        self._update_channel_annot_fills(onset, offset)
 
-    def _update_channel_annot_fills(self, start, stop):
-        """Update the FillBetweenItems for channel specific annotations.
+    def _add_single_channel_annot(self, ch_name):
+        self.single_channel_annots[ch_name] = SingleChannelAnnot(
+            self.mne, self.weakmain, self, ch_name
+        )
 
-        FillBetweenItems are used to highlight channels associated with an annotation.
-        Start and stop are time in seconds.
-        """
-        for fi, this_fill in enumerate(self.ch_annot_fills):
-            if fi == 0:
-                logger.debug(
-                    f"Moving {len(self.ch_annot_fills)} {self.description} "
-                    f"rectangle(s) to {start} - {stop}"
-                )
-            # we have to update the upper and lower curves of the FillBetweenItem
-            _, upper_ypos = this_fill.curves[0].getData()
-            _, lower_ypos = this_fill.curves[1].getData()
-            new_xpos = np.array([start, stop])
-            this_fill.curves[0].setData(new_xpos, upper_ypos)
-            this_fill.curves[1].setData(new_xpos, lower_ypos)
+    def _remove_single_channel_annot(self, ch_name):
+        self.single_channel_annots[ch_name].remove()
+        self.single_channel_annots.pop(ch_name)
+
+    def _toggle_single_channel_annot(self, ch_name):
+        """Add or remove single channel annotations."""
+        # Exit if mne-python not updated to support shift-click
+        if not hasattr(self.weakmain(), "_toggle_single_channel_annotation"):
+            warn(
+                "MNE must be updated to version 1.8 or above to "
+                "support add/remove channels from annotation."
+            )
+            return
+
+        region_idx = self.weakmain()._get_onset_idx(self.getRegion()[0])
+        self.weakmain()._toggle_single_channel_annotation(ch_name, region_idx)
+        if ch_name not in self.single_channel_annots.keys():
+            self._add_single_channel_annot(ch_name)
+        else:
+            self._remove_single_channel_annot(ch_name)
+
+        self.update_color(all_channels=(not list(self.single_channel_annots.keys())))
 
     def update_color(self, all_channels=True):
         """Update color of annotation-region.
@@ -2310,6 +2368,7 @@ class AnnotRegion(LinearRegionItem):
             line.setPen(self.line_pen)
             line.setHoverPen(self.hover_pen)
         self.update()
+        self.sigUpdateColor.emit(color_string)
 
     def update_description(self, description):
         """Update description of annoation-region."""
@@ -2321,6 +2380,7 @@ class AnnotRegion(LinearRegionItem):
         """Update if annotation-region is visible."""
         self.setVisible(visible)
         self.label_item.setVisible(visible)
+        self.sigToggleVisibility.emit(visible)
 
     def remove(self):
         """Remove annotation-region."""
@@ -2347,7 +2407,20 @@ class AnnotRegion(LinearRegionItem):
 
     def mouseClickEvent(self, event):
         """Customize mouse click events."""
-        if self.mne.annotation_mode:
+        if self.mne.annotation_mode and (
+            event.button() == Qt.LeftButton and event.modifiers() & Qt.ShiftModifier
+        ):
+            scene_pos = self.mapToScene(event.pos())
+
+            for t in self.mne.traces:
+                trace_path = t.shape()
+                trace_point = t.mapFromScene(scene_pos)
+                if trace_path.contains(trace_point):
+                    self._toggle_single_channel_annot(t.ch_name)
+                    event.accept()
+                    break
+
+        elif self.mne.annotation_mode:
             if event.button() == Qt.LeftButton and self.movable:
                 logger.debug(f"Mouse event in annotation mode for {event.pos()}...")
                 self.select(True)
@@ -2760,8 +2833,8 @@ class AnnotationDock(QDockWidget):
         if start < stop:
             self.mne.selected_region.setRegion((start, stop))
             # Make channel specific fillBetweens stay in sync with annot region
-            if sel_region.ch_annot_fills:
-                sel_region._update_channel_annot_fills(start, stop)
+            # if len(sel_region.single_channel_annots.keys()) > 0:
+            #    sel_region.single_channel_annots(start, stop)
         else:
             self.weakmain().message_box(
                 text="Invalid value!",
@@ -2777,8 +2850,6 @@ class AnnotationDock(QDockWidget):
         start = sel_region.getRegion()[0]
         if start < stop:
             sel_region.setRegion((start, stop))
-            # Make channel specific fillBetweens stay in sync with annot region
-            sel_region._update_channel_annot_fills(start, stop)
         else:
             self.weakmain().message_box(
                 text="Invalid value!",
@@ -4885,6 +4956,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         xform="ax",
         button=1,
         kind="press",
+        modifier=None,
     ):
         add_points = add_points or list()
         # Wait until Window is fully shown.
@@ -4946,13 +5018,20 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 # always click because most interactivity comes form
                 # mouseClickEvent from pyqtgraph (just press doesn't suffice
                 # here).
-                _mouseClick(widget=widget, pos=point, button=button)
+                _mouseClick(widget=widget, pos=point, button=button, modifier=modifier)
             elif kind == "release":
-                _mouseRelease(widget=widget, pos=point, button=button)
+                _mouseRelease(
+                    widget=widget, pos=point, button=button, modifier=modifier
+                )
             elif kind == "motion":
-                _mouseMove(widget=widget, pos=point, buttons=button)
+                _mouseMove(widget=widget, pos=point, buttons=button, modifier=modifier)
             elif kind == "drag":
-                _mouseDrag(widget=widget, positions=[point] + add_points, button=button)
+                _mouseDrag(
+                    widget=widget,
+                    positions=[point] + add_points,
+                    button=button,
+                    modifier=modifier,
+                )
 
         for exc in exceptions:
             raise RuntimeError(
