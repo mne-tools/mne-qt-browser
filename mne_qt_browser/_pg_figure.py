@@ -101,6 +101,7 @@ from qtpy.QtWidgets import (
     QGraphicsScene,
     QGraphicsView,
     QGridLayout,
+    QGroupBox,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -1799,6 +1800,33 @@ class SettingsDialog(_BaseDialog):
         # Set default
         self.scroll_sensitivity_slider.setValue(self.mne.scroll_sensitivity)
         layout.addRow("horizontal scroll sensitivity", self.scroll_sensitivity_slider)
+
+        # Add subgroup box to show channel type scalings
+        ch_scaling_box = QGroupBox("Channel Type Scalings")
+        # self.mne.unit_scalings
+        # self.mne.scalings
+        # self.mne.units
+        ch_scaling_layout = QFormLayout()
+        self.ch_scaling_spinboxes = {}
+
+        # Get all unique channel types
+        ordered_types = self.mne.ch_types[self.mne.ch_order]
+        unique_type_idxs = np.unique(ordered_types, return_index=True)[1]
+        ch_types_ordered = [ordered_types[idx] for idx in sorted(unique_type_idxs)]
+        for ch in ch_types_ordered:
+            if ch in self.mne.unit_scalings.keys():
+                ch_spinbox = QDoubleSpinBox()
+                ch_spinbox.setRange(-float("inf"), float("inf"))
+                ch_spinbox.setDecimals(3)
+                ch_spinbox.setValue(self.mne.scalings[ch] * self.mne.unit_scalings[ch])
+                ch_spinbox.setDisabled(True)
+                # ch_spinbox.setReadOnly(True)
+                ch_spinbox.setMinimumWidth(150)
+                self.ch_scaling_spinboxes[ch] = ch_spinbox
+                ch_scaling_layout.addRow(f"{ch} ({self.mne.units[ch]})", ch_spinbox)
+
+        ch_scaling_box.setLayout(ch_scaling_layout)
+        layout.addRow(ch_scaling_box)
 
         self.setLayout(layout)
         self.show()
