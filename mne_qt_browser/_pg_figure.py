@@ -116,6 +116,7 @@ from qtpy.QtWidgets import (
     QScrollBar,
     QSizePolicy,
     QSlider,
+    QSpacerItem,
     QSpinBox,
     QStyle,
     QStyleOptionSlider,
@@ -1802,10 +1803,9 @@ class SettingsDialog(_BaseDialog):
         layout.addRow("horizontal scroll sensitivity", self.scroll_sensitivity_slider)
 
         # Add subgroup box to show channel type scalings
+        layout.addItem(QSpacerItem(10, 10, QSizePolicy.Minimum, QSizePolicy.Expanding))
         ch_scaling_box = QGroupBox("Channel Type Scalings")
-        # self.mne.unit_scalings
-        # self.mne.scalings
-        # self.mne.units
+        ch_scaling_box.setStyleSheet("QGroupBox { font-size: 12pt; }")
         ch_scaling_layout = QFormLayout()
         self.ch_scaling_spinboxes = {}
 
