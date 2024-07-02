@@ -1853,6 +1853,7 @@ class SettingsDialog(_BaseDialog):
 
     def _ch_scaling_changed(self, new_value, ch_type):
         self.mne.scalings[ch_type] = new_value / self.mne.unit_scalings[ch_type]
+        self.mne.scalebar_texts[ch_type].update_value()
         self.weakmain()._redraw()
 
 
