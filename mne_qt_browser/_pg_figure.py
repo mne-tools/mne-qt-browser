@@ -1809,19 +1809,20 @@ class SettingsDialog(_BaseDialog):
         ch_scaling_layout = QFormLayout()
         self.ch_scaling_spinboxes = {}
 
-        # Get all unique channel types
+        # Get all unique channel types and allow scaling
         ordered_types = self.mne.ch_types[self.mne.ch_order]
         unique_type_idxs = np.unique(ordered_types, return_index=True)[1]
         ch_types_ordered = [ordered_types[idx] for idx in sorted(unique_type_idxs)]
         for ch in ch_types_ordered:
             if ch in self.mne.unit_scalings.keys():
                 ch_spinbox = QDoubleSpinBox()
+                ch_spinbox.setMinimumWidth(100)
                 ch_spinbox.setRange(-float("inf"), float("inf"))
-                ch_spinbox.setDecimals(3)
+                ch_spinbox.setDecimals(1)
                 ch_spinbox.setValue(self.mne.scalings[ch] * self.mne.unit_scalings[ch])
-                ch_spinbox.setDisabled(True)
-                # ch_spinbox.setReadOnly(True)
-                ch_spinbox.setMinimumWidth(150)
+                ch_spinbox.valueChanged.connect(
+                    _methpartial(self._ch_scaling_changed, ch_type=ch)
+                )
                 self.ch_scaling_spinboxes[ch] = ch_spinbox
                 ch_scaling_layout.addRow(f"{ch} ({self.mne.units[ch]})", ch_spinbox)
 
@@ -1849,6 +1850,10 @@ class SettingsDialog(_BaseDialog):
 
     def _toggle_antialiasing(self, _):
         self.weakmain()._toggle_antialiasing()
+
+    def _ch_scaling_changed(self, new_value, ch_type):
+        self.mne.scalings[ch_type] = new_value / self.mne.unit_scalings[ch_type]
+        self.weakmain()._redraw()
 
 
 class HelpDialog(_BaseDialog):
