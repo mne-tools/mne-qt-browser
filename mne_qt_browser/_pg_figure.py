@@ -1810,7 +1810,7 @@ class SettingsDialog(_BaseDialog):
         self.ch_scaling_spinboxes = {}
 
         # Get all unique channel types and allow scaling
-        self.scaler = 1 if self.mne.butterfly else 2
+        scaler = 1 if self.mne.butterfly else 2
         ordered_types = self.mne.ch_types[self.mne.ch_order]
         unique_type_idxs = np.unique(ordered_types, return_index=True)[1]
         ch_types_ordered = [ordered_types[idx] for idx in sorted(unique_type_idxs)]
@@ -1823,7 +1823,7 @@ class SettingsDialog(_BaseDialog):
                 ch_spinbox.setValue(
                     self.mne.scalings[ch]
                     * self.mne.unit_scalings[ch]
-                    * self.scaler
+                    * scaler
                     / self.mne.scale_factor
                 )
                 ch_spinbox.valueChanged.connect(
@@ -1859,11 +1859,12 @@ class SettingsDialog(_BaseDialog):
 
     def _update_spinbox_values(self, *args, **kwargs):
         """Update spinbox values."""
+        scaler = 1 if self.mne.butterfly else 2
         if len(args) > 0:
             new_value = args[0]
             ch_type = kwargs["ch_type"]
             self.mne.scalings[ch_type] = new_value / (
-                self.mne.unit_scalings[ch_type] * self.scaler / self.mne.scale_factor
+                self.mne.unit_scalings[ch_type] * scaler / self.mne.scale_factor
             )
             self.mne.scalebar_texts[ch_type].update_value()
             self.weakmain()._redraw()
@@ -1872,7 +1873,7 @@ class SettingsDialog(_BaseDialog):
                 spinbox.setValue(
                     self.mne.scalings[ch_type]
                     * self.mne.unit_scalings[ch_type]
-                    * self.scaler
+                    * scaler
                     / self.mne.scale_factor
                 )
 
