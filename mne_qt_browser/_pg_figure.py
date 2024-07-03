@@ -1824,10 +1824,10 @@ class SettingsDialog(_BaseDialog):
                     self.mne.scalings[ch]
                     * self.mne.unit_scalings[ch]
                     * self.scaler
-                    * self.mne.scale_factor
+                    / self.mne.scale_factor
                 )
                 ch_spinbox.valueChanged.connect(
-                    _methpartial(self._ch_scaling_changed, ch_type=ch)
+                    _methpartial(self._update_spinbox_values, ch_type=ch)
                 )
                 self.ch_scaling_spinboxes[ch] = ch_spinbox
                 ch_scaling_layout.addRow(f"{ch} ({self.mne.units[ch]})", ch_spinbox)
@@ -1857,12 +1857,24 @@ class SettingsDialog(_BaseDialog):
     def _toggle_antialiasing(self, _):
         self.weakmain()._toggle_antialiasing()
 
-    def _ch_scaling_changed(self, new_value, ch_type):
-        self.mne.scalings[ch_type] = new_value / (
-            self.mne.unit_scalings[ch_type] * self.scaler * self.mne.scale_factor
-        )
-        self.mne.scalebar_texts[ch_type].update_value()
-        self.weakmain()._redraw()
+    def _update_spinbox_values(self, *args, **kwargs):
+        """Update spinbox values."""
+        if len(args) > 0:
+            new_value = args[0]
+            ch_type = kwargs["ch_type"]
+            self.mne.scalings[ch_type] = new_value / (
+                self.mne.unit_scalings[ch_type] * self.scaler / self.mne.scale_factor
+            )
+            self.mne.scalebar_texts[ch_type].update_value()
+            self.weakmain()._redraw()
+        else:
+            for ch_type, spinbox in self.ch_scaling_spinboxes.items():
+                spinbox.setValue(
+                    self.mne.scalings[ch_type]
+                    * self.mne.unit_scalings[ch_type]
+                    * self.scaler
+                    / self.mne.scale_factor
+                )
 
 
 class HelpDialog(_BaseDialog):
@@ -3886,6 +3898,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         for scalebar_text in self.mne.scalebar_texts.values():
             scalebar_text.update_value()
 
+    def _update_ch_spinbox_values(self):
+        if self.mne.fig_settings is not None:
+            self.mne.fig_settings.update_all_spinboxes()
+
     def _set_scalebars_visible(self, visible):
         for scalebar in self.mne.scalebars.values():
             scalebar.setVisible(visible)
@@ -3923,6 +3939,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Update Scalebars
         self._update_scalebar_values()
+        if self.mne.fig_settings is not None:
+            self.mne.fig_settings._update_spinbox_values()
+
+        # self._update_ch_spinbox_values()
 
     def hscroll(self, step):
         """Scroll horizontally by step."""
