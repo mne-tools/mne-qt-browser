@@ -4758,6 +4758,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.butterfly = butterfly
         self._update_picks()
         self._update_data()
+        self._update_ch_spinbox_values()
 
         if butterfly and self.mne.fig_selection is not None:
             self.mne.selection_ypos_dict.clear()
