@@ -1810,7 +1810,6 @@ class SettingsDialog(_BaseDialog):
         self.ch_scaling_spinboxes = {}
 
         # Get all unique channel types and allow scaling
-        scaler = 1 if self.mne.butterfly else 2
         ordered_types = self.mne.ch_types[self.mne.ch_order]
         unique_type_idxs = np.unique(ordered_types, return_index=True)[1]
         ch_types_ordered = [ordered_types[idx] for idx in sorted(unique_type_idxs)]
@@ -1820,12 +1819,7 @@ class SettingsDialog(_BaseDialog):
                 ch_spinbox.setMinimumWidth(100)
                 ch_spinbox.setRange(-float("inf"), float("inf"))
                 ch_spinbox.setDecimals(1)
-                ch_spinbox.setValue(
-                    self.mne.scalings[ch]
-                    * self.mne.unit_scalings[ch]
-                    * scaler
-                    / self.mne.scale_factor
-                )
+                ch_spinbox.setValue(self._get_scaling_value(ch_type=ch))
                 ch_spinbox.valueChanged.connect(
                     _methpartial(self._update_spinbox_values, ch_type=ch)
                 )
@@ -1859,23 +1853,32 @@ class SettingsDialog(_BaseDialog):
 
     def _update_spinbox_values(self, *args, **kwargs):
         """Update spinbox values."""
-        scaler = 1 if self.mne.butterfly else 2
         if len(args) > 0:
             new_value = args[0]
             ch_type = kwargs["ch_type"]
-            self.mne.scalings[ch_type] = new_value / (
-                self.mne.unit_scalings[ch_type] * scaler / self.mne.scale_factor
+            self.mne.scalings[ch_type] = self._get_scaling_value(
+                new_value=new_value, ch_type=ch_type
             )
             self.mne.scalebar_texts[ch_type].update_value()
             self.weakmain()._redraw()
         else:
             for ch_type, spinbox in self.ch_scaling_spinboxes.items():
-                spinbox.setValue(
-                    self.mne.scalings[ch_type]
-                    * self.mne.unit_scalings[ch_type]
-                    * scaler
-                    / self.mne.scale_factor
-                )
+                spinbox.setValue(self._get_scaling_value(ch_type=ch_type))
+
+    def _get_scaling_value(self, new_value=None, ch_type=None):
+        """Get scaling value for tests."""
+        if new_value is None:
+            return (
+                self.mne.scalings[ch_type]
+                * self.mne.unit_scalings[ch_type]
+                * (1 if self.mne.butterfly else 2)
+                / self.mne.scale_factor
+            )
+        return new_value / (
+            self.mne.unit_scalings[ch_type]
+            * (1 if self.mne.butterfly else 2)
+            / self.mne.scale_factor
+        )
 
 
 class HelpDialog(_BaseDialog):
