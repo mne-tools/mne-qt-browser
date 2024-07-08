@@ -1826,7 +1826,7 @@ class SettingsDialog(_BaseDialog):
                 ch_spinbox.setRange(-float("inf"), float("inf"))
                 ch_spinbox.setDecimals(1)
                 inv_norm = _get_channel_scaling(self, ch)
-                ch_spinbox.setSingleStep(inv_norm * 0.1)
+                ch_spinbox.setSingleStep(inv_norm * 0.25)
                 ch_spinbox.setValue(inv_norm)
                 ch_spinbox.valueChanged.connect(
                     _methpartial(self._update_spinbox_values, ch_type=ch)
