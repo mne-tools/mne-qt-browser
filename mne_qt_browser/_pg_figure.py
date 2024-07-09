@@ -87,6 +87,7 @@ from qtpy.QtGui import (
 )
 from qtpy.QtTest import QTest
 from qtpy.QtWidgets import (
+    QAbstractSpinBox,
     QAction,
     QActionGroup,
     QApplication,
@@ -1823,10 +1824,10 @@ class SettingsDialog(_BaseDialog):
             if ch in self.mne.unit_scalings.keys():
                 ch_spinbox = QDoubleSpinBox()
                 ch_spinbox.setMinimumWidth(100)
-                ch_spinbox.setRange(-float("inf"), float("inf"))
+                ch_spinbox.setRange(0, float("inf"))
                 ch_spinbox.setDecimals(1)
+                ch_spinbox.setStepType(QAbstractSpinBox.AdaptiveDecimalStepType)
                 inv_norm = _get_channel_scaling(self, ch)
-                ch_spinbox.setSingleStep(inv_norm * 0.25)
                 ch_spinbox.setValue(inv_norm)
                 ch_spinbox.valueChanged.connect(
                     _methpartial(self._update_spinbox_values, ch_type=ch)
@@ -3949,8 +3950,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self._update_scalebar_values()
         if self.mne.fig_settings is not None:
             self.mne.fig_settings._update_spinbox_values()
-
-        # self._update_ch_spinbox_values()
 
     def hscroll(self, step):
         """Scroll horizontally by step."""
