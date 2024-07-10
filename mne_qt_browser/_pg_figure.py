@@ -230,6 +230,41 @@ def _get_channel_scaling(widget, ch_type):
     return inv_norm
 
 
+def _calc_data_to_physical(widget, size, axis="y", units="mm"):
+    """Convert size in a pyqtgraph plot to data pixels."""
+    vb = widget.mne.viewbox
+    screen = QApplication.primaryScreen()
+    if axis == "y":
+        point1 = vb.mapFromViewToItem(None, QPointF(0, size)).y()
+        point2 = vb.mapFromViewToItem(None, QPointF(0, 0)).y()
+        screenSizePixels = screen.size().height()
+        screenSizeMm = screen.physicalSize().height()
+    elif axis == "x":
+        point1 = vb.mapFromViewToItem(None, QPointF(size, 0)).x()
+        point2 = vb.mapFromViewToItem(None, QPointF(0, 0)).x()
+        screenSizePixels = screen.size().width()
+        screenSizeMm = screen.physicalSize().width()
+    else:
+        raise ValueError("axis must be 'x' or 'y'")
+
+    line_height_pixels = point1 - point2
+
+    # Calculate pixels per millimeter (px/mm)
+    pxPerMm = screenSizePixels / screenSizeMm
+
+    # Calculate line height in millimeters (mm)
+    lineHeightMm = line_height_pixels / pxPerMm
+
+    if units == "mm":
+        return lineHeightMm
+    elif units == "inches":
+        return lineHeightMm / 25.4
+    elif units == "cm":
+        return lineHeightMm / 10
+    else:
+        raise ValueError("units must be 'mm', 'cm', or 'inches'")
+
+
 def propagate_to_children(method):  # noqa: D103
     @functools.wraps(method)
     def wrapper(*args, **kwargs):
@@ -1837,6 +1872,40 @@ class SettingsDialog(_BaseDialog):
 
         ch_scaling_box.setLayout(ch_scaling_layout)
         layout.addRow(ch_scaling_box)
+
+        # Add subgroup box for sensitivity of each channel type
+        layout.addItem(QSpacerItem(10, 10, QSizePolicy.Minimum, QSizePolicy.Expanding))
+        ch_sensitivity_box = QGroupBox("Channel Type Sensitivities")
+        ch_sensitivity_box.setStyleSheet("QGroupBox { font-size: 12pt; }")
+        ch_sensitivity_layout = QFormLayout()
+        self.ch_sensitivity_spinboxes = {}
+
+        # Get conversion from data unit to physical size
+        data_to_physical = _calc_data_to_physical(self, 1, axis="y", units="mm")
+
+        # Get all unique channel and show sensitivity
+        for ch in ch_types_ordered:
+            if ch in self.mne.unit_scalings.keys():
+                ch_spinbox = QDoubleSpinBox()
+                ch_spinbox.setMinimumWidth(100)
+                ch_spinbox.setRange(0, float("inf"))
+                ch_spinbox.setDecimals(1)
+                ch_spinbox.setStepType(QAbstractSpinBox.AdaptiveDecimalStepType)
+                ch_spinbox.setReadOnly(True)
+                ch_spinbox.setDisabled(True)
+                ch_spinbox.setValue(
+                    self.ch_scaling_spinboxes[ch].value() / data_to_physical
+                )
+                ch_spinbox.valueChanged.connect(
+                    _methpartial(self._update_spinbox_values, ch_type=ch)
+                )
+                self.ch_sensitivity_spinboxes[ch] = ch_spinbox
+                ch_sensitivity_layout.addRow(
+                    f"{ch} ({self.mne.units[ch]}/mm)", ch_spinbox
+                )
+
+        ch_sensitivity_box.setLayout(ch_sensitivity_layout)
+        layout.addRow(ch_sensitivity_box)
 
         self.setLayout(layout)
         self.show()
