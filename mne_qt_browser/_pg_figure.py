@@ -257,7 +257,7 @@ def _calc_data_to_physical(widget, size, axis="y", units="mm"):
 
     if units == "mm":
         return lineHeightMm
-    elif units == "inches":
+    elif units == "inch":
         return lineHeightMm / 25.4
     elif units == "cm":
         return lineHeightMm / 10
@@ -1879,9 +1879,21 @@ class SettingsDialog(_BaseDialog):
         ch_sensitivity_box.setStyleSheet("QGroupBox { font-size: 12pt; }")
         ch_sensitivity_layout = QFormLayout()
         self.ch_sensitivity_spinboxes = {}
+        self.ch_sensitivity_spinbox_labels = {}
+
+        # Create dropdown to choose units
+        self.physical_units_cmbx = QComboBox()
+        self.physical_units_cmbx.addItems(["mm", "cm", "inch"])
+        self.physical_units_cmbx.currentIndexChanged.connect(
+            self._update_sensitivity_spinbox_values
+        )
+        ch_sensitivity_layout.addRow("Physical units", self.physical_units_cmbx)
 
         # Get conversion from data unit to physical size
-        data_to_physical = _calc_data_to_physical(self, 1, axis="y", units="mm")
+        current_units = self.physical_units_cmbx.currentText()
+        data_to_physical = _calc_data_to_physical(
+            self, 1, axis="y", units=current_units
+        )
 
         # Get all unique channel and show sensitivity
         for ch in ch_types_ordered:
@@ -1896,12 +1908,12 @@ class SettingsDialog(_BaseDialog):
                 ch_spinbox.setValue(
                     self.ch_scaling_spinboxes[ch].value() / data_to_physical
                 )
-                ch_spinbox.valueChanged.connect(
-                    _methpartial(self._update_spinbox_values, ch_type=ch)
-                )
                 self.ch_sensitivity_spinboxes[ch] = ch_spinbox
+                self.ch_sensitivity_spinbox_labels[ch] = QLabel(
+                    f"{ch} ({self.mne.units[ch]}/{current_units})"
+                )
                 ch_sensitivity_layout.addRow(
-                    f"{ch} ({self.mne.units[ch]}/mm)", ch_spinbox
+                    self.ch_sensitivity_spinbox_labels[ch], ch_spinbox
                 )
 
         ch_sensitivity_box.setLayout(ch_sensitivity_layout)
@@ -1953,6 +1965,22 @@ class SettingsDialog(_BaseDialog):
         else:
             for ch_type, spinbox in self.ch_scaling_spinboxes.items():
                 spinbox.setValue(_get_channel_scaling(self, ch_type))
+
+        self._update_sensitivity_spinbox_values()
+
+    def _update_sensitivity_spinbox_values(self):
+        """Update sensitivity spinbox values."""
+        current_units = self.physical_units_cmbx.currentText()
+        data_to_physical = _calc_data_to_physical(
+            self, 1, axis="y", units=current_units
+        )
+        for ch_type, spinbox in self.ch_scaling_spinboxes.items():
+            self.ch_sensitivity_spinboxes[ch_type].setValue(
+                self.ch_scaling_spinboxes[ch_type].value() / data_to_physical
+            )
+            self.ch_sensitivity_spinbox_labels[ch_type].setText(
+                f"{ch_type} ({self.mne.units[ch_type]}/{current_units})"
+            )
 
 
 class HelpDialog(_BaseDialog):
