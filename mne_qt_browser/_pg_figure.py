@@ -87,6 +87,7 @@ from qtpy.QtGui import (
 )
 from qtpy.QtTest import QTest
 from qtpy.QtWidgets import (
+    QAbstractSpinBox,
     QAction,
     QActionGroup,
     QApplication,
@@ -215,6 +216,18 @@ def _get_color_cached(*, color_spec, invert):
             color.setRgbF(*rgba)
 
     return color
+
+
+def _get_channel_scaling(widget, ch_type):
+    """Get channel scaling."""
+    scaler = 1 if widget.mne.butterfly else 2
+    inv_norm = (
+        scaler
+        * widget.mne.scalings[ch_type]
+        * widget.mne.unit_scalings[ch_type]
+        / widget.mne.scale_factor
+    )
+    return inv_norm
 
 
 def propagate_to_children(method):  # noqa: D103
@@ -1632,13 +1645,7 @@ class ScaleBarText(BaseScaleBar, TextItem):  # noqa: D101
 
     def update_value(self):
         """Update value of ScaleBarText."""
-        scaler = 1 if self.mne.butterfly else 2
-        inv_norm = (
-            scaler
-            * self.mne.scalings[self.ch_type]
-            * self.mne.unit_scalings[self.ch_type]
-            / self.mne.scale_factor
-        )
+        inv_norm = _get_channel_scaling(self, self.ch_type)
         self.setText(f"{_simplify_float(inv_norm)} " f"{self.mne.units[self.ch_type]}")
 
     def _set_position(self, x, y):
@@ -1809,19 +1816,22 @@ class SettingsDialog(_BaseDialog):
         ch_scaling_layout = QFormLayout()
         self.ch_scaling_spinboxes = {}
 
-        # Get all unique channel types
+        # Get all unique channel types and allow scaling
         ordered_types = self.mne.ch_types[self.mne.ch_order]
         unique_type_idxs = np.unique(ordered_types, return_index=True)[1]
         ch_types_ordered = [ordered_types[idx] for idx in sorted(unique_type_idxs)]
         for ch in ch_types_ordered:
             if ch in self.mne.unit_scalings.keys():
                 ch_spinbox = QDoubleSpinBox()
-                ch_spinbox.setRange(-float("inf"), float("inf"))
-                ch_spinbox.setDecimals(3)
-                ch_spinbox.setValue(self.mne.scalings[ch] * self.mne.unit_scalings[ch])
-                ch_spinbox.setDisabled(True)
-                # ch_spinbox.setReadOnly(True)
-                ch_spinbox.setMinimumWidth(150)
+                ch_spinbox.setMinimumWidth(100)
+                ch_spinbox.setRange(0, float("inf"))
+                ch_spinbox.setDecimals(1)
+                ch_spinbox.setStepType(QAbstractSpinBox.AdaptiveDecimalStepType)
+                inv_norm = _get_channel_scaling(self, ch)
+                ch_spinbox.setValue(inv_norm)
+                ch_spinbox.valueChanged.connect(
+                    _methpartial(self._update_spinbox_values, ch_type=ch)
+                )
                 self.ch_scaling_spinboxes[ch] = ch_spinbox
                 ch_scaling_layout.addRow(f"{ch} ({self.mne.units[ch]})", ch_spinbox)
 
@@ -1849,6 +1859,31 @@ class SettingsDialog(_BaseDialog):
 
     def _toggle_antialiasing(self, _):
         self.weakmain()._toggle_antialiasing()
+
+    def _update_spinbox_values(self, *args, **kwargs):
+        """Update spinbox values. If any args or kwargs do a specific channel update."""
+        # If new value for a channel given update that channel type and redraw
+        if len(args) > 0:
+            new_value = args[0]
+            ch_type = kwargs["ch_type"]
+
+            # If new_value is 0 then scaling is stuck on 0.
+            # To get out of 0 set scalings to 1 and then set the new value
+            if new_value == 0:
+                self.mne.scalings[ch_type] = 0
+            else:
+                self.mne.scalings[ch_type] = 1
+                self.mne.scalings[ch_type] = new_value / _get_channel_scaling(
+                    self, ch_type
+                )
+
+            self.mne.scalebar_texts[ch_type].update_value()
+            self.weakmain()._redraw()
+
+        # Update all channels and don't redraw (happens elsewhere)
+        else:
+            for ch_type, spinbox in self.ch_scaling_spinboxes.items():
+                spinbox.setValue(_get_channel_scaling(self, ch_type))
 
 
 class HelpDialog(_BaseDialog):
@@ -3872,6 +3907,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         for scalebar_text in self.mne.scalebar_texts.values():
             scalebar_text.update_value()
 
+    def _update_ch_spinbox_values(self):
+        if self.mne.fig_settings is not None:
+            self.mne.fig_settings.update_all_spinboxes()
+
     def _set_scalebars_visible(self, visible):
         for scalebar in self.mne.scalebars.values():
             scalebar.setVisible(visible)
@@ -3909,6 +3948,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Update Scalebars
         self._update_scalebar_values()
+        if self.mne.fig_settings is not None:
+            self.mne.fig_settings._update_spinbox_values()
 
     def hscroll(self, step):
         """Scroll horizontally by step."""
@@ -4124,13 +4165,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                             x = self.mne.inst.times[rel_idx]
 
                         # negative because plot is inverted for Y
-                        scaler = -1 if self.mne.butterfly else -2
-                        inv_norm = (
-                            scaler
-                            * self.mne.scalings[trace.ch_type]
-                            * self.mne.unit_scalings[trace.ch_type]
-                            / self.mne.scale_factor
-                        )
+                        inv_norm = _get_channel_scaling(self, trace.ch_type) * -1
                         label = (
                             f"{_simplify_float(yvalue * inv_norm)} "
                             f"{self.mne.units[trace.ch_type]}"
@@ -4723,6 +4758,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.butterfly = butterfly
         self._update_picks()
         self._update_data()
+        self._update_ch_spinbox_values()
 
         if butterfly and self.mne.fig_selection is not None:
             self.mne.selection_ypos_dict.clear()
