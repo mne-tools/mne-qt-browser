@@ -267,7 +267,7 @@ def _safe_splash(meth):
     return func
 
 
-class BaseDataTrace():
+class BaseDataTrace:
     """Base graphics-object for single data trace."""
 
     def __init__(self, main, ch_idx, child_idx=None, parent_trace=None):
@@ -581,8 +581,7 @@ class DataTrace(BaseDataTrace, PlotCurveItem):
     """Graphics-Object for single line data trace."""
 
     def __init__(self, main, ch_idx, child_idx=None, parent_trace=None):
-        super().__init__(main, ch_idx, child_idx=child_idx,
-                         parent_trace=parent_trace)
+        super().__init__(main, ch_idx, child_idx=child_idx, parent_trace=parent_trace)
 
         # Set clickable with small area around trace to make clicking easier.
         self.setClickable(True, 12)
@@ -592,8 +591,7 @@ class ImageTrace(BaseDataTrace, ImageItem):
     """Graphics-Object for single line data trace."""
 
     def __init__(self, main, ch_idx, child_idx=None, parent_trace=None):
-        super().__init__(main, ch_idx, child_idx=child_idx,
-                         parent_trace=parent_trace)
+        super().__init__(main, ch_idx, child_idx=child_idx, parent_trace=parent_trace)
         self.setColorMap(self.mne.cmap)
 
     @propagate_to_children
@@ -605,8 +603,7 @@ class ImageTrace(BaseDataTrace, ImageItem):
     def update_scale(self):  # noqa: D102
         transform = QTransform()
         tmin, tmax = self.mne.times[0], self.mne.times[-1]
-        transform.scale((tmax - tmin) / self.mne.times.size,
-                        0.9 / self.mne.freqs.size)
+        transform.scale((tmax - tmin) / self.mne.times.size, 0.9 / self.mne.freqs.size)
         self.setTransform(transform)
 
         self.setLevels([0, self.mne.vmax / self.mne.scale_factor])
@@ -641,10 +638,10 @@ class ImageTrace(BaseDataTrace, ImageItem):
 
         tfr_data = tfr_array_morlet(
             data[None, None],
-            self.mne.info['sfreq'],
+            self.mne.info["sfreq"],
             freqs=self.mne.freqs,
             n_cycles=self.mne.n_cycles,
-            output='power'
+            output="power",
         )[0][0]
         # tfr_data = rescale(tfr_data, times, (None, None), mode='zlogratio')
         self.setImage(tfr_data[::-1].T,
@@ -4899,7 +4896,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Remove traces
         for trace in self.mne.traces.copy():
             trace.remove()
-    
+
         if self.mne.spectrogram:
             # Add image traces
             for ch_idx in self.mne.picks:
