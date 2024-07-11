@@ -230,39 +230,49 @@ def _get_channel_scaling(widget, ch_type):
     return inv_norm
 
 
-def _calc_data_to_physical(widget, size, axis="y", units="mm"):
-    """Convert size in a pyqtgraph plot to data pixels."""
+def _calc_chan_type_to_physical(widget, ch_type, units="mm"):
+    """Convert data to physical units."""
+    # Load in some data and measure its range in a timeperiod
+    start, stop = widget.weakmain()._get_start_stop()
+    data, _ = widget.weakmain()._load_data(start, stop)
+    ordered_types = widget.mne.ch_types[widget.mne.ch_order]
+    ch_pick = np.where(ordered_types == ch_type)[0][0]
+    data = widget.weakmain()._process_data(data, start, stop, [ch_pick])
+    data = data * widget.mne.scale_factor
+    peak_to_peak_data = np.abs(data.max() - data.min())
+
+    # Get the ViewBox and its height in pixels
     vb = widget.mne.viewbox
-    screen = QApplication.primaryScreen()
-    if axis == "y":
-        point1 = vb.mapFromViewToItem(None, QPointF(0, size)).y()
-        point2 = vb.mapFromViewToItem(None, QPointF(0, 0)).y()
-        screenSizePixels = screen.size().height()
-        screenSizeMm = screen.physicalSize().height()
-    elif axis == "x":
-        point1 = vb.mapFromViewToItem(None, QPointF(size, 0)).x()
-        point2 = vb.mapFromViewToItem(None, QPointF(0, 0)).x()
-        screenSizePixels = screen.size().width()
-        screenSizeMm = screen.physicalSize().width()
-    else:
-        raise ValueError("axis must be 'x' or 'y'")
+    pixel_height = vb.geometry().height()
 
-    line_height_pixels = point1 - point2
+    # Get the view range in data units
+    view_range = vb.viewRange()
+    data_height = view_range[1][1] - view_range[1][0]
 
-    # Calculate pixels per millimeter (px/mm)
-    pxPerMm = screenSizePixels / screenSizeMm
+    # Calculate the pixel-to-data ratio
+    if data_height != 0:
+        pixels_per_data_unit = pixel_height / data_height
 
-    # Calculate line height in millimeters (mm)
-    lineHeightMm = line_height_pixels / pxPerMm
+        # Calculate the peak-to-peak height in pixels
+        peak_to_peak_pixels = peak_to_peak_data * pixels_per_data_unit
 
-    if units == "mm":
-        return lineHeightMm
-    elif units == "inch":
-        return lineHeightMm / 25.4
-    elif units == "cm":
-        return lineHeightMm / 10
-    else:
-        raise ValueError("units must be 'mm', 'cm', or 'inches'")
+        # Get the screen DPI
+        dpi = QApplication.primaryScreen().logicalDotsPerInch()
+
+        # Convert pixels to inches
+        peak_to_peak_inches = peak_to_peak_pixels / dpi
+
+        # Convert inches to millimeters
+        peak_to_peak_mm = peak_to_peak_inches * 25.4
+
+        if units == "mm":
+            return _get_channel_scaling(widget, ch_type) / peak_to_peak_mm
+        elif units == "inch":
+            return _get_channel_scaling(widget, ch_type) / peak_to_peak_inches
+        elif units == "cm":
+            return _get_channel_scaling(widget, ch_type) / (peak_to_peak_mm / 10)
+        else:
+            raise ValueError("units must be 'mm', 'cm', or 'inches'")
 
 
 def propagate_to_children(method):  # noqa: D103
@@ -1854,21 +1864,25 @@ class SettingsDialog(_BaseDialog):
         # Get all unique channel types and allow scaling
         ordered_types = self.mne.ch_types[self.mne.ch_order]
         unique_type_idxs = np.unique(ordered_types, return_index=True)[1]
-        ch_types_ordered = [ordered_types[idx] for idx in sorted(unique_type_idxs)]
+        # ch_types_ordered = [ordered_types[idx] for idx in sorted(unique_type_idxs)]
+        ch_types_ordered = [
+            ordered_types[idx]
+            for idx in sorted(unique_type_idxs)
+            if ordered_types[idx] in self.mne.unit_scalings.keys()
+        ]
         for ch in ch_types_ordered:
-            if ch in self.mne.unit_scalings.keys():
-                ch_spinbox = QDoubleSpinBox()
-                ch_spinbox.setMinimumWidth(100)
-                ch_spinbox.setRange(0, float("inf"))
-                ch_spinbox.setDecimals(1)
-                ch_spinbox.setStepType(QAbstractSpinBox.AdaptiveDecimalStepType)
-                inv_norm = _get_channel_scaling(self, ch)
-                ch_spinbox.setValue(inv_norm)
-                ch_spinbox.valueChanged.connect(
-                    _methpartial(self._update_spinbox_values, ch_type=ch)
-                )
-                self.ch_scaling_spinboxes[ch] = ch_spinbox
-                ch_scaling_layout.addRow(f"{ch} ({self.mne.units[ch]})", ch_spinbox)
+            ch_spinbox = QDoubleSpinBox()
+            ch_spinbox.setMinimumWidth(100)
+            ch_spinbox.setRange(0, float("inf"))
+            ch_spinbox.setDecimals(1)
+            ch_spinbox.setStepType(QAbstractSpinBox.AdaptiveDecimalStepType)
+            inv_norm = _get_channel_scaling(self, ch)
+            ch_spinbox.setValue(inv_norm)
+            ch_spinbox.valueChanged.connect(
+                _methpartial(self._update_spinbox_values, ch_type=ch)
+            )
+            self.ch_scaling_spinboxes[ch] = ch_spinbox
+            ch_scaling_layout.addRow(f"{ch} ({self.mne.units[ch]})", ch_spinbox)
 
         ch_scaling_box.setLayout(ch_scaling_layout)
         layout.addRow(ch_scaling_box)
@@ -1891,30 +1905,26 @@ class SettingsDialog(_BaseDialog):
 
         # Get conversion from data unit to physical size
         current_units = self.physical_units_cmbx.currentText()
-        data_to_physical = _calc_data_to_physical(
-            self, 1, axis="y", units=current_units
-        )
 
         # Get all unique channel and show sensitivity
         for ch in ch_types_ordered:
-            if ch in self.mne.unit_scalings.keys():
-                ch_spinbox = QDoubleSpinBox()
-                ch_spinbox.setMinimumWidth(100)
-                ch_spinbox.setRange(0, float("inf"))
-                ch_spinbox.setDecimals(1)
-                ch_spinbox.setStepType(QAbstractSpinBox.AdaptiveDecimalStepType)
-                ch_spinbox.setReadOnly(True)
-                ch_spinbox.setDisabled(True)
-                ch_spinbox.setValue(
-                    self.ch_scaling_spinboxes[ch].value() / data_to_physical
-                )
-                self.ch_sensitivity_spinboxes[ch] = ch_spinbox
-                self.ch_sensitivity_spinbox_labels[ch] = QLabel(
-                    f"{ch} ({self.mne.units[ch]}/{current_units})"
-                )
-                ch_sensitivity_layout.addRow(
-                    self.ch_sensitivity_spinbox_labels[ch], ch_spinbox
-                )
+            ch_spinbox = QDoubleSpinBox()
+            ch_spinbox.setMinimumWidth(100)
+            ch_spinbox.setRange(0, float("inf"))
+            ch_spinbox.setDecimals(1)
+            ch_spinbox.setStepType(QAbstractSpinBox.AdaptiveDecimalStepType)
+            ch_spinbox.setReadOnly(True)
+            ch_spinbox.setDisabled(True)
+            ch_spinbox.setValue(
+                _calc_chan_type_to_physical(self, ch, units=current_units)
+            )
+            self.ch_sensitivity_spinboxes[ch] = ch_spinbox
+            self.ch_sensitivity_spinbox_labels[ch] = QLabel(
+                f"{ch} ({self.mne.units[ch]}/{current_units})"
+            )
+            ch_sensitivity_layout.addRow(
+                self.ch_sensitivity_spinbox_labels[ch], ch_spinbox
+            )
 
         ch_sensitivity_box.setLayout(ch_sensitivity_layout)
         layout.addRow(ch_sensitivity_box)
@@ -1971,12 +1981,9 @@ class SettingsDialog(_BaseDialog):
     def _update_sensitivity_spinbox_values(self):
         """Update sensitivity spinbox values."""
         current_units = self.physical_units_cmbx.currentText()
-        data_to_physical = _calc_data_to_physical(
-            self, 1, axis="y", units=current_units
-        )
         for ch_type, spinbox in self.ch_scaling_spinboxes.items():
             self.ch_sensitivity_spinboxes[ch_type].setValue(
-                self.ch_scaling_spinboxes[ch_type].value() / data_to_physical
+                _calc_chan_type_to_physical(self, ch_type, units=current_units)
             )
             self.ch_sensitivity_spinbox_labels[ch_type].setText(
                 f"{ch_type} ({self.mne.units[ch_type]}/{current_units})"
