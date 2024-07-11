@@ -266,11 +266,23 @@ def _calc_chan_type_to_physical(widget, ch_type, units="mm"):
         peak_to_peak_mm = peak_to_peak_inches * 25.4
 
         if units == "mm":
-            return _get_channel_scaling(widget, ch_type) / peak_to_peak_mm
+            return (
+                _get_channel_scaling(widget, ch_type)
+                * peak_to_peak_data
+                / peak_to_peak_mm
+            )
         elif units == "inch":
-            return _get_channel_scaling(widget, ch_type) / peak_to_peak_inches
+            return (
+                _get_channel_scaling(widget, ch_type)
+                * peak_to_peak_data
+                / peak_to_peak_inches
+            )
         elif units == "cm":
-            return _get_channel_scaling(widget, ch_type) / (peak_to_peak_mm / 10)
+            return (
+                _get_channel_scaling(widget, ch_type)
+                * peak_to_peak_data
+                / (peak_to_peak_mm / 10)
+            )
         else:
             raise ValueError("units must be 'mm', 'cm', or 'inches'")
 
