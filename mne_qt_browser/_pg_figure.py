@@ -38,7 +38,6 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.colors import to_rgba_array
 from mne import channel_indices_by_type
 from mne.annotations import _sync_onset
-from mne.baseline import rescale
 from mne.io.pick import _DATA_CH_TYPES_ORDER_DEFAULT, _DATA_CH_TYPES_SPLIT
 from mne.time_frequency import tfr_array_morlet
 from mne.utils import _check_option, _to_rgb, get_config, logger, sizeof_fmt, warn
@@ -644,8 +643,9 @@ class ImageTrace(BaseDataTrace, ImageItem):
             output="power",
         )[0][0]
         # tfr_data = rescale(tfr_data, times, (None, None), mode='zlogratio')
-        self.setImage(tfr_data[::-1].T,
-                      levels=[0, self.mne.vmax / self.mne.scale_factor])
+        self.setImage(
+            tfr_data[::-1].T, levels=[0, self.mne.vmax / self.mne.scale_factor]
+        )
 
         self.setPos(times[0], self.range_idx + self.mne.ch_start + 0.5)
 
@@ -3347,11 +3347,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         ]
         # Spectogram
         self.mne.spectrogram = False
-        self.mne.freqs = np.arange(
-            5, np.min([250, self.mne.info['sfreq'] / 4]), 5
-        )
+        self.mne.freqs = np.arange(5, np.min([250, self.mne.info["sfreq"] / 4]), 5)
         self.mne.n_cycles = self.mne.freqs / 2
-        self.mne.cmap = 'CET-L18'
+        self.mne.cmap = "CET-L18"
         self.mne.vmax = 0.2
         if self.mne.is_epochs:
             # Stores parameters for epochs
