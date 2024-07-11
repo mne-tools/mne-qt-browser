@@ -609,6 +609,8 @@ class ImageTrace(BaseDataTrace, ImageItem):
                         0.9 / self.mne.freqs.size)
         self.setTransform(transform)
 
+        self.setLevels([0, self.mne.vmax / self.mne.scale_factor])
+
     @propagate_to_children
     def update_data(self):
         """Update data (fetch data from self.mne according to self.ch_idx)."""
@@ -644,8 +646,9 @@ class ImageTrace(BaseDataTrace, ImageItem):
             n_cycles=self.mne.n_cycles,
             output='power'
         )[0][0]
-        tfr_data = rescale(tfr_data, times, (None, None), mode='zlogratio')
-        self.setImage(tfr_data.T)
+        # tfr_data = rescale(tfr_data, times, (None, None), mode='zlogratio')
+        self.setImage(tfr_data[::-1].T,
+                      levels=[0, self.mne.vmax / self.mne.scale_factor])
 
         self.setPos(times[0], self.range_idx + self.mne.ch_start + 0.5)
 
@@ -3347,9 +3350,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         ]
         # Spectogram
         self.mne.spectrogram = False
-        self.mne.freqs = np.arange(5, 250, 5)
+        self.mne.freqs = np.arange(
+            5, np.min([250, self.mne.info['sfreq'] / 4]), 5
+        )
         self.mne.n_cycles = self.mne.freqs / 2
-        self.mne.cmap = 'viridis'
+        self.mne.cmap = 'CET-L18'
+        self.mne.vmax = 0.2
         if self.mne.is_epochs:
             # Stores parameters for epochs
             self.mne.epoch_dur = np.diff(self.mne.boundary_times[:2])[0]
@@ -4152,6 +4158,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.ax_vscroll.update_nchan()
             self.mne.plt.setYRange(ymin, ymax, padding=0)
 
+            if self.mne.spectrogram:
+                self._set_spectrogram(self.mne.spectrogram)
+
     def _remove_vline(self):
         if self.mne.vline is not None:
             if self.mne.is_epochs:
@@ -4895,6 +4904,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # Add image traces
             for ch_idx in self.mne.picks:
                 ImageTrace(self, ch_idx)
+            for trace in self.mne.traces:
+                trace.update_scale()
             self._set_scalebars_visible(False)
         else:
             # Add traces
