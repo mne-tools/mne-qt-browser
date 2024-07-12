@@ -1866,22 +1866,24 @@ class SettingsDialog(_BaseDialog):
         self.scroll_sensitivity_slider.setValue(self.mne.scroll_sensitivity)
         layout.addRow("horizontal scroll sensitivity", self.scroll_sensitivity_slider)
 
-        # Add subgroup box to show channel type scalings
         layout.addItem(QSpacerItem(10, 10, QSizePolicy.Minimum, QSizePolicy.Expanding))
-        ch_scaling_box = QGroupBox("Channel Type Scalings")
-        ch_scaling_box.setStyleSheet("QGroupBox { font-size: 12pt; }")
-        ch_scaling_layout = QFormLayout()
-        self.ch_scaling_spinboxes = {}
 
-        # Get all unique channel types and allow scaling
+        # Get all unique channel types
         ordered_types = self.mne.ch_types[self.mne.ch_order]
         unique_type_idxs = np.unique(ordered_types, return_index=True)[1]
-        # ch_types_ordered = [ordered_types[idx] for idx in sorted(unique_type_idxs)]
         ch_types_ordered = [
             ordered_types[idx]
             for idx in sorted(unique_type_idxs)
             if ordered_types[idx] in self.mne.unit_scalings.keys()
         ]
+
+        # Add subgroup box to show channel type scalings
+        ch_scaling_box = QGroupBox("Scalings")
+        ch_scaling_box.setStyleSheet("QGroupBox { font-size: 12pt; }")
+        ch_scaling_layout = QFormLayout()
+        self.ch_scaling_spinboxes = {}
+
+        # Create scaling spinboxes for each channel type
         for ch in ch_types_ordered:
             ch_spinbox = QDoubleSpinBox()
             ch_spinbox.setMinimumWidth(100)
@@ -1897,11 +1899,9 @@ class SettingsDialog(_BaseDialog):
             ch_scaling_layout.addRow(f"{ch} ({self.mne.units[ch]})", ch_spinbox)
 
         ch_scaling_box.setLayout(ch_scaling_layout)
-        layout.addRow(ch_scaling_box)
 
         # Add subgroup box for sensitivity of each channel type
-        layout.addItem(QSpacerItem(10, 10, QSizePolicy.Minimum, QSizePolicy.Expanding))
-        ch_sensitivity_box = QGroupBox("Channel Type Sensitivities")
+        ch_sensitivity_box = QGroupBox("Sensitivities")
         ch_sensitivity_box.setStyleSheet("QGroupBox { font-size: 12pt; }")
         ch_sensitivity_layout = QFormLayout()
         self.ch_sensitivity_spinboxes = {}
@@ -1918,7 +1918,7 @@ class SettingsDialog(_BaseDialog):
         # Get conversion from data unit to physical size
         current_units = self.physical_units_cmbx.currentText()
 
-        # Get all unique channel and show sensitivity
+        # Create sensitivity spinboxes for each channel type
         for ch in ch_types_ordered:
             ch_spinbox = QDoubleSpinBox()
             ch_spinbox.setMinimumWidth(100)
@@ -1939,7 +1939,14 @@ class SettingsDialog(_BaseDialog):
             )
 
         ch_sensitivity_box.setLayout(ch_sensitivity_layout)
-        layout.addRow(ch_sensitivity_box)
+
+        # Add subgroup box for scaling and sensitivity of each channel type
+        chan_config_box = QGroupBox("Channel Configuration")
+        chan_config_box_lay = QHBoxLayout()
+        chan_config_box_lay.addWidget(ch_scaling_box)
+        chan_config_box_lay.addWidget(ch_sensitivity_box)
+        chan_config_box.setLayout(chan_config_box_lay)
+        layout.addRow(chan_config_box)
 
         self.setLayout(layout)
         self.show()
