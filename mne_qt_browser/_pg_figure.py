@@ -1877,35 +1877,8 @@ class SettingsDialog(_BaseDialog):
             if ordered_types[idx] in self.mne.unit_scalings.keys()
         ]
 
-        # Add subgroup box to show channel type scalings
-        ch_scaling_box = QGroupBox("Scalings")
-        ch_scaling_box.setStyleSheet("QGroupBox { font-size: 12pt; }")
-        ch_scaling_layout = QFormLayout()
-        self.ch_scaling_spinboxes = {}
-
-        # Create scaling spinboxes for each channel type
-        for ch in ch_types_ordered:
-            ch_spinbox = QDoubleSpinBox()
-            ch_spinbox.setMinimumWidth(100)
-            ch_spinbox.setRange(0, float("inf"))
-            ch_spinbox.setDecimals(1)
-            ch_spinbox.setStepType(QAbstractSpinBox.AdaptiveDecimalStepType)
-            inv_norm = _get_channel_scaling(self, ch)
-            ch_spinbox.setValue(inv_norm)
-            ch_spinbox.valueChanged.connect(
-                _methpartial(self._update_spinbox_values, ch_type=ch)
-            )
-            self.ch_scaling_spinboxes[ch] = ch_spinbox
-            ch_scaling_layout.addRow(f"{ch} ({self.mne.units[ch]})", ch_spinbox)
-
-        ch_scaling_box.setLayout(ch_scaling_layout)
-
-        # Add subgroup box for sensitivity of each channel type
-        ch_sensitivity_box = QGroupBox("Sensitivities")
-        ch_sensitivity_box.setStyleSheet("QGroupBox { font-size: 12pt; }")
-        ch_sensitivity_layout = QFormLayout()
-        self.ch_sensitivity_spinboxes = {}
-        self.ch_sensitivity_spinbox_labels = {}
+        # Grid layout for channel spinboxes and settings
+        ch_grid_layout = QGridLayout()
 
         # Create dropdown to choose units
         self.physical_units_cmbx = QComboBox()
@@ -1913,40 +1886,66 @@ class SettingsDialog(_BaseDialog):
         self.physical_units_cmbx.currentIndexChanged.connect(
             self._update_sensitivity_spinbox_values
         )
-        ch_sensitivity_layout.addRow("Physical units", self.physical_units_cmbx)
-
-        # Get conversion from data unit to physical size
         current_units = self.physical_units_cmbx.currentText()
 
-        # Create sensitivity spinboxes for each channel type
-        for ch in ch_types_ordered:
-            ch_spinbox = QDoubleSpinBox()
-            ch_spinbox.setMinimumWidth(100)
-            ch_spinbox.setRange(0, float("inf"))
-            ch_spinbox.setDecimals(1)
-            ch_spinbox.setStepType(QAbstractSpinBox.AdaptiveDecimalStepType)
-            ch_spinbox.setReadOnly(True)
-            ch_spinbox.setDisabled(True)
-            ch_spinbox.setValue(
-                _calc_chan_type_to_physical(self, ch, units=current_units)
-            )
-            self.ch_sensitivity_spinboxes[ch] = ch_spinbox
-            self.ch_sensitivity_spinbox_labels[ch] = QLabel(
-                f"{ch} ({self.mne.units[ch]}/{current_units})"
-            )
-            ch_sensitivity_layout.addRow(
-                self.ch_sensitivity_spinbox_labels[ch], ch_spinbox
+        # Add subgroup box to show channel type scalings
+        ch_scroll_box = QGroupBox("Channel Configuration")
+        ch_scroll_box.setStyleSheet("QGroupBox { font-size: 12pt; }")
+        self.ch_scaling_spinboxes = {}
+        # self.ch_scaling_spinbox_labels = {}
+        self.ch_sensitivity_spinboxes = {}
+        # self.ch_sensitivity_spinbox_labels = {}
+        self.ch_label_widgets = {}
+
+        ch_grid_layout.addWidget(QLabel("Channel Type"), 0, 0)
+        ch_grid_layout.addWidget(QLabel("Scaling"), 0, 1)
+        ch_grid_layout.addWidget(QLabel("Sensitivity"), 0, 2)
+        grid_row = 1
+        for ch_type in ch_types_ordered:
+            self.ch_label_widgets[ch_type] = QLabel(
+                f"{ch_type} ({self.mne.units[ch_type]})"
             )
 
-        ch_sensitivity_box.setLayout(ch_sensitivity_layout)
+            # Make scaling spinbox first
+            ch_scale_spinbox = QDoubleSpinBox()
+            ch_scale_spinbox.setMinimumWidth(100)
+            ch_scale_spinbox.setRange(0, float("inf"))
+            ch_scale_spinbox.setDecimals(1)
+            ch_scale_spinbox.setStepType(QAbstractSpinBox.AdaptiveDecimalStepType)
+            inv_norm = _get_channel_scaling(self, ch_type)
+            ch_scale_spinbox.setValue(inv_norm)
+            ch_scale_spinbox.valueChanged.connect(
+                _methpartial(self._update_spinbox_values, ch_type=ch_type)
+            )
+            self.ch_scaling_spinboxes[ch_type] = ch_scale_spinbox
 
-        # Add subgroup box for scaling and sensitivity of each channel type
-        chan_config_box = QGroupBox("Channel Configuration")
-        chan_config_box_lay = QHBoxLayout()
-        chan_config_box_lay.addWidget(ch_scaling_box)
-        chan_config_box_lay.addWidget(ch_sensitivity_box)
-        chan_config_box.setLayout(chan_config_box_lay)
-        layout.addRow(chan_config_box)
+            # Now make sensitivity spinbox
+            ch_sens_spinbox = QDoubleSpinBox()
+            ch_sens_spinbox.setMinimumWidth(100)
+            ch_sens_spinbox.setRange(0, float("inf"))
+            ch_sens_spinbox.setDecimals(1)
+            ch_sens_spinbox.setStepType(QAbstractSpinBox.AdaptiveDecimalStepType)
+            ch_sens_spinbox.setReadOnly(True)
+            ch_sens_spinbox.setDisabled(True)
+            ch_sens_spinbox.setValue(
+                _calc_chan_type_to_physical(self, ch_type, units=current_units)
+            )
+            self.ch_sensitivity_spinboxes[ch_type] = ch_sens_spinbox
+            # self.ch_sensitivity_spinbox_labels[ch_type] = QLabel(
+            #     f"{ch_type} ({self.mne.units[ch_type]}/{current_units})"
+            # )
+
+            # Add these to the layout
+            ch_grid_layout.addWidget(self.ch_label_widgets[ch_type], grid_row, 0)
+            ch_grid_layout.addWidget(ch_scale_spinbox, grid_row, 1)
+            ch_grid_layout.addWidget(ch_sens_spinbox, grid_row, 2)
+            grid_row += 1
+
+        ch_grid_layout.addWidget(self.physical_units_cmbx, grid_row, 2)
+
+        ch_scroll_box.setLayout(ch_grid_layout)
+
+        layout.addRow(ch_scroll_box)
 
         self.setLayout(layout)
         self.show()
