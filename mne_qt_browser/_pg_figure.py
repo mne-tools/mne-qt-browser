@@ -2003,9 +2003,9 @@ class SettingsDialog(_BaseDialog):
             self.ch_sensitivity_spinboxes[ch_type].setValue(
                 _calc_chan_type_to_physical(self, ch_type, units=current_units)
             )
-            self.ch_sensitivity_spinbox_labels[ch_type].setText(
-                f"{ch_type} ({self.mne.units[ch_type]}/{current_units})"
-            )
+            # self.ch_sensitivity_spinbox_labels[ch_type].setText(
+            #    f"{ch_type} ({self.mne.units[ch_type]}/{current_units})"
+            # )
 
 
 class HelpDialog(_BaseDialog):
@@ -5335,6 +5335,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Make sure it gets deleted after it was closed.
         self.deleteLater()
         self._closed = True
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if self.mne.fig_settings is not None:
+            self.mne.fig_settings._update_sensitivity_spinbox_values()
 
     def _fake_click_on_toolbar_action(self, action_name, wait_after=500):
         """Trigger event associated with action 'action_name' in toolbar."""
