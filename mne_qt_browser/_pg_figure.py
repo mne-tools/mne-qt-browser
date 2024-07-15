@@ -232,59 +232,33 @@ def _get_channel_scaling(widget, ch_type):
 
 def _calc_chan_type_to_physical(widget, ch_type, units="mm"):
     """Convert data to physical units."""
-    # Load in some data and measure its range in a timeperiod
-    start, stop = widget.weakmain()._get_start_stop()
-    data, _ = widget.weakmain()._load_data(start, stop)
-    ordered_types = widget.mne.ch_types[widget.mne.ch_order]
-    ch_pick = np.where(ordered_types == ch_type)[0][0]
-    data = widget.weakmain()._process_data(data, start, stop, [ch_pick])
-    data = data * widget.mne.scale_factor
-    peak_to_peak_data = np.abs(data.max() - data.min())
-
     # Get the ViewBox and its height in pixels
     vb = widget.mne.viewbox
-    pixel_height = vb.geometry().height()
+    height_px = vb.geometry().height()
 
-    # Get the view range in data units
+    # Get the view range in data units (here we write V for logical simplicity and
+    # dimensional analysis but it works for any underlying data unit)
     view_range = vb.viewRange()
-    data_height = view_range[1][1] - view_range[1][0]
+    height_V = view_range[1][1] - view_range[1][0]
 
     # Calculate the pixel-to-data ratio
-    if data_height != 0:
-        pixels_per_data_unit = pixel_height / data_height
+    if height_V == 0:
+        return 0
 
-        # Calculate the peak-to-peak height in pixels
-        peak_to_peak_pixels = peak_to_peak_data * pixels_per_data_unit
+    # Get the screen DPI
+    px_per_in = QApplication.primaryScreen().logicalDotsPerInch()
 
-        # Get the screen DPI
-        dpi = QApplication.primaryScreen().logicalDotsPerInch()
+    # Convert to inches
+    height_in = height_px / px_per_in
 
-        # Convert pixels to inches
-        peak_to_peak_inches = peak_to_peak_pixels / dpi
+    # Convert pixels to inches
+    in_per_V = height_in / height_V
 
-        # Convert inches to millimeters
-        peak_to_peak_mm = peak_to_peak_inches * 25.4
-
-        if units == "mm":
-            return (
-                _get_channel_scaling(widget, ch_type)
-                * peak_to_peak_data
-                / peak_to_peak_mm
-            )
-        elif units == "inch":
-            return (
-                _get_channel_scaling(widget, ch_type)
-                * peak_to_peak_data
-                / peak_to_peak_inches
-            )
-        elif units == "cm":
-            return (
-                _get_channel_scaling(widget, ch_type)
-                * peak_to_peak_data
-                / (peak_to_peak_mm / 10)
-            )
-        else:
-            raise ValueError("units must be 'mm', 'cm', or 'inches'")
+    # Convert inches to millimeters (or something else, but using mm in the name for
+    # simplicity)
+    mm_per_in = dict(mm=25.4, cm=2.54, inch=1.0)[units]
+    mm_per_V = in_per_V * mm_per_in
+    return _get_channel_scaling(widget, ch_type) / mm_per_V
 
 
 def propagate_to_children(method):  # noqa: D103
@@ -1715,7 +1689,9 @@ class ScaleBar(BaseScaleBar, QGraphicsLineItem):  # noqa: D101
         QGraphicsLineItem.__init__(self)
 
         self.setZValue(1)
-        self.setPen(self.mne.mkPen(color="#AA3377", width=5))
+        pen = self.mne.mkPen(color="#AA3377", width=5)
+        pen.setCapStyle(Qt.FlatCap)
+        self.setPen(pen)
         self.update_y_position()
 
     def _set_position(self, x, y):
@@ -1882,11 +1858,11 @@ class SettingsDialog(_BaseDialog):
 
         # Create dropdown to choose units
         self.physical_units_cmbx = QComboBox()
-        self.physical_units_cmbx.addItems(["mm", "cm", "inch"])
+        self.physical_units_cmbx.addItems(["/ mm", "/ cm", "/ inch"])
         self.physical_units_cmbx.currentIndexChanged.connect(
             self._update_sensitivity_spinbox_values
         )
-        current_units = self.physical_units_cmbx.currentText()
+        current_units = self.physical_units_cmbx.currentText().split()[-1]
 
         # Add subgroup box to show channel type scalings
         ch_scroll_box = QGroupBox("Channel Configuration")
@@ -1998,14 +1974,11 @@ class SettingsDialog(_BaseDialog):
 
     def _update_sensitivity_spinbox_values(self):
         """Update sensitivity spinbox values."""
-        current_units = self.physical_units_cmbx.currentText()
-        for ch_type, spinbox in self.ch_scaling_spinboxes.items():
+        current_units = self.physical_units_cmbx.currentText().split()[-1]
+        for ch_type in self.ch_scaling_spinboxes:
             self.ch_sensitivity_spinboxes[ch_type].setValue(
                 _calc_chan_type_to_physical(self, ch_type, units=current_units)
             )
-            # self.ch_sensitivity_spinbox_labels[ch_type].setText(
-            #    f"{ch_type} ({self.mne.units[ch_type]}/{current_units})"
-            # )
 
 
 class HelpDialog(_BaseDialog):
@@ -5108,7 +5081,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def _get_size(self):
         inch_width = self.width() / self.logicalDpiX()
         inch_height = self.height() / self.logicalDpiY()
-
+        logger.debug(f"Window size: {inch_width:0.1f} x {inch_height:0.1f} inches")
         return inch_width, inch_height
 
     def _fake_keypress(self, key, fig=None):
