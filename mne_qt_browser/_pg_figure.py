@@ -1891,7 +1891,7 @@ class SettingsDialog(_BaseDialog):
             inv_norm = _get_channel_scaling(self, ch_type)
             ch_scale_spinbox.setValue(inv_norm)
             ch_scale_spinbox.valueChanged.connect(
-                _methpartial(self._update_spinbox_values, ch_type=ch_type)
+                _methpartial(self._update_scaling_spinbox_values, ch_type=ch_type)
             )
             self.ch_scaling_spinboxes[ch_type] = ch_scale_spinbox
 
@@ -1945,7 +1945,7 @@ class SettingsDialog(_BaseDialog):
     def _toggle_antialiasing(self, _):
         self.weakmain()._toggle_antialiasing()
 
-    def _update_spinbox_values(self, *args, **kwargs):
+    def _update_scaling_spinbox_values(self, *args, **kwargs):
         """Update spinbox values. If any args or kwargs do a specific channel update."""
         # If new value for a channel given update that channel type and redraw
         if len(args) > 0:
@@ -4044,7 +4044,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Update Scalebars
         self._update_scalebar_values()
         if self.mne.fig_settings is not None:
-            self.mne.fig_settings._update_spinbox_values()
+            self.mne.fig_settings._update_scaling_spinbox_values()
 
     def hscroll(self, step):
         """Scroll horizontally by step."""
