@@ -2328,7 +2328,8 @@ class AnnotRegion(LinearRegionItem):
             dur = self.getRegion()[1] - self.getRegion()[0]
             self.setRegion((self.old_onset, self.old_onset + dur))
             warn(
-                "Can not combine general annotation and  " "channel based annotations."
+                "Can not combine channel-based annotations with "
+                "any other annotation."
             )
             return
 
