@@ -295,6 +295,18 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
     )
     assert inv_norm == ch_spinbox.value()
 
+    ch_scale_spinbox = fig.mne.fig_settings.ch_scaling_spinboxes[ch_type_test]
+    ch_sens_spinbox = fig.mne.fig_settings.ch_sensitivity_spinboxes[ch_type_test]
+    scaling_spinbox_value = ch_spinbox.value()
+    sensitivity_spinbox_value = ch_sens_spinbox.value()
+    scaling_value = fig.mne.scalings[ch_type_test]
+    new_scaling_spinbox_value = round(scaling_spinbox_value * 2)
+    new_sensitivity_spinbox_value = sensitivity_spinbox_value * 2
+    ch_scale_spinbox.setValue(new_scaling_spinbox_value)
+    new_scaling_value = fig.mne.scalings[ch_type_test]
+    assert scaling_value != new_scaling_value
+    assert ch_sens_spinbox.value() == new_sensitivity_spinbox_value
+
 
 def test_pg_help_dialog(raw_orig, pg_backend):
     """Test Settings Dialog toggle on/off for pyqtgraph-backend."""
