@@ -1955,7 +1955,7 @@ class SettingsDialog(_BaseDialog):
             # If new_value is 0 then scaling is stuck on 0.
             # To get out of 0 set scalings to 1 and then set the new value
             if new_value == 0:
-                self.mne.scalings[ch_type] = 0
+                self.mne.scalings[ch_type] = 1e-12
             else:
                 self.mne.scalings[ch_type] = 1
                 self.mne.scalings[ch_type] = new_value / _get_channel_scaling(
@@ -4004,7 +4004,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _update_ch_spinbox_values(self):
         if self.mne.fig_settings is not None:
-            self.mne.fig_settings.update_all_spinboxes()
+            self.mne.fig_settings._update_scaling_spinbox_values()
 
     def _set_scalebars_visible(self, visible):
         for scalebar in self.mne.scalebars.values():
@@ -4853,7 +4853,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.butterfly = butterfly
         self._update_picks()
         self._update_data()
-        self._update_ch_spinbox_values()
+        # self._update_ch_spinbox_values()
 
         if butterfly and self.mne.fig_selection is not None:
             self.mne.selection_ypos_dict.clear()
@@ -4882,6 +4882,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if self.mne.fig_selection is not None:
             # Update Selection-Dialog
             self.mne.fig_selection._style_butterfly()
+            self._update_ch_spinbox_values()
 
         # Set vertical scrollbar visible
         self.mne.ax_vscroll.setVisible(
