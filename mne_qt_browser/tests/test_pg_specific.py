@@ -277,6 +277,24 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
     assert sensitivities_mne == sensitivity_values
     assert sensitivities_control == sensitivity_values
 
+    ordered_types = fig.mne.ch_types[fig.mne.ch_order]
+    unique_types = np.unique(ordered_types)
+    unique_types = [
+        ch_type for ch_type in unique_types if ch_type in fig.mne.unit_scalings.keys()
+    ]
+    n_unique_types = len(unique_types)
+    assert n_unique_types == len(fig.mne.fig_settings.ch_scaling_spinboxes)
+
+    ch_type_test = unique_types[0]
+    ch_spinbox = fig.mne.fig_settings.ch_scaling_spinboxes[ch_type_test]
+    inv_norm = (
+        fig.mne.scalings[ch_type_test]
+        * fig.mne.unit_scalings[ch_type_test]
+        * 2  # values multiplied by two for raw data
+        / fig.mne.scale_factor
+    )
+    assert inv_norm == ch_spinbox.value()
+
 
 def test_pg_help_dialog(raw_orig, pg_backend):
     """Test Settings Dialog toggle on/off for pyqtgraph-backend."""
