@@ -2309,10 +2309,8 @@ class AnnotRegion(LinearRegionItem):
         self.mne.plt.addItem(self.label_item, ignoreBounds=True)
 
     def _region_changed(self):
-        self.regionChangeFinished.emit(self)
-        self.old_onset = self.getRegion()[0]
-        # remove merged regions
-        # overlapping_scas = list()
+        # Check for overlapping regions
+        overlap_has_sca = []
         overlapping_regions = list()
         for region in self.mne.regions:
             if region.description != self.description or id(self) == id(region):
@@ -2320,11 +2318,27 @@ class AnnotRegion(LinearRegionItem):
             values = region.getRegion()
             if any(self.getRegion()[0] <= val <= self.getRegion()[1] for val in values):
                 overlapping_regions.append(region)
-            #     overlapping_scas += list(region.single_channel_annots.keys())
+                overlap_has_sca.append(len(region.single_channel_annots) > 0)
+
+        # If this region or an overlapping region have
+        # channel specific annotations then terminate
+        if (len(self.single_channel_annots) > 0 or any(overlap_has_sca)) and len(
+            overlapping_regions
+        ) > 0:
+            dur = self.getRegion()[1] - self.getRegion()[0]
+            self.setRegion((self.old_onset, self.old_onset + dur))
+            warn(
+                "Can not combine general annotation and  " "channel based annotations."
+            )
+            return
+
         # figure out new boundaries
         regions_ = np.array(
             [region.getRegion() for region in overlapping_regions] + [self.getRegion()]
         )
+
+        self.regionChangeFinished.emit(self)
+        self.old_onset = self.getRegion()[0]
 
         # This annotation(s) has no sca but other has scas
         # Other annotation(s) has sca but this annotation doesn't
