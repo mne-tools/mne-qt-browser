@@ -4164,6 +4164,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.ax_vscroll.update_nchan()
             self.mne.plt.setYRange(ymin, ymax, padding=0)
 
+        if self.mne.fig_settings is not None:
+            self.mne.fig_settings._update_sensitivity_spinbox_values()
+
     def _remove_vline(self):
         if self.mne.vline is not None:
             if self.mne.is_epochs:
