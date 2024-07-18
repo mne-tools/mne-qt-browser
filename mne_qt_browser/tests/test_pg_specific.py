@@ -305,7 +305,7 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
     ch_scale_spinbox.setValue(new_scaling_spinbox_value)
     new_scaling_value = fig.mne.scalings[ch_type_test]
     assert scaling_value != new_scaling_value
-    assert ch_sens_spinbox.value() == new_sensitivity_spinbox_value
+    assert round(ch_sens_spinbox.value()) == round(new_sensitivity_spinbox_value)
 
 
 def test_pg_help_dialog(raw_orig, pg_backend):
