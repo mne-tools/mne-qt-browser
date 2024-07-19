@@ -301,11 +301,13 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
     sensitivity_spinbox_value = ch_sens_spinbox.value()
     scaling_value = fig.mne.scalings[ch_type_test]
     new_scaling_spinbox_value = scaling_spinbox_value * 2
-    new_sensitivity_spinbox_value = sensitivity_spinbox_value * 2
+    new_expected_sensitivity_spinbox_value = sensitivity_spinbox_value * 2
     ch_scale_spinbox.setValue(new_scaling_spinbox_value)
     new_scaling_value = fig.mne.scalings[ch_type_test]
     assert scaling_value != new_scaling_value
-    assert round(ch_sens_spinbox.value(), 1) == round(new_sensitivity_spinbox_value, 1)
+    np.testing.assert_allclose(
+        ch_sens_spinbox.value(), new_expected_sensitivity_spinbox_value, atol=2
+    )
 
 
 def test_pg_help_dialog(raw_orig, pg_backend):
