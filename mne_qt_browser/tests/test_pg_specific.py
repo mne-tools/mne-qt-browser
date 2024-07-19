@@ -306,7 +306,7 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
     new_scaling_value = fig.mne.scalings[ch_type_test]
     assert scaling_value != new_scaling_value
     np.testing.assert_allclose(
-        ch_sens_spinbox.value(), new_expected_sensitivity_spinbox_value, atol=2
+        ch_sens_spinbox.value(), new_expected_sensitivity_spinbox_value, atol=0.1
     )
 
 
