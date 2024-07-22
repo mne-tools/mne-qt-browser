@@ -4885,7 +4885,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if self.mne.fig_selection is not None:
             # Update Selection-Dialog
             self.mne.fig_selection._style_butterfly()
-            self._update_ch_spinbox_values()
+            # self._update_ch_spinbox_values()
 
         # Set vertical scrollbar visible
         self.mne.ax_vscroll.setVisible(
@@ -4901,6 +4901,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             trace.update_ypos()
 
         self._draw_traces()
+
+        self._update_ch_spinbox_values()
 
     def _toggle_butterfly(self):
         if self.mne.instance_type != "ica":
