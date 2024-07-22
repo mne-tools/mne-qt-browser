@@ -172,6 +172,8 @@ _dark_dict = {
 
 _vline_color = (0, 191, 0)
 
+_unit_per_inch = dict(mm=25.4, cm=2.54, inch=1.0)
+
 
 def _get_color(color_spec, invert=False):
     """Wrap mkColor to accept all possible matplotlib color-specifiers."""
@@ -230,8 +232,8 @@ def _get_channel_scaling(widget, ch_type):
     return inv_norm
 
 
-def _calc_chan_type_to_physical(widget, ch_type, units="mm"):
-    """Convert data to physical units."""
+def _calc_data_unit_to_physical(widget, units="mm"):
+    """Calculate the physical size of a data unit."""
     # Get the ViewBox and its height in pixels
     vb = widget.mne.viewbox
     height_px = vb.geometry().height()
@@ -256,9 +258,16 @@ def _calc_chan_type_to_physical(widget, ch_type, units="mm"):
 
     # Convert inches to millimeters (or something else, but using mm in the name for
     # simplicity)
-    mm_per_in = dict(mm=25.4, cm=2.54, inch=1.0)[units]
+    mm_per_in = _unit_per_inch[units]
     mm_per_V = in_per_V * mm_per_in
-    return _get_channel_scaling(widget, ch_type) / mm_per_V
+    return mm_per_V
+
+
+def _calc_chan_type_to_physical(widget, ch_type, units="mm"):
+    """Convert data to physical units."""
+    return _get_channel_scaling(widget, ch_type) / _calc_data_unit_to_physical(
+        widget, units=units
+    )
 
 
 def propagate_to_children(method):  # noqa: D103
@@ -1888,11 +1897,7 @@ class SettingsDialog(_BaseDialog):
             ch_scale_spinbox.setRange(0, float("inf"))
             ch_scale_spinbox.setDecimals(1)
             ch_scale_spinbox.setStepType(QAbstractSpinBox.AdaptiveDecimalStepType)
-            inv_norm = _get_channel_scaling(self, ch_type)
-            ch_scale_spinbox.setValue(inv_norm)
-            # ch_scale_spinbox.valueChanged.connect(
-            #     _methpartial(self._update_scaling_spinbox_values, ch_type=ch_type)
-            # )
+            ch_scale_spinbox.setValue(_get_channel_scaling(self, ch_type))
             ch_scale_spinbox.valueChanged.connect(
                 _methpartial(
                     self._update_spinbox_values, ch_type=ch_type, source="scaling"
@@ -1952,47 +1957,11 @@ class SettingsDialog(_BaseDialog):
     def _toggle_antialiasing(self, _):
         self.weakmain()._toggle_antialiasing()
 
-    def _update_scaling_spinbox_values(self, *args, **kwargs):
-        """Update spinbox values. If any args or kwargs do a specific channel update."""
-        # If new value for a channel given update that channel type and redraw
-        if len(args) > 0:
-            new_value = args[0]
-            ch_type = kwargs["ch_type"]
-
-            # If new_value is 0 then scaling is stuck on 0.
-            # To get out of 0 set scalings to 1 and then set the new value
-            if new_value == 0:
-                self.mne.scalings[ch_type] = 1e-12
-            else:
-                self.mne.scalings[ch_type] = 1
-                self.mne.scalings[ch_type] = new_value / _get_channel_scaling(
-                    self, ch_type
-                )
-
-            self.mne.scalebar_texts[ch_type].update_value()
-            self.weakmain()._redraw()
-
-        # Update all channels and don't redraw (happens elsewhere)
-        else:
-            for ch_type, spinbox in self.ch_scaling_spinboxes.items():
-                spinbox.setValue(_get_channel_scaling(self, ch_type))
-
-        self._update_sensitivity_spinbox_values()
-
-    def _update_sensitivity_spinbox_values(self):
-        """Update sensitivity spinbox values."""
-        current_units = self.physical_units_cmbx.currentText().split()[-1]
-        for ch_type in self.ch_scaling_spinboxes:
-            self.ch_sensitivity_spinboxes[ch_type].setValue(
-                _calc_chan_type_to_physical(self, ch_type, units=current_units)
-            )
-
     def _update_spinbox_values(self, *args, **kwargs):
         """Update spinbox values."""
         ch_type = kwargs["ch_type"]
         source = kwargs["source"]
         current_units = self.physical_units_cmbx.currentText().split()[-1]
-        unit_conversion = dict(mm=25.4, cm=2.54, inch=1.0)[current_units]
 
         # A new value is passed in
         if len(args) > 0:
@@ -2008,6 +1977,7 @@ class SettingsDialog(_BaseDialog):
                     self.mne.scalings[ch_type] = new_value / _get_channel_scaling(
                         self, ch_type
                     )
+
                 self.ch_sensitivity_spinboxes[ch_type].blockSignals(True)
                 self.ch_sensitivity_spinboxes[ch_type].setValue(
                     _calc_chan_type_to_physical(self, ch_type, units=current_units)
@@ -2021,12 +1991,14 @@ class SettingsDialog(_BaseDialog):
                 if new_value == 0:
                     self.mne.scalings[ch_type] = 1e-12
                 else:
+                    scaler = 1 if self.mne.butterfly else 2
                     self.mne.scalings[ch_type] = (
                         new_value
-                        * unit_conversion
                         * self.mne.scale_factor
-                        / self.mne.unit_scalings[ch_type]
+                        * _calc_data_unit_to_physical(self, units=current_units)
+                        / (scaler * self.mne.unit_scalings[ch_type])
                     )
+
                 self.ch_scaling_spinboxes[ch_type].blockSignals(True)
                 self.ch_scaling_spinboxes[ch_type].setValue(
                     _get_channel_scaling(self, ch_type)
@@ -4081,7 +4053,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _update_ch_spinbox_values(self):
         if self.mne.fig_settings is not None:
-            # self.mne.fig_settings._update_scaling_spinbox_values()
             self.mne.fig_settings._update_spinbox_values(ch_type="all", source="all")
 
     def _set_scalebars_visible(self, visible):
@@ -4121,9 +4092,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Update Scalebars
         self._update_scalebar_values()
+
+        # Update spinboxes in settings dialog
         self._update_ch_spinbox_values()
-        # if self.mne.fig_settings is not None:
-        #     self.mne.fig_settings._update_scaling_spinbox_values()
 
     def hscroll(self, step):
         """Scroll horizontally by step."""
