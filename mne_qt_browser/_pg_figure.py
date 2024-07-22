@@ -1890,8 +1890,13 @@ class SettingsDialog(_BaseDialog):
             ch_scale_spinbox.setStepType(QAbstractSpinBox.AdaptiveDecimalStepType)
             inv_norm = _get_channel_scaling(self, ch_type)
             ch_scale_spinbox.setValue(inv_norm)
+            # ch_scale_spinbox.valueChanged.connect(
+            #     _methpartial(self._update_scaling_spinbox_values, ch_type=ch_type)
+            # )
             ch_scale_spinbox.valueChanged.connect(
-                _methpartial(self._update_scaling_spinbox_values, ch_type=ch_type)
+                _methpartial(
+                    self._update_spinbox_values, ch_type=ch_type, source="scaling"
+                )
             )
             self.ch_scaling_spinboxes[ch_type] = ch_scale_spinbox
 
@@ -1901,10 +1906,15 @@ class SettingsDialog(_BaseDialog):
             ch_sens_spinbox.setRange(0, float("inf"))
             ch_sens_spinbox.setDecimals(1)
             ch_sens_spinbox.setStepType(QAbstractSpinBox.AdaptiveDecimalStepType)
-            ch_sens_spinbox.setReadOnly(True)
-            ch_sens_spinbox.setDisabled(True)
+            ch_sens_spinbox.setReadOnly(False)
+            ch_sens_spinbox.setDisabled(False)
             ch_sens_spinbox.setValue(
                 _calc_chan_type_to_physical(self, ch_type, units=current_units)
+            )
+            ch_sens_spinbox.valueChanged.connect(
+                _methpartial(
+                    self._update_spinbox_values, ch_type=ch_type, source="sensitivity"
+                )
             )
             self.ch_sensitivity_spinboxes[ch_type] = ch_sens_spinbox
 
@@ -1976,6 +1986,76 @@ class SettingsDialog(_BaseDialog):
             self.ch_sensitivity_spinboxes[ch_type].setValue(
                 _calc_chan_type_to_physical(self, ch_type, units=current_units)
             )
+
+    def _update_spinbox_values(self, *args, **kwargs):
+        """Update spinbox values."""
+        ch_type = kwargs["ch_type"]
+        source = kwargs["source"]
+        current_units = self.physical_units_cmbx.currentText().split()[-1]
+        unit_conversion = dict(mm=25.4, cm=2.54, inch=1.0)[current_units]
+
+        # A new value is passed in
+        if len(args) > 0:
+            new_value = args[0]
+
+            # If source is scaling then update scaling and block signal
+            # to avoid recursion
+            if source == "scaling":
+                if new_value == 0:
+                    self.mne.scalings[ch_type] = 1e-12
+                else:
+                    self.mne.scalings[ch_type] = 1
+                    self.mne.scalings[ch_type] = new_value / _get_channel_scaling(
+                        self, ch_type
+                    )
+                self.ch_sensitivity_spinboxes[ch_type].blockSignals(True)
+                self.ch_sensitivity_spinboxes[ch_type].setValue(
+                    _calc_chan_type_to_physical(self, ch_type, units=current_units)
+                )
+                self.ch_sensitivity_spinboxes[ch_type].blockSignals(False)
+                self.mne.scalebar_texts[ch_type].update_value()
+
+            elif source == "sensitivity":
+                # If new_value is 0 then scaling is stuck on 0.
+                # Calculate what the new scalings value will have to be
+                if new_value == 0:
+                    self.mne.scalings[ch_type] = 1e-12
+                else:
+                    self.mne.scalings[ch_type] = (
+                        new_value
+                        * unit_conversion
+                        * self.mne.scale_factor
+                        / self.mne.unit_scalings[ch_type]
+                    )
+                self.ch_scaling_spinboxes[ch_type].blockSignals(True)
+                self.ch_scaling_spinboxes[ch_type].setValue(
+                    _get_channel_scaling(self, ch_type)
+                )
+                self.ch_scaling_spinboxes[ch_type].blockSignals(False)
+
+            else:
+                raise ValueError(
+                    f"Unknown source: {source}. "
+                    f"Must be scaling or sensitivity. if specifying a new value"
+                )
+
+            self.mne.scalebar_texts[ch_type].update_value()
+            self.weakmain()._redraw()
+
+        else:
+            # Update all spinboxes
+            ch_types = self.ch_scaling_spinboxes.keys()
+            for ch_type in ch_types:
+                self.ch_scaling_spinboxes[ch_type].blockSignals(True)
+                self.ch_sensitivity_spinboxes[ch_type].blockSignals(True)
+                self.ch_scaling_spinboxes[ch_type].setValue(
+                    _get_channel_scaling(self, ch_type)
+                )
+                self.ch_sensitivity_spinboxes[ch_type].setValue(
+                    _calc_chan_type_to_physical(self, ch_type, units=current_units)
+                )
+                self.ch_scaling_spinboxes[ch_type].blockSignals(False)
+                self.ch_sensitivity_spinboxes[ch_type].blockSignals(False)
 
 
 class HelpDialog(_BaseDialog):
@@ -4001,7 +4081,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _update_ch_spinbox_values(self):
         if self.mne.fig_settings is not None:
-            self.mne.fig_settings._update_scaling_spinbox_values()
+            # self.mne.fig_settings._update_scaling_spinbox_values()
+            self.mne.fig_settings._update_spinbox_values(ch_type="all", source="all")
 
     def _set_scalebars_visible(self, visible):
         for scalebar in self.mne.scalebars.values():
@@ -4040,8 +4121,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Update Scalebars
         self._update_scalebar_values()
-        if self.mne.fig_settings is not None:
-            self.mne.fig_settings._update_scaling_spinbox_values()
+        self._update_ch_spinbox_values()
+        # if self.mne.fig_settings is not None:
+        #     self.mne.fig_settings._update_scaling_spinbox_values()
 
     def hscroll(self, step):
         """Scroll horizontally by step."""
