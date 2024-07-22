@@ -1907,9 +1907,6 @@ class SettingsDialog(_BaseDialog):
                 _calc_chan_type_to_physical(self, ch_type, units=current_units)
             )
             self.ch_sensitivity_spinboxes[ch_type] = ch_sens_spinbox
-            # self.ch_sensitivity_spinbox_labels[ch_type] = QLabel(
-            #     f"{ch_type} ({self.mne.units[ch_type]}/{current_units})"
-            # )
 
             # Add these to the layout
             ch_grid_layout.addWidget(self.ch_label_widgets[ch_type], grid_row, 0)
@@ -4856,7 +4853,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.butterfly = butterfly
         self._update_picks()
         self._update_data()
-        # self._update_ch_spinbox_values()
 
         if butterfly and self.mne.fig_selection is not None:
             self.mne.selection_ypos_dict.clear()
@@ -4885,7 +4881,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if self.mne.fig_selection is not None:
             # Update Selection-Dialog
             self.mne.fig_selection._style_butterfly()
-            # self._update_ch_spinbox_values()
 
         # Set vertical scrollbar visible
         self.mne.ax_vscroll.setVisible(
