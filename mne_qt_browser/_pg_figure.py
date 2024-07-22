@@ -1850,7 +1850,7 @@ class SettingsDialog(_BaseDialog):
         ch_types_ordered = [
             ordered_types[idx]
             for idx in sorted(unique_type_idxs)
-            if ordered_types[idx] in self.mne.unit_scalings.keys()
+            if ordered_types[idx] in self.mne.unit_scalings
         ]
 
         # Grid layout for channel spinboxes and settings
