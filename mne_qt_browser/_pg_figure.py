@@ -1980,11 +1980,11 @@ class SettingsDialog(_BaseDialog):
                         self, ch_type
                     )
 
-                self.ch_sensitivity_spinboxes[ch_type].blockSignals(True)
-                self.ch_sensitivity_spinboxes[ch_type].setValue(
-                    _calc_chan_type_to_physical(self, ch_type, units=current_units)
-                )
-                self.ch_sensitivity_spinboxes[ch_type].blockSignals(False)
+                with SignalBlocker(self.ch_sensitivity_spinboxes[ch_type]):
+                    self.ch_sensitivity_spinboxes[ch_type].setValue(
+                        _calc_chan_type_to_physical(self, ch_type, units=current_units)
+                    )
+
                 self.mne.scalebar_texts[ch_type].update_value()
 
             elif source == "sensitivity":
@@ -2001,11 +2001,10 @@ class SettingsDialog(_BaseDialog):
                         / (scaler * self.mne.unit_scalings[ch_type])
                     )
 
-                self.ch_scaling_spinboxes[ch_type].blockSignals(True)
-                self.ch_scaling_spinboxes[ch_type].setValue(
-                    _get_channel_scaling(self, ch_type)
-                )
-                self.ch_scaling_spinboxes[ch_type].blockSignals(False)
+                with SignalBlocker(self.ch_scaling_spinboxes[ch_type]):
+                    self.ch_scaling_spinboxes[ch_type].setValue(
+                        _get_channel_scaling(self, ch_type)
+                    )
 
                 self.mne.scalebar_texts[ch_type].update_value()
 
@@ -2013,11 +2012,10 @@ class SettingsDialog(_BaseDialog):
                 new_unit = new_value.split()[-1]
                 ch_types = self.ch_scaling_spinboxes.keys()
                 for ch_type in ch_types:
-                    self.ch_sensitivity_spinboxes[ch_type].blockSignals(True)
-                    self.ch_sensitivity_spinboxes[ch_type].setValue(
-                        _calc_chan_type_to_physical(self, ch_type, units=new_unit)
-                    )
-                    self.ch_sensitivity_spinboxes[ch_type].blockSignals(False)
+                    with SignalBlocker(self.ch_sensitivity_spinboxes[ch_type]):
+                        self.ch_sensitivity_spinboxes[ch_type].setValue(
+                            _calc_chan_type_to_physical(self, ch_type, units=new_unit)
+                        )
 
             else:
                 raise ValueError(
@@ -2032,16 +2030,14 @@ class SettingsDialog(_BaseDialog):
             # Update all spinboxes
             ch_types = self.ch_scaling_spinboxes.keys()
             for ch_type in ch_types:
-                self.ch_scaling_spinboxes[ch_type].blockSignals(True)
-                self.ch_sensitivity_spinboxes[ch_type].blockSignals(True)
-                self.ch_scaling_spinboxes[ch_type].setValue(
-                    _get_channel_scaling(self, ch_type)
-                )
-                self.ch_sensitivity_spinboxes[ch_type].setValue(
-                    _calc_chan_type_to_physical(self, ch_type, units=current_units)
-                )
-                self.ch_scaling_spinboxes[ch_type].blockSignals(False)
-                self.ch_sensitivity_spinboxes[ch_type].blockSignals(False)
+                with SignalBlocker(self.ch_scaling_spinboxes[ch_type]):
+                    self.ch_scaling_spinboxes[ch_type].setValue(
+                        _get_channel_scaling(self, ch_type)
+                    )
+                with SignalBlocker(self.ch_sensitivity_spinboxes[ch_type]):
+                    self.ch_sensitivity_spinboxes[ch_type].setValue(
+                        _calc_chan_type_to_physical(self, ch_type, units=current_units)
+                    )
 
 
 class HelpDialog(_BaseDialog):
