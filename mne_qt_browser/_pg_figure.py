@@ -1868,8 +1868,10 @@ class SettingsDialog(_BaseDialog):
         # Create dropdown to choose units
         self.physical_units_cmbx = QComboBox()
         self.physical_units_cmbx.addItems(["/ mm", "/ cm", "/ inch"])
-        self.physical_units_cmbx.currentIndexChanged.connect(
-            self._update_sensitivity_spinbox_values
+        self.physical_units_cmbx.currentTextChanged.connect(
+            _methpartial(
+                self._update_spinbox_values, ch_type="all", source="unit_change"
+            )
         )
         current_units = self.physical_units_cmbx.currentText().split()[-1]
 
@@ -2004,6 +2006,18 @@ class SettingsDialog(_BaseDialog):
                     _get_channel_scaling(self, ch_type)
                 )
                 self.ch_scaling_spinboxes[ch_type].blockSignals(False)
+
+                self.mne.scalebar_texts[ch_type].update_value()
+
+            elif source == "unit_change":
+                new_unit = new_value.split()[-1]
+                ch_types = self.ch_scaling_spinboxes.keys()
+                for ch_type in ch_types:
+                    self.ch_sensitivity_spinboxes[ch_type].blockSignals(True)
+                    self.ch_sensitivity_spinboxes[ch_type].setValue(
+                        _calc_chan_type_to_physical(self, ch_type, units=new_unit)
+                    )
+                    self.ch_sensitivity_spinboxes[ch_type].blockSignals(False)
 
             else:
                 raise ValueError(
