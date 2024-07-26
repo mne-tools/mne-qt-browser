@@ -232,6 +232,37 @@ def _get_channel_scaling(widget, ch_type):
     return inv_norm
 
 
+def _calc_chan_type_to_physical(widget, ch_type, units="mm"):
+    """Convert data to physical units."""
+    # Get the ViewBox and its height in pixels
+    vb = widget.mne.viewbox
+    height_px = vb.geometry().height()
+
+    # Get the view range in data units (here we write V for logical simplicity and
+    # dimensional analysis but it works for any underlying data unit)
+    view_range = vb.viewRange()
+    height_V = view_range[1][1] - view_range[1][0]
+
+    # Calculate the pixel-to-data ratio
+    if height_V == 0:
+        return 0
+
+    # Get the screen DPI
+    px_per_in = QApplication.primaryScreen().logicalDotsPerInch()
+
+    # Convert to inches
+    height_in = height_px / px_per_in
+
+    # Convert pixels to inches
+    in_per_V = height_in / height_V
+
+    # Convert inches to millimeters (or something else, but using mm in the name for
+    # simplicity)
+    mm_per_in = dict(mm=25.4, cm=2.54, inch=1.0)[units]
+    mm_per_V = in_per_V * mm_per_in
+    return _get_channel_scaling(widget, ch_type) / mm_per_V
+
+
 def propagate_to_children(method):  # noqa: D103
     @functools.wraps(method)
     def wrapper(*args, **kwargs):
@@ -1731,7 +1762,9 @@ class ScaleBar(BaseScaleBar, QGraphicsLineItem):  # noqa: D101
         QGraphicsLineItem.__init__(self)
 
         self.setZValue(1)
-        self.setPen(self.mne.mkPen(color="#AA3377", width=5))
+        pen = self.mne.mkPen(color="#AA3377", width=5)
+        pen.setCapStyle(Qt.FlatCap)
+        self.setPen(pen)
         self.update_y_position()
 
     def _set_position(self, x, y):
@@ -1882,34 +1915,83 @@ class SettingsDialog(_BaseDialog):
         self.scroll_sensitivity_slider.setValue(self.mne.scroll_sensitivity)
         layout.addRow("horizontal scroll sensitivity", self.scroll_sensitivity_slider)
 
-        # Add subgroup box to show channel type scalings
         layout.addItem(QSpacerItem(10, 10, QSizePolicy.Minimum, QSizePolicy.Expanding))
-        ch_scaling_box = QGroupBox("Channel Type Scalings")
-        ch_scaling_box.setStyleSheet("QGroupBox { font-size: 12pt; }")
-        ch_scaling_layout = QFormLayout()
-        self.ch_scaling_spinboxes = {}
 
-        # Get all unique channel types and allow scaling
+        # Get all unique channel types
         ordered_types = self.mne.ch_types[self.mne.ch_order]
         unique_type_idxs = np.unique(ordered_types, return_index=True)[1]
-        ch_types_ordered = [ordered_types[idx] for idx in sorted(unique_type_idxs)]
-        for ch in ch_types_ordered:
-            if ch in self.mne.unit_scalings.keys():
-                ch_spinbox = QDoubleSpinBox()
-                ch_spinbox.setMinimumWidth(100)
-                ch_spinbox.setRange(0, float("inf"))
-                ch_spinbox.setDecimals(1)
-                ch_spinbox.setStepType(QAbstractSpinBox.AdaptiveDecimalStepType)
-                inv_norm = _get_channel_scaling(self, ch)
-                ch_spinbox.setValue(inv_norm)
-                ch_spinbox.valueChanged.connect(
-                    _methpartial(self._update_spinbox_values, ch_type=ch)
-                )
-                self.ch_scaling_spinboxes[ch] = ch_spinbox
-                ch_scaling_layout.addRow(f"{ch} ({self.mne.units[ch]})", ch_spinbox)
+        ch_types_ordered = [
+            ordered_types[idx]
+            for idx in sorted(unique_type_idxs)
+            if ordered_types[idx] in self.mne.unit_scalings
+        ]
 
-        ch_scaling_box.setLayout(ch_scaling_layout)
-        layout.addRow(ch_scaling_box)
+        # Grid layout for channel spinboxes and settings
+        ch_grid_layout = QGridLayout()
+
+        # Create dropdown to choose units
+        self.physical_units_cmbx = QComboBox()
+        self.physical_units_cmbx.addItems(["/ mm", "/ cm", "/ inch"])
+        self.physical_units_cmbx.currentIndexChanged.connect(
+            self._update_sensitivity_spinbox_values
+        )
+        current_units = self.physical_units_cmbx.currentText().split()[-1]
+
+        # Add subgroup box to show channel type scalings
+        ch_scroll_box = QGroupBox("Channel Configuration")
+        ch_scroll_box.setStyleSheet("QGroupBox { font-size: 12pt; }")
+        self.ch_scaling_spinboxes = {}
+        # self.ch_scaling_spinbox_labels = {}
+        self.ch_sensitivity_spinboxes = {}
+        # self.ch_sensitivity_spinbox_labels = {}
+        self.ch_label_widgets = {}
+
+        ch_grid_layout.addWidget(QLabel("Channel Type"), 0, 0)
+        ch_grid_layout.addWidget(QLabel("Scaling"), 0, 1)
+        ch_grid_layout.addWidget(QLabel("Sensitivity"), 0, 2)
+        grid_row = 1
+        for ch_type in ch_types_ordered:
+            self.ch_label_widgets[ch_type] = QLabel(
+                f"{ch_type} ({self.mne.units[ch_type]})"
+            )
+
+            # Make scaling spinbox first
+            ch_scale_spinbox = QDoubleSpinBox()
+            ch_scale_spinbox.setMinimumWidth(100)
+            ch_scale_spinbox.setRange(0, float("inf"))
+            ch_scale_spinbox.setDecimals(1)
+            ch_scale_spinbox.setStepType(QAbstractSpinBox.AdaptiveDecimalStepType)
+            inv_norm = _get_channel_scaling(self, ch_type)
+            ch_scale_spinbox.setValue(inv_norm)
+            ch_scale_spinbox.valueChanged.connect(
+                _methpartial(self._update_scaling_spinbox_values, ch_type=ch_type)
+            )
+            self.ch_scaling_spinboxes[ch_type] = ch_scale_spinbox
+
+            # Now make sensitivity spinbox
+            ch_sens_spinbox = QDoubleSpinBox()
+            ch_sens_spinbox.setMinimumWidth(100)
+            ch_sens_spinbox.setRange(0, float("inf"))
+            ch_sens_spinbox.setDecimals(1)
+            ch_sens_spinbox.setStepType(QAbstractSpinBox.AdaptiveDecimalStepType)
+            ch_sens_spinbox.setReadOnly(True)
+            ch_sens_spinbox.setDisabled(True)
+            ch_sens_spinbox.setValue(
+                _calc_chan_type_to_physical(self, ch_type, units=current_units)
+            )
+            self.ch_sensitivity_spinboxes[ch_type] = ch_sens_spinbox
+
+            # Add these to the layout
+            ch_grid_layout.addWidget(self.ch_label_widgets[ch_type], grid_row, 0)
+            ch_grid_layout.addWidget(ch_scale_spinbox, grid_row, 1)
+            ch_grid_layout.addWidget(ch_sens_spinbox, grid_row, 2)
+            grid_row += 1
+
+        ch_grid_layout.addWidget(self.physical_units_cmbx, grid_row, 2)
+
+        ch_scroll_box.setLayout(ch_grid_layout)
+
+        layout.addRow(ch_scroll_box)
 
         self.setLayout(layout)
         self.show()
@@ -1933,7 +2015,7 @@ class SettingsDialog(_BaseDialog):
     def _toggle_antialiasing(self, _):
         self.weakmain()._toggle_antialiasing()
 
-    def _update_spinbox_values(self, *args, **kwargs):
+    def _update_scaling_spinbox_values(self, *args, **kwargs):
         """Update spinbox values. If any args or kwargs do a specific channel update."""
         # If new value for a channel given update that channel type and redraw
         if len(args) > 0:
@@ -1943,7 +2025,7 @@ class SettingsDialog(_BaseDialog):
             # If new_value is 0 then scaling is stuck on 0.
             # To get out of 0 set scalings to 1 and then set the new value
             if new_value == 0:
-                self.mne.scalings[ch_type] = 0
+                self.mne.scalings[ch_type] = 1e-12
             else:
                 self.mne.scalings[ch_type] = 1
                 self.mne.scalings[ch_type] = new_value / _get_channel_scaling(
@@ -1957,6 +2039,16 @@ class SettingsDialog(_BaseDialog):
         else:
             for ch_type, spinbox in self.ch_scaling_spinboxes.items():
                 spinbox.setValue(_get_channel_scaling(self, ch_type))
+
+        self._update_sensitivity_spinbox_values()
+
+    def _update_sensitivity_spinbox_values(self):
+        """Update sensitivity spinbox values."""
+        current_units = self.physical_units_cmbx.currentText().split()[-1]
+        for ch_type in self.ch_scaling_spinboxes:
+            self.ch_sensitivity_spinboxes[ch_type].setValue(
+                _calc_chan_type_to_physical(self, ch_type, units=current_units)
+            )
 
 
 class HelpDialog(_BaseDialog):
@@ -3993,7 +4085,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _update_ch_spinbox_values(self):
         if self.mne.fig_settings is not None:
-            self.mne.fig_settings.update_all_spinboxes()
+            self.mne.fig_settings._update_scaling_spinbox_values()
 
     def _set_scalebars_visible(self, visible):
         for scalebar in self.mne.scalebars.values():
@@ -4033,7 +4125,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Update Scalebars
         self._update_scalebar_values()
         if self.mne.fig_settings is not None:
-            self.mne.fig_settings._update_spinbox_values()
+            self.mne.fig_settings._update_scaling_spinbox_values()
 
     def hscroll(self, step):
         """Scroll horizontally by step."""
@@ -4155,6 +4247,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
             if self.mne.spectrogram:
                 self._set_spectrogram(self.mne.spectrogram)
+
+        if self.mne.fig_settings is not None:
+            self.mne.fig_settings._update_sensitivity_spinbox_values()
 
     def _remove_vline(self):
         if self.mne.vline is not None:
@@ -4845,7 +4940,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.butterfly = butterfly
         self._update_picks()
         self._update_data()
-        self._update_ch_spinbox_values()
 
         if butterfly and self.mne.fig_selection is not None:
             self.mne.selection_ypos_dict.clear()
@@ -4917,6 +5011,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.overview_bar.update_viewrange()
 
         self._draw_traces()
+
+        self._update_ch_spinbox_values()
 
     def _toggle_butterfly(self):
         if self.mne.instance_type != "ica":
@@ -5105,7 +5201,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def _get_size(self):
         inch_width = self.width() / self.logicalDpiX()
         inch_height = self.height() / self.logicalDpiY()
-
+        logger.debug(f"Window size: {inch_width:0.1f} x {inch_height:0.1f} inches")
         return inch_width, inch_height
 
     def _fake_keypress(self, key, fig=None):
@@ -5332,6 +5428,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Make sure it gets deleted after it was closed.
         self.deleteLater()
         self._closed = True
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if self.mne.fig_settings is not None:
+            self.mne.fig_settings._update_sensitivity_spinbox_values()
 
     def _fake_click_on_toolbar_action(self, action_name, wait_after=500):
         """Trigger event associated with action 'action_name' in toolbar."""
