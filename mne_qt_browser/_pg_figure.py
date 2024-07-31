@@ -270,6 +270,21 @@ def _calc_chan_type_to_physical(widget, ch_type, units="mm"):
     )
 
 
+def _convert_physical_units(value, from_unit=None, to_unit=None):
+    _unit_per_inch = dict(mm=25.4, cm=2.54, inch=1.0)
+
+    if from_unit not in _unit_per_inch or to_unit not in _unit_per_inch:
+        raise ValueError("Invalid units. Please use 'mm', 'cm', or 'inch'.")
+
+    # Convert the value to inches first
+    value_in_inches = value / _unit_per_inch[from_unit]
+
+    # Convert the value from inches to the target unit
+    converted_value = value_in_inches * _unit_per_inch[to_unit]
+
+    return converted_value
+
+
 def propagate_to_children(method):  # noqa: D103
     @functools.wraps(method)
     def wrapper(*args, **kwargs):
@@ -1879,9 +1894,7 @@ class SettingsDialog(_BaseDialog):
         ch_scroll_box = QGroupBox("Channel Configuration")
         ch_scroll_box.setStyleSheet("QGroupBox { font-size: 12pt; }")
         self.ch_scaling_spinboxes = {}
-        # self.ch_scaling_spinbox_labels = {}
         self.ch_sensitivity_spinboxes = {}
-        # self.ch_sensitivity_spinbox_labels = {}
         self.ch_label_widgets = {}
 
         ch_grid_layout.addWidget(QLabel("Channel Type"), 0, 0)
@@ -1932,10 +1945,45 @@ class SettingsDialog(_BaseDialog):
             grid_row += 1
 
         ch_grid_layout.addWidget(self.physical_units_cmbx, grid_row, 2)
-
         ch_scroll_box.setLayout(ch_grid_layout)
-
         layout.addRow(ch_scroll_box)
+
+        layout.addItem(QSpacerItem(10, 10, QSizePolicy.Minimum, QSizePolicy.Expanding))
+
+        # Add box for monitor settings
+        monitor_layout = QGridLayout()
+        monitor_box = QGroupBox("Monitor Settings")
+        monitor_box.setStyleSheet("QGroupBox { font-size: 12pt; }")
+
+        # Monitor height spinbox
+        self.mon_height_spinbox = QDoubleSpinBox()
+        self.mon_height_spinbox.setMinimumWidth(100)
+        self.mon_height_spinbox.setRange(0, float("inf"))
+        self.mon_height_spinbox.setDecimals(2)
+        monitor_layout.addWidget(QLabel("Monitor Height"), 0, 0)
+        monitor_layout.addWidget(self.mon_height_spinbox, 0, 1)
+
+        # Monitor width spinbox
+        self.mon_width_spinbox = QDoubleSpinBox()
+        self.mon_width_spinbox.setMinimumWidth(100)
+        self.mon_width_spinbox.setRange(0, float("inf"))
+        self.mon_width_spinbox.setDecimals(2)
+        monitor_layout.addWidget(QLabel("Monitor Width"), 1, 0)
+        monitor_layout.addWidget(self.mon_width_spinbox, 1, 1)
+
+        # Units combobox
+        self.mon_units_cmbx = QComboBox()
+        self.mon_units_cmbx.addItems(["/ mm", "/ cm", "/ inch"])
+        monitor_layout.addWidget(QLabel("Monitor Units"), 2, 0)
+        monitor_layout.addWidget(self.mon_units_cmbx, 2, 1)
+
+        # Push buttons
+        monitor_layout.addWidget(QPushButton("Apply"), 3, 0)
+        monitor_layout.addWidget(QPushButton("Reset"), 3, 1)
+
+        self._reset_monitor_spinboxes()
+        monitor_box.setLayout(monitor_layout)
+        layout.addRow(monitor_box)
 
         self.setLayout(layout)
         self.show()
@@ -1958,6 +2006,30 @@ class SettingsDialog(_BaseDialog):
 
     def _toggle_antialiasing(self, _):
         self.weakmain()._toggle_antialiasing()
+
+    def _update_monitor(self):
+        """Update monitor spinboxes."""
+        pass
+
+    def _reset_monitor_spinboxes(self):
+        """Reset monitor spinboxes to expected values."""
+        mon_units = self.mon_units_cmbx.currentText().split()[-1]
+
+        # Get the screen DPI
+        height_mm = QApplication.primaryScreen().physicalSize().height()
+        width_mm = QApplication.primaryScreen().physicalSize().width()
+
+        # Convert to inches
+        height_inch = height_mm / _unit_per_inch["mm"]
+        width_inch = width_mm / _unit_per_inch["mm"]
+
+        # Convert to chosen unit
+        height_mon_units = height_inch * _unit_per_inch[mon_units]
+        width_mon_units = width_inch * _unit_per_inch[mon_units]
+
+        # Set the spinbox values as such
+        self.mon_height_spinbox.setValue(height_mon_units)
+        self.mon_width_spinbox.setValue(width_mon_units)
 
     def _update_spinbox_values(self, *args, **kwargs):
         """Update spinbox values."""
