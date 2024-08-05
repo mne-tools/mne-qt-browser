@@ -248,7 +248,8 @@ def _calc_data_unit_to_physical(widget, units="mm"):
         return 0
 
     # Get the screen DPI
-    px_per_in = QApplication.primaryScreen().logicalDotsPerInch()
+    # px_per_in = QApplication.primaryScreen().logicalDotsPerInch()
+    px_per_in = widget.mne.dpi
 
     # Convert to inches
     height_in = height_px / px_per_in
@@ -271,8 +272,7 @@ def _calc_chan_type_to_physical(widget, ch_type, units="mm"):
 
 
 def _convert_physical_units(value, from_unit=None, to_unit=None):
-    _unit_per_inch = dict(mm=25.4, cm=2.54, inch=1.0)
-
+    """Convert a value from one physical unit to another."""
     if from_unit not in _unit_per_inch or to_unit not in _unit_per_inch:
         raise ValueError("Invalid units. Please use 'mm', 'cm', or 'inch'.")
 
@@ -1952,7 +1952,7 @@ class SettingsDialog(_BaseDialog):
 
         # Add box for monitor settings
         monitor_layout = QGridLayout()
-        monitor_box = QGroupBox("Monitor Settings")
+        monitor_box = QGroupBox("Monitor Size")
         monitor_box.setStyleSheet("QGroupBox { font-size: 12pt; }")
 
         # Monitor height spinbox
@@ -1978,8 +1978,12 @@ class SettingsDialog(_BaseDialog):
         monitor_layout.addWidget(self.mon_units_cmbx, 2, 1)
 
         # Push buttons
-        monitor_layout.addWidget(QPushButton("Apply"), 3, 0)
-        monitor_layout.addWidget(QPushButton("Reset"), 3, 1)
+        self.mon_apply_bttn = QPushButton("Apply")
+        self.mon_apply_bttn.clicked.connect(self._update_monitor)
+        monitor_layout.addWidget(self.mon_apply_bttn, 3, 0)
+        self.mon_reset_bttn = QPushButton("Reset")
+        self.mon_reset_bttn.clicked.connect(self._reset_monitor_spinboxes)
+        monitor_layout.addWidget(self.mon_reset_bttn, 3, 1)
 
         self._reset_monitor_spinboxes()
         monitor_box.setLayout(monitor_layout)
@@ -2008,8 +2012,31 @@ class SettingsDialog(_BaseDialog):
         self.weakmain()._toggle_antialiasing()
 
     def _update_monitor(self):
-        """Update monitor spinboxes."""
-        pass
+        """Update DPI to reflect monitor size."""
+        mon_units = self.mon_units_cmbx.currentText().split()[-1]
+        px_width = QApplication.primaryScreen().size().width()
+        px_height = QApplication.primaryScreen().size().height()
+        mon_width_inch = _convert_physical_units(
+            self.mon_width_spinbox.value(), from_unit=mon_units, to_unit="inch"
+        )
+        mon_height_inch = _convert_physical_units(
+            self.mon_height_spinbox.value(), from_unit=mon_units, to_unit="inch"
+        )
+
+        dpi = (
+            np.sqrt(
+                (px_width / mon_width_inch) ** 2 + (px_height / mon_height_inch) ** 2
+            )
+            / QApplication.primaryScreen().devicePixelRatio()
+        )
+
+        # dpi_width = px_width / mon_width_inch
+        # dpi_height = px_height / mon_height_inch
+        # dpi = (dpi_width + dpi_height) / 2
+        self.mne.dpi = dpi
+
+        # Update sensitivity spinboxes
+        self._update_spinbox_values(ch_type="all", source="unit_change")
 
     def _reset_monitor_spinboxes(self):
         """Reset monitor spinboxes to expected values."""
@@ -2019,17 +2046,21 @@ class SettingsDialog(_BaseDialog):
         height_mm = QApplication.primaryScreen().physicalSize().height()
         width_mm = QApplication.primaryScreen().physicalSize().width()
 
-        # Convert to inches
-        height_inch = height_mm / _unit_per_inch["mm"]
-        width_inch = width_mm / _unit_per_inch["mm"]
-
-        # Convert to chosen unit
-        height_mon_units = height_inch * _unit_per_inch[mon_units]
-        width_mon_units = width_inch * _unit_per_inch[mon_units]
+        height_mon_units = _convert_physical_units(
+            height_mm, from_unit="mm", to_unit=mon_units
+        )
+        width_mon_units = _convert_physical_units(
+            width_mm, from_unit="mm", to_unit=mon_units
+        )
 
         # Set the spinbox values as such
         self.mon_height_spinbox.setValue(height_mon_units)
         self.mon_width_spinbox.setValue(width_mon_units)
+
+        self.mne.dpi = QApplication.primaryScreen().logicalDotsPerInch()
+
+        # Update sensitivity spinboxes
+        self._update_spinbox_values(ch_type="all", source="unit_change")
 
     def _update_spinbox_values(self, *args, **kwargs):
         """Update spinbox values."""
@@ -3494,6 +3525,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.traces = list()
         # Scale-Factor
         self.mne.scale_factor = 1
+        # DPI
+        self.mne.dpi = QApplication.primaryScreen().logicalDotsPerInch()
         # Stores channel-types for butterfly-mode
         self.mne.butterfly_type_order = [
             tp for tp in DATA_CH_TYPES_ORDER if tp in self.mne.ch_types
