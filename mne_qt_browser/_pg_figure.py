@@ -2059,7 +2059,7 @@ class SettingsDialog(_BaseDialog):
             mon_width_inch = _convert_physical_units(
                 new_value, from_unit=mon_units, to_unit="inch"
             )
-            dpi = px_width / mon_width_inch
+            dpi = (px_width / dpr) / mon_width_inch
 
             # Find new height of monitor
             mon_height_inch = (px_height / dpr) / dpi
