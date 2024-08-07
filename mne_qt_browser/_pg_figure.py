@@ -1970,6 +1970,9 @@ class SettingsDialog(_BaseDialog):
         self.mon_height_spinbox.setMinimumWidth(100)
         self.mon_height_spinbox.setRange(0, float("inf"))
         self.mon_height_spinbox.setDecimals(2)
+        self.mon_height_spinbox.lineEdit().returnPressed.connect(
+            _methpartial(self._update_monitor, dim="height")
+        )
         monitor_layout.addWidget(QLabel("Monitor Height"), 0, 0)
         monitor_layout.addWidget(self.mon_height_spinbox, 0, 1)
 
@@ -1978,12 +1981,18 @@ class SettingsDialog(_BaseDialog):
         self.mon_width_spinbox.setMinimumWidth(100)
         self.mon_width_spinbox.setRange(0, float("inf"))
         self.mon_width_spinbox.setDecimals(2)
+        self.mon_width_spinbox.lineEdit().returnPressed.connect(
+            _methpartial(self._update_monitor, dim="width")
+        )
         monitor_layout.addWidget(QLabel("Monitor Width"), 1, 0)
         monitor_layout.addWidget(self.mon_width_spinbox, 1, 1)
 
         # Units combobox
         self.mon_units_cmbx = QComboBox()
         self.mon_units_cmbx.addItems(["/ mm", "/ cm", "/ inch"])
+        self.mon_units_cmbx.currentTextChanged.connect(
+            _methpartial(self._update_monitor, dim="unit_change")
+        )
         monitor_layout.addWidget(QLabel("Monitor Units"), 2, 0)
         monitor_layout.addWidget(self.mon_units_cmbx, 2, 1)
 
@@ -2021,31 +2030,72 @@ class SettingsDialog(_BaseDialog):
     def _toggle_antialiasing(self, _):
         self.weakmain()._toggle_antialiasing()
 
-    def _update_monitor(self):
-        """Update DPI to reflect monitor size."""
-        mon_units = self.mon_units_cmbx.currentText().split()[-1]
-        px_width = QApplication.primaryScreen().size().width()
+    def _update_monitor(self, *args, dim="height"):
+        dpr = QApplication.primaryScreen().devicePixelRatio()
         px_height = QApplication.primaryScreen().size().height()
-        mon_width_inch = _convert_physical_units(
-            self.mon_width_spinbox.value(), from_unit=mon_units, to_unit="inch"
-        )
-        mon_height_inch = _convert_physical_units(
-            self.mon_height_spinbox.value(), from_unit=mon_units, to_unit="inch"
-        )
-
-        dpi = (
-            np.sqrt(
-                (px_width / mon_width_inch) ** 2 + (px_height / mon_height_inch) ** 2
+        px_width = QApplication.primaryScreen().size().width()
+        if dim == "height":
+            new_value = self.mon_height_spinbox.value()
+            # Get new dpi
+            mon_units = self.mon_units_cmbx.currentText().split()[-1]
+            mon_height_inch = _convert_physical_units(
+                new_value, from_unit=mon_units, to_unit="inch"
             )
-            / QApplication.primaryScreen().devicePixelRatio()
-        )
+            dpi = (px_height / dpr) / mon_height_inch
 
-        # dpi_width = px_width / mon_width_inch
-        # dpi_height = px_height / mon_height_inch
-        # dpi = (dpi_width + dpi_height) / 2
+            # Find new width of monitor
+            mon_width_inch = (px_width / dpr) / dpi
+            with SignalBlocker(self.mon_width_spinbox):
+                self.mon_width_spinbox.setValue(
+                    _convert_physical_units(
+                        mon_width_inch, from_unit="inch", to_unit=mon_units
+                    )
+                )
+
+        elif dim == "width":
+            new_value = self.mon_width_spinbox.value()
+            # Get new dpi
+            mon_units = self.mon_units_cmbx.currentText().split()[-1]
+            mon_width_inch = _convert_physical_units(
+                new_value, from_unit=mon_units, to_unit="inch"
+            )
+            dpi = px_width / mon_width_inch
+
+            # Find new height of monitor
+            mon_height_inch = (px_height / dpr) / dpi
+            with SignalBlocker(self.mon_height_spinbox):
+                self.mon_height_spinbox.setValue(
+                    _convert_physical_units(
+                        mon_height_inch, from_unit="inch", to_unit=mon_units
+                    )
+                )
+
+        elif dim == "unit_change":
+            # Get new dpi
+            mon_units = self.mon_units_cmbx.currentText().split()[-1]
+            mon_height_inch = _convert_physical_units(
+                self.mon_height_spinbox.value(), from_unit=mon_units, to_unit="inch"
+            )
+            dpi = (px_height / dpr) / mon_height_inch
+
+            # Find new dimensions of monitor
+            mon_width_units = _convert_physical_units(
+                (px_width / dpr) / dpi, from_unit="inch", to_unit=mon_units
+            )
+            with SignalBlocker(self.mon_width_spinbox):
+                self.mon_width_spinbox.setValue(mon_width_units)
+
+            mon_height_units = _convert_physical_units(
+                (px_height / dpr) / dpi, from_unit="inch", to_unit=mon_units
+            )
+            with SignalBlocker(self.mon_height_spinbox):
+                self.mon_height_spinbox.setValue(mon_height_units)
+
+        else:
+            raise ValueError(f"Unknown dimension: {dim}")
+
         self.mne.dpi = dpi
 
-        # Update sensitivity spinboxes
         self._update_spinbox_values(ch_type="all", source="unit_change")
 
     def _reset_monitor_spinboxes(self):
