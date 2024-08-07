@@ -1997,12 +1997,9 @@ class SettingsDialog(_BaseDialog):
         monitor_layout.addWidget(self.mon_units_cmbx, 2, 1)
 
         # Push buttons
-        self.mon_apply_bttn = QPushButton("Apply")
-        self.mon_apply_bttn.clicked.connect(self._update_monitor)
-        monitor_layout.addWidget(self.mon_apply_bttn, 3, 0)
         self.mon_reset_bttn = QPushButton("Reset")
         self.mon_reset_bttn.clicked.connect(self._reset_monitor_spinboxes)
-        monitor_layout.addWidget(self.mon_reset_bttn, 3, 1)
+        monitor_layout.addWidget(self.mon_reset_bttn, 3, 0, 1, 2)
 
         self._reset_monitor_spinboxes()
         monitor_box.setLayout(monitor_layout)
