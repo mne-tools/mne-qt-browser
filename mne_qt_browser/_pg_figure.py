@@ -353,6 +353,8 @@ class DataTrace(PlotCurveItem):
         self.ch_type = None
         # Color-specifier (all possible matplotlib color formats)
         self.color = None
+        # Scaling to change if scaling is changed.
+        self.precomputed_scaling = self.mne.scalings.copy()
 
         # Attributes for epochs-mode
         # Index of child if child.
@@ -521,6 +523,14 @@ class DataTrace(PlotCurveItem):
                 data[np.logical_and(start <= times, times <= stop)] = np.nan
 
         assert times.shape[-1] == data.shape[-1]
+
+        if self.mne.data_precomputed:
+            data = (
+                data
+                * self.precomputed_scaling[self.ch_type]
+                / self.mne.scalings[self.ch_type]
+            )
+
         self.setData(
             times,
             data,
@@ -2141,6 +2151,8 @@ class SettingsDialog(_BaseDialog):
                     self.ch_sensitivity_spinboxes[ch_type].setValue(
                         _calc_chan_type_to_physical(self, ch_type, units=current_units)
                     )
+
+        # self.weakmain().scale_all(step=1, update_spinboxes=False)
 
 
 class HelpDialog(_BaseDialog):
@@ -4193,7 +4205,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         menu.close()
         self._overview_mode_changed(new_mode=new_mode)
 
-    def scale_all(self, checked=False, *, step):
+    def scale_all(self, checked=False, *, step, update_spinboxes=True):
         """Scale all traces by multiplying with step."""
         self.mne.scale_factor *= step
 
@@ -4209,7 +4221,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self._update_scalebar_values()
 
         # Update spinboxes in settings dialog
-        self._update_ch_spinbox_values()
+        if update_spinboxes:
+            self._update_ch_spinbox_values()
 
     def hscroll(self, step):
         """Scroll horizontally by step."""
