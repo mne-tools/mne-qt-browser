@@ -2443,7 +2443,11 @@ class AnnotRegion(LinearRegionItem):
             if region.description != self.description or id(self) == id(region):
                 continue
             values = region.getRegion()
-            if any(self.getRegion()[0] <= val <= self.getRegion()[1] for val in values):
+            if (
+                any(self.getRegion()[0] <= val <= self.getRegion()[1] for val in values)
+                or (values[0] <= self.getRegion()[0] <= values[1])
+                and (values[0] <= self.getRegion()[1] <= values[1])
+            ):
                 overlapping_regions.append(region)
                 overlap_has_sca.append(len(region.single_channel_annots) > 0)
 
@@ -2466,18 +2470,12 @@ class AnnotRegion(LinearRegionItem):
         )
 
         self.regionChangeFinished.emit(self)
-        self.old_onset = self.getRegion()[0]
-
-        # This annotation(s) has no sca but other has scas
-        # Other annotation(s) has sca but this annotation doesn't
-        # Both annotations have scas
-        # if len(self.single_channel_annots.keys()) == 0 or len(overlapping_scas) == 0:
-        #     combine_scas = False
-        # else:
-        #     combine_scas = True
 
         onset = np.min(regions_[:, 0])
         offset = np.max(regions_[:, 1])
+
+        self.old_onset = onset
+
         logger.debug(f"New {self.description} region: {onset:.2f} - {offset:.2f}")
         # remove overlapping regions
         for region in overlapping_regions:
@@ -2487,15 +2485,6 @@ class AnnotRegion(LinearRegionItem):
         with SignalBlocker(self):
             self.setRegion((onset, offset))
 
-        # if combine_scas:
-        #     # combine single channel annotations
-        #     for ch_name in overlapping_scas:
-        #         if ch_name not in self.single_channel_annots.keys():
-        #             self._toggle_single_channel_annot(ch_name, update_color=False)
-        # else:
-        #     self.removeSingleChannelAnnots.emit(self)
-        #
-        # self.update_color(all_channels=(not list(self.single_channel_annots.keys())))
         self.update_label_pos()
 
     def _add_single_channel_annot(self, ch_name):
