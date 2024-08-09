@@ -1990,6 +1990,7 @@ class SettingsDialog(_BaseDialog):
         # Units combobox
         self.mon_units_cmbx = QComboBox()
         self.mon_units_cmbx.addItems(["/ mm", "/ cm", "/ inch"])
+        self.current_monitor_units = self.mon_units_cmbx.currentText().split()[-1]
         self.mon_units_cmbx.currentTextChanged.connect(
             _methpartial(self._update_monitor, dim="unit_change")
         )
@@ -2049,6 +2050,10 @@ class SettingsDialog(_BaseDialog):
                     )
                 )
 
+            self.mne.dpi = dpi
+
+            self._update_spinbox_values(ch_type="all", source="unit_change")
+
         elif dim == "width":
             new_value = self.mon_width_spinbox.value()
             # Get new dpi
@@ -2067,33 +2072,32 @@ class SettingsDialog(_BaseDialog):
                     )
                 )
 
-        elif dim == "unit_change":
-            # Get new dpi
-            mon_units = self.mon_units_cmbx.currentText().split()[-1]
-            mon_height_inch = _convert_physical_units(
-                self.mon_height_spinbox.value(), from_unit=mon_units, to_unit="inch"
-            )
-            dpi = (px_height / dpr) / mon_height_inch
+            self.mne.dpi = dpi
 
-            # Find new dimensions of monitor
-            mon_width_units = _convert_physical_units(
-                (px_width / dpr) / dpi, from_unit="inch", to_unit=mon_units
+            self._update_spinbox_values(ch_type="all", source="unit_change")
+
+        elif dim == "unit_change":
+            old_units = self.current_monitor_units
+            new_units = self.mon_units_cmbx.currentText().split()[-1]
+
+            mon_height_units = _convert_physical_units(
+                self.mon_height_spinbox.value(), from_unit=old_units, to_unit=new_units
             )
+
+            mon_width_units = _convert_physical_units(
+                self.mon_width_spinbox.value(), from_unit=old_units, to_unit=new_units
+            )
+
             with SignalBlocker(self.mon_width_spinbox):
                 self.mon_width_spinbox.setValue(mon_width_units)
 
-            mon_height_units = _convert_physical_units(
-                (px_height / dpr) / dpi, from_unit="inch", to_unit=mon_units
-            )
             with SignalBlocker(self.mon_height_spinbox):
                 self.mon_height_spinbox.setValue(mon_height_units)
 
+            self.current_monitor_units = new_units
+
         else:
             raise ValueError(f"Unknown dimension: {dim}")
-
-        self.mne.dpi = dpi
-
-        self._update_spinbox_values(ch_type="all", source="unit_change")
 
     def _reset_monitor_spinboxes(self):
         """Reset monitor spinboxes to expected values."""
@@ -2185,6 +2189,7 @@ class SettingsDialog(_BaseDialog):
 
             self.mne.scalebar_texts[ch_type].update_value()
             self.weakmain()._redraw()
+            # self.weakmain().scale_all(step=1, update_spinboxes=False)
 
         else:
             # Update all spinboxes
@@ -2198,8 +2203,6 @@ class SettingsDialog(_BaseDialog):
                     self.ch_sensitivity_spinboxes[ch_type].setValue(
                         _calc_chan_type_to_physical(self, ch_type, units=current_units)
                     )
-
-        # self.weakmain().scale_all(step=1, update_spinboxes=False)
 
 
 class HelpDialog(_BaseDialog):
@@ -5541,7 +5544,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         if self.mne.fig_settings is not None:
-            self.mne.fig_settings._update_sensitivity_spinbox_values()
+            self.mne.fig_settings._update_spinbox_values(
+                source="resize_event", ch_type="all"
+            )
 
     def _fake_click_on_toolbar_action(self, action_name, wait_after=500):
         """Trigger event associated with action 'action_name' in toolbar."""
