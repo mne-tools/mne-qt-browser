@@ -1987,6 +1987,17 @@ class SettingsDialog(_BaseDialog):
         monitor_layout.addWidget(QLabel("Monitor Width"), 1, 0)
         monitor_layout.addWidget(self.mon_width_spinbox, 1, 1)
 
+        # DPI Spinbox
+        self.dpi_spinbox = QDoubleSpinBox()
+        self.dpi_spinbox.setMinimumWidth(100)
+        self.dpi_spinbox.setRange(0, float("inf"))
+        self.dpi_spinbox.setDecimals(2)
+        self.dpi_spinbox.lineEdit().returnPressed.connect(
+            _methpartial(self._update_monitor, dim="dpi")
+        )
+        monitor_layout.addWidget(QLabel("Monitor DPI"), 2, 0)
+        monitor_layout.addWidget(self.dpi_spinbox, 2, 1)
+
         # Units combobox
         self.mon_units_cmbx = QComboBox()
         self.mon_units_cmbx.addItems(["/ mm", "/ cm", "/ inch"])
@@ -1994,8 +2005,8 @@ class SettingsDialog(_BaseDialog):
         self.mon_units_cmbx.currentTextChanged.connect(
             _methpartial(self._update_monitor, dim="unit_change")
         )
-        monitor_layout.addWidget(QLabel("Monitor Units"), 2, 0)
-        monitor_layout.addWidget(self.mon_units_cmbx, 2, 1)
+        monitor_layout.addWidget(QLabel("Monitor Units"), 3, 0)
+        monitor_layout.addWidget(self.mon_units_cmbx, 3, 1)
 
         # Push buttons
         self.mon_reset_bttn = QPushButton("Reset")
@@ -2034,16 +2045,17 @@ class SettingsDialog(_BaseDialog):
         px_width = QApplication.primaryScreen().size().width()
         if dim == "height":
             new_value = self.mon_height_spinbox.value()
+
             # Get new dpi
-            mon_units = self.mon_units_cmbx.currentText().split()[-1]
+            mon_units = self.current_monitor_units
             mon_height_inch = _convert_physical_units(
                 new_value, from_unit=mon_units, to_unit="inch"
             )
             dpi = (px_height / dpr) / mon_height_inch
 
             # Find new width of monitor
-            mon_width_inch = (px_width / dpr) / dpi
             with SignalBlocker(self.mon_width_spinbox):
+                mon_width_inch = (px_width / dpr) / dpi
                 self.mon_width_spinbox.setValue(
                     _convert_physical_units(
                         mon_width_inch, from_unit="inch", to_unit=mon_units
@@ -2051,21 +2063,23 @@ class SettingsDialog(_BaseDialog):
                 )
 
             self.mne.dpi = dpi
+            self.dpi_spinbox.setValue(self.mne.dpi)
 
             self._update_spinbox_values(ch_type="all", source="unit_change")
 
         elif dim == "width":
             new_value = self.mon_width_spinbox.value()
+
             # Get new dpi
-            mon_units = self.mon_units_cmbx.currentText().split()[-1]
+            mon_units = self.current_monitor_units
             mon_width_inch = _convert_physical_units(
                 new_value, from_unit=mon_units, to_unit="inch"
             )
             dpi = (px_width / dpr) / mon_width_inch
 
             # Find new height of monitor
-            mon_height_inch = (px_height / dpr) / dpi
             with SignalBlocker(self.mon_height_spinbox):
+                mon_height_inch = (px_height / dpr) / dpi
                 self.mon_height_spinbox.setValue(
                     _convert_physical_units(
                         mon_height_inch, from_unit="inch", to_unit=mon_units
@@ -2073,6 +2087,7 @@ class SettingsDialog(_BaseDialog):
                 )
 
             self.mne.dpi = dpi
+            self.dpi_spinbox.setValue(self.mne.dpi)
 
             self._update_spinbox_values(ch_type="all", source="unit_change")
 
@@ -2096,6 +2111,29 @@ class SettingsDialog(_BaseDialog):
 
             self.current_monitor_units = new_units
 
+        elif dim == "dpi":
+            new_value = self.dpi_spinbox.value()
+            self.mne.dpi = new_value
+            mon_units = self.current_monitor_units
+
+            with SignalBlocker(self.mon_height_spinbox):
+                mon_height_inch = (px_height / dpr) / new_value
+                self.mon_height_spinbox.setValue(
+                    _convert_physical_units(
+                        mon_height_inch, from_unit="inch", to_unit=mon_units
+                    )
+                )
+
+            with SignalBlocker(self.mon_width_spinbox):
+                mon_width_inch = (px_width / dpr) / new_value
+                self.mon_width_spinbox.setValue(
+                    _convert_physical_units(
+                        mon_width_inch, from_unit="inch", to_unit=mon_units
+                    )
+                )
+
+            self._update_spinbox_values(ch_type="all", source="unit_change")
+
         else:
             raise ValueError(f"Unknown dimension: {dim}")
 
@@ -2103,7 +2141,7 @@ class SettingsDialog(_BaseDialog):
         """Reset monitor spinboxes to expected values."""
         mon_units = self.mon_units_cmbx.currentText().split()[-1]
 
-        # Get the screen DPI
+        # Get the screen size
         height_mm = QApplication.primaryScreen().physicalSize().height()
         width_mm = QApplication.primaryScreen().physicalSize().width()
 
@@ -2113,10 +2151,12 @@ class SettingsDialog(_BaseDialog):
         width_mon_units = _convert_physical_units(
             width_mm, from_unit="mm", to_unit=mon_units
         )
+        self.mne.dpi = QApplication.primaryScreen().logicalDotsPerInch()
 
         # Set the spinbox values as such
         self.mon_height_spinbox.setValue(height_mon_units)
         self.mon_width_spinbox.setValue(width_mon_units)
+        self.dpi_spinbox.setValue(self.mne.dpi)
 
         self.mne.dpi = QApplication.primaryScreen().logicalDotsPerInch()
 
@@ -4393,7 +4433,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.plt.setYRange(ymin, ymax, padding=0)
 
         if self.mne.fig_settings is not None:
-            self.mne.fig_settings._update_sensitivity_spinbox_values()
+            self.mne.fig_settings._update_spinbox_values()
 
     def _remove_vline(self):
         if self.mne.vline is not None:
