@@ -2009,7 +2009,7 @@ class SettingsDialog(_BaseDialog):
         # Push buttons
         self.mon_reset_bttn = QPushButton("Reset")
         self.mon_reset_bttn.clicked.connect(self._reset_monitor_spinboxes)
-        monitor_layout.addWidget(self.mon_reset_bttn, 3, 0, 1, 2)
+        monitor_layout.addWidget(self.mon_reset_bttn, 4, 0, 1, 2)
 
         self._reset_monitor_spinboxes()
         monitor_box.setLayout(monitor_layout)
