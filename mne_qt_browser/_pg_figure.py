@@ -353,8 +353,6 @@ class DataTrace(PlotCurveItem):
         self.ch_type = None
         # Color-specifier (all possible matplotlib color formats)
         self.color = None
-        # Scaling to change if scaling is changed.
-        self.precomputed_scaling = self.mne.scalings.copy()
 
         # Attributes for epochs-mode
         # Index of child if child.
@@ -527,7 +525,7 @@ class DataTrace(PlotCurveItem):
         if self.mne.data_precomputed:
             data = (
                 data
-                * self.precomputed_scaling[self.ch_type]
+                * self.weakmain().precomputed_scalings[self.ch_type]
                 / self.mne.scalings[self.ch_type]
             )
 
@@ -4211,6 +4209,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 del self.mne.keyboard_shortcuts["t"]
             # disable histogram of epoch PTP amplitude
             del self.mne.keyboard_shortcuts["h"]
+
+        self.precomputed_scalings = self.mne.scalings.copy()
 
     def _hidpi_mkPen(self, *args, **kwargs):
         kwargs["width"] = self._pixel_ratio * kwargs.get("width", 1.0)
