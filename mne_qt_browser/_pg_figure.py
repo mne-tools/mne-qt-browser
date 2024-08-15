@@ -1998,7 +1998,7 @@ class SettingsDialog(_BaseDialog):
 
         # Units combobox
         self.mon_units_cmbx = QComboBox()
-        self.mon_units_cmbx.addItems(["/ mm", "/ cm", "/ inch"])
+        self.mon_units_cmbx.addItems(["mm", "cm", "inch"])
         self.current_monitor_units = self.mon_units_cmbx.currentText().split()[-1]
         self.mon_units_cmbx.currentTextChanged.connect(
             _methpartial(self._update_monitor, dim="unit_change")
@@ -2091,7 +2091,7 @@ class SettingsDialog(_BaseDialog):
 
         elif dim == "unit_change":
             old_units = self.current_monitor_units
-            new_units = self.mon_units_cmbx.currentText().split()[-1]
+            new_units = self.mon_units_cmbx.currentText()
 
             mon_height_units = _convert_physical_units(
                 self.mon_height_spinbox.value(), from_unit=old_units, to_unit=new_units
@@ -2137,7 +2137,7 @@ class SettingsDialog(_BaseDialog):
 
     def _reset_monitor_spinboxes(self):
         """Reset monitor spinboxes to expected values."""
-        mon_units = self.mon_units_cmbx.currentText().split()[-1]
+        mon_units = self.mon_units_cmbx.currentText()
 
         # Get the screen size
         height_mm = QApplication.primaryScreen().physicalSize().height()
