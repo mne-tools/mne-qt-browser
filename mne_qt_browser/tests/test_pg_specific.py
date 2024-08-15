@@ -101,6 +101,28 @@ def test_annotations_interactions(raw_orig, pg_backend):
     assert fig.msg_box.informativeText() == "Start can't be bigger or " "equal to Stop!"
     fig.msg_box.close()
 
+    # Test that dragging annotation onto the tail of another works
+    annot_dock._remove_description("E")
+    annot_dock._remove_description("C")
+    fig._fake_click(
+        (4.0, 1.0), add_points=[(6.0, 1.0)], xform="data", button=1, kind="drag"
+    )
+    fig._fake_click(
+        (4.0, 1.0), add_points=[(3.0, 1.0)], xform="data", button=1, kind="drag"
+    )
+    assert len(raw_orig.annotations.onset) == 1
+    assert len(fig.mne.regions) == 1
+
+    # Make a smaller annotation and put it into the larger one
+    fig._fake_click(
+        (8.0, 1.0), add_points=[(8.1, 1.0)], xform="data", button=1, kind="drag"
+    )
+    fig._fake_click(
+        (8.0, 1.0), add_points=[(4.0, 1.0)], xform="data", button=1, kind="drag"
+    )
+    assert len(raw_orig.annotations.onset) == 1
+    assert len(fig.mne.regions) == 1
+
 
 def test_ch_specific_annot(raw_orig, pg_backend):
     """Test plotting channel specific annotations."""
