@@ -2479,7 +2479,6 @@ class AnnotRegion(LinearRegionItem):
         logger.debug(f"New {self.description} region: {onset:.2f} - {offset:.2f}")
         # remove overlapping regions
         for region in overlapping_regions:
-            # region.removeSingleChannelAnnots.emit(region)
             self.weakmain()._remove_region(region, from_annot=False)
         # re-set while blocking the signal to avoid re-running this function
         with SignalBlocker(self):

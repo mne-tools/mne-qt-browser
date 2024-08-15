@@ -189,6 +189,17 @@ def test_ch_specific_annot(raw_orig, pg_backend):
             modifier=Qt.ShiftModifier,
         )
         assert "MEG 0133" in annot.single_channel_annots.keys()
+
+        # Check that channel specific annotations do not merge
+        fig._fake_click(
+            (2.0, 1.0), add_points=[(3.0, 1.0)], xform="data", button=1, kind="drag"
+        )
+        with pytest.warns(RuntimeWarning) as record:
+            fig._fake_click(
+                (2.1, 1.0), add_points=[(5.0, 1.0)], xform="data", button=1, kind="drag"
+            )
+        assert len(record) == 1
+
     else:
         # emit a warning if the user tries to test single channel annots
         with pytest.warns(RuntimeWarning, match="updated"):
