@@ -57,8 +57,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install dependencies
@@ -78,13 +77,11 @@ jobs:
             python -m pip install --upgrade --pre --only-binary ":all:" --default-timeout=60 --extra-index-url "https://pypi.anaconda.org/scientific-python-nightly-wheels/simple" "numpy>=2.0.0.dev0" "scipy>=1.14.0.dev0" "matplotlib>=3.9.0.dev0" "scikit-learn>=1.5.dev0"
           fi
       - run: ./tools/get_testing_version.sh
-        name: 'Get testing version'
         working-directory: ../mne-python
       - uses: actions/cache@v4
         with:
           key: ${{ env.TESTING_VERSION }}
           path: ~/mne_data
-        name: 'Cache testing data'
       - run: python -c 'import mne; print(mne.datasets.testing.data_path(verbose=True))'
         name: 'Download testing data'
       - uses: pyvista/setup-headless-display-action@main
@@ -94,19 +91,19 @@ jobs:
         name: Check OpenGL
         working-directory: ../mne-python
         if: runner.os == 'Linux' && contains(matrix.opengl, 'opengl')
-      - name: Show system information
-        run: mne sys_info
+      - run: mne sys_info
       - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/report ../mne-python/mne/viz
         name: Run MNE-Tests
-      - run: pytest --error-for-skips mne_qt_browser/tests/test_pg_specific.py
+      - run: pytest --error-for-skips mne_qt_browser/tests/test_pg_specific.py --cov-report=xml --cov-append
         name: Run pyqtgraph-specific tests
       # These are slow on macOS, so skip them
-      - run: pytest mne_qt_browser/tests/test_speed.py
+      - run: pytest mne_qt_browser/tests/test_speed.py --cov-report=xml --cov-append
         name: Run benchmarks
         if: runner.os != 'macOS'
       - uses: codecov/codecov-action@v4
         if: always()
-        name: 'Upload coverage to CodeCov'
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
   qt:
     strategy:
       fail-fast: false
@@ -144,8 +141,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install dependencies
@@ -167,15 +163,12 @@ jobs:
             PIP_OPTION="[tests]"
           fi
           python -m pip install -ve .${PIP_OPTION} ${QT_LIB_INSTALL}
-      - shell: bash -e {0}
-        run: ./tools/get_testing_version.sh
-        name: 'Get testing version'
+      - run: bash ./tools/get_testing_version.sh
         working-directory: ../mne-python
       - uses: actions/cache@v4
         with:
           key: ${{ env.TESTING_VERSION }}
           path: ~/mne_data
-        name: 'Cache testing data'
       - run: python -c 'import mne; print(mne.datasets.testing.data_path(verbose=True))'
         name: 'Download testing data'
       - uses: pyvista/setup-headless-display-action@main
@@ -190,13 +183,14 @@ jobs:
           mne sys_info -pd | grep "^.*qtpy.*${QT_LIB}=.*$"
       - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/report ../mne-python/mne/viz
         name: Run MNE-Tests
-      - run: pytest --error-for-skips mne_qt_browser/tests/test_pg_specific.py
+      - run: pytest --error-for-skips mne_qt_browser/tests/test_pg_specific.py --cov-report=xml --cov-append
         name: Run pyqtgraph-specific tests
       # For some reason this dies on Linux PySide2. We can live without this
       # case given our primary target moving forward is Qt6+
-      - run: pytest mne_qt_browser/tests/test_speed.py
+      - run: pytest mne_qt_browser/tests/test_speed.py --cov-report=xml --cov-append
         name: Run benchmarks
         if: runner.os != 'Linux' || (matrix.qt != 'PySide2' && matrix.qt != 'PyQt5')
       - uses: codecov/codecov-action@v4
         if: always()
-        name: 'Upload coverage to CodeCov'
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
