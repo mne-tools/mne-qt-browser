@@ -2359,7 +2359,7 @@ class SingleChannelAnnot(FillBetweenItem):
 
         self.mne.plt.addItem(self, ignoreBounds=True)
 
-        self.annot.removeRequested.connect(self.remove)
+        self.annot.removeSingleChannelAnnots.connect(self.remove)
         self.annot.sigRegionChangeFinished.connect(self.update_plot_curves)
         self.annot.sigRegionChanged.connect(self.update_plot_curves)
         self.annot.sigToggleVisibility.connect(self.update_visible)
@@ -2399,6 +2399,7 @@ class AnnotRegion(LinearRegionItem):
     regionChangeFinished = Signal(object)
     gotSelected = Signal(object)
     removeRequested = Signal(object)
+    removeSingleChannelAnnots = Signal(object)
     sigToggleVisibility = Signal(bool)
     sigUpdateColor = Signal(str)
 
@@ -2435,22 +2436,46 @@ class AnnotRegion(LinearRegionItem):
         self.mne.plt.addItem(self.label_item, ignoreBounds=True)
 
     def _region_changed(self):
-        self.regionChangeFinished.emit(self)
-        self.old_onset = self.getRegion()[0]
-        # remove merged regions
+        # Check for overlapping regions
+        overlap_has_sca = []
         overlapping_regions = list()
         for region in self.mne.regions:
             if region.description != self.description or id(self) == id(region):
                 continue
             values = region.getRegion()
-            if any(self.getRegion()[0] <= val <= self.getRegion()[1] for val in values):
+            if (
+                any(self.getRegion()[0] <= val <= self.getRegion()[1] for val in values)
+                or (values[0] <= self.getRegion()[0] <= values[1])
+                and (values[0] <= self.getRegion()[1] <= values[1])
+            ):
                 overlapping_regions.append(region)
+                overlap_has_sca.append(len(region.single_channel_annots) > 0)
+
+        # If this region or an overlapping region have
+        # channel specific annotations then terminate
+        if (len(self.single_channel_annots) > 0 or any(overlap_has_sca)) and len(
+            overlapping_regions
+        ) > 0:
+            dur = self.getRegion()[1] - self.getRegion()[0]
+            self.setRegion((self.old_onset, self.old_onset + dur))
+            warn(
+                "Can not combine channel-based annotations with "
+                "any other annotation."
+            )
+            return
+
         # figure out new boundaries
         regions_ = np.array(
             [region.getRegion() for region in overlapping_regions] + [self.getRegion()]
         )
+
+        self.regionChangeFinished.emit(self)
+
         onset = np.min(regions_[:, 0])
         offset = np.max(regions_[:, 1])
+
+        self.old_onset = onset
+
         logger.debug(f"New {self.description} region: {onset:.2f} - {offset:.2f}")
         # remove overlapping regions
         for region in overlapping_regions:
@@ -2458,6 +2483,7 @@ class AnnotRegion(LinearRegionItem):
         # re-set while blocking the signal to avoid re-running this function
         with SignalBlocker(self):
             self.setRegion((onset, offset))
+
         self.update_label_pos()
 
     def _add_single_channel_annot(self, ch_name):
@@ -2469,7 +2495,7 @@ class AnnotRegion(LinearRegionItem):
         self.single_channel_annots[ch_name].remove()
         self.single_channel_annots.pop(ch_name)
 
-    def _toggle_single_channel_annot(self, ch_name):
+    def _toggle_single_channel_annot(self, ch_name, update_color=True):
         """Add or remove single channel annotations."""
         # Exit if mne-python not updated to support shift-click
         if not hasattr(self.weakmain(), "_toggle_single_channel_annotation"):
@@ -2486,7 +2512,10 @@ class AnnotRegion(LinearRegionItem):
         else:
             self._remove_single_channel_annot(ch_name)
 
-        self.update_color(all_channels=(not list(self.single_channel_annots.keys())))
+        if update_color:
+            self.update_color(
+                all_channels=(not list(self.single_channel_annots.keys()))
+            )
 
     def update_color(self, all_channels=True):
         """Update color of annotation-region.
@@ -2539,6 +2568,7 @@ class AnnotRegion(LinearRegionItem):
 
     def remove(self):
         """Remove annotation-region."""
+        self.removeSingleChannelAnnots.emit(self)
         self.removeRequested.emit(self)
         vb = self.mne.viewbox
         if vb and self.label_item in vb.addedItems:
