@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Base classes and functions for 2D browser backends."""
 
 # Author: Martin Schulz <dev@earthman-music.de>
@@ -4096,7 +4095,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         del step
 
         # Get current range and add step to it
-        xmin, xmax = [i + rel_step for i in self.mne.viewbox.viewRange()[0]]
+        xmin, xmax = (i + rel_step for i in self.mne.viewbox.viewRange()[0])
 
         if xmin < 0:
             xmin = 0
@@ -4125,7 +4124,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 step = self.mne.n_channels
             elif step == "-full":
                 step = -self.mne.n_channels
-            ymin, ymax = [i + step for i in self.mne.viewbox.viewRange()[1]]
+            ymin, ymax = (i + step for i in self.mne.viewbox.viewRange()[1])
 
             if ymin < 0:
                 ymin = 0
@@ -5191,12 +5190,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 add_points[idx] = self.mne.viewbox.mapViewToScene(Point(*apoint))
 
         elif xform == "none" or xform is None:
-            if isinstance(point, (tuple, list)):
+            if isinstance(point, tuple | list):
                 point = Point(*point)
             else:
                 point = Point(point)
             for idx, apoint in enumerate(add_points):
-                if isinstance(apoint, (tuple, list)):
+                if isinstance(apoint, tuple | list):
                     add_points[idx] = Point(*apoint)
                 else:
                     add_points[idx] = Point(apoint)
