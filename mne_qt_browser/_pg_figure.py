@@ -1456,7 +1456,7 @@ class RawViewBox(ViewBox):
                     self.mne.overview_bar.update_annotations()
                 else:
                     x_to = self.mapSceneToView(event.scenePos()).x()
-                    with SignalBlocker(self._drag_region):
+                    with QSignalBlocker(self._drag_region):
                         self._drag_region.setRegion((self._drag_start, x_to))
 
             elif event.isFinish():
@@ -2480,7 +2480,7 @@ class AnnotRegion(LinearRegionItem):
         for region in overlapping_regions:
             self.weakmain()._remove_region(region, from_annot=False)
         # re-set while blocking the signal to avoid re-running this function
-        with SignalBlocker(self):
+        with QSignalBlocker(self):
             self.setRegion((onset, offset))
 
         self.update_label_pos()
@@ -2653,7 +2653,7 @@ class AnnotRegion(LinearRegionItem):
             for pos in new_pos:
                 pos.setX(pos.x() - shift)
 
-        with SignalBlocker(self.lines[0]):
+        with QSignalBlocker(self.lines[0]):
             for pos, line in zip(new_pos, self.lines):
                 line.setPos(pos)
         self.prepareGeometryChange()
@@ -3065,9 +3065,9 @@ class AnnotationDock(QDockWidget):
         rgn = region.getRegion()
         self.start_bx.setEnabled(True)
         self.stop_bx.setEnabled(True)
-        with SignalBlocker(self.start_bx):
+        with QSignalBlocker(self.start_bx):
             self.start_bx.setValue(rgn[0])
-        with SignalBlocker(self.stop_bx):
+        with QSignalBlocker(self.stop_bx):
             self.stop_bx.setValue(rgn[1])
 
     def _update_description_cmbx(self):
@@ -3086,9 +3086,9 @@ class AnnotationDock(QDockWidget):
         if self.description_cmbx.count() > 0:
             self.description_cmbx.setCurrentIndex(0)
             self.mne.current_description = self.description_cmbx.currentText()
-        with SignalBlocker(self.start_bx):
+        with QSignalBlocker(self.start_bx):
             self.start_bx.setValue(0)
-        with SignalBlocker(self.stop_bx):
+        with QSignalBlocker(self.stop_bx):
             self.stop_bx.setValue(1 / self.mne.info["sfreq"])
 
     def _show_help(self):
@@ -4695,9 +4695,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # disable, reset start/stop doubleSpinBox until another region is selected
             self.mne.fig_annotation.start_bx.setEnabled(False)
             self.mne.fig_annotation.stop_bx.setEnabled(False)
-            with SignalBlocker(self.mne.fig_annotation.start_bx):
+            with QSignalBlocker(self.mne.fig_annotation.start_bx):
                 self.mne.fig_annotation.start_bx.setValue(0)
-            with SignalBlocker(self.mne.fig_annotation.stop_bx):
+            with QSignalBlocker(self.mne.fig_annotation.stop_bx):
                 self.mne.fig_annotation.stop_bx.setValue(1 / self.mne.info["sfreq"])
 
         # Remove from annotations
@@ -5449,22 +5449,6 @@ def _init_browser(**kwargs):
     browser = MNEQtBrowser(**kwargs)
 
     return browser
-
-
-class SignalBlocker(QSignalBlocker):
-    """Wrapper to use QSignalBlocker as a context manager in PySide2."""
-
-    def __enter__(self):
-        if hasattr(super(), "__enter__"):
-            super().__enter__()
-        else:
-            super().reblock()
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        if hasattr(super(), "__exit__"):
-            super().__exit__(exc_type, exc_value, traceback)
-        else:
-            super().unblock()
 
 
 def _set_window_flags(widget):
