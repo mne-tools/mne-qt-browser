@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Author: Martin Schulz <dev@earthman-music.de>
 #
 # License: BSD-3-Clause
