@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Base classes and functions for 2D browser backends."""
 
 # Author: Martin Schulz <dev@earthman-music.de>
@@ -1489,7 +1488,7 @@ class RawViewBox(ViewBox):
                     self.mne.overview_bar.update_annotations()
                 else:
                     x_to = self.mapSceneToView(event.scenePos()).x()
-                    with SignalBlocker(self._drag_region):
+                    with QSignalBlocker(self._drag_region):
                         self._drag_region.setRegion((self._drag_start, x_to))
 
             elif event.isFinish():
@@ -2624,7 +2623,7 @@ class SingleChannelAnnot(FillBetweenItem):
 
         self.mne.plt.addItem(self, ignoreBounds=True)
 
-        self.annot.removeRequested.connect(self.remove)
+        self.annot.removeSingleChannelAnnots.connect(self.remove)
         self.annot.sigRegionChangeFinished.connect(self.update_plot_curves)
         self.annot.sigRegionChanged.connect(self.update_plot_curves)
         self.annot.sigToggleVisibility.connect(self.update_visible)
@@ -2664,6 +2663,7 @@ class AnnotRegion(LinearRegionItem):
     regionChangeFinished = Signal(object)
     gotSelected = Signal(object)
     removeRequested = Signal(object)
+    removeSingleChannelAnnots = Signal(object)
     sigToggleVisibility = Signal(bool)
     sigUpdateColor = Signal(str)
 
@@ -2700,29 +2700,54 @@ class AnnotRegion(LinearRegionItem):
         self.mne.plt.addItem(self.label_item, ignoreBounds=True)
 
     def _region_changed(self):
-        self.regionChangeFinished.emit(self)
-        self.old_onset = self.getRegion()[0]
-        # remove merged regions
+        # Check for overlapping regions
+        overlap_has_sca = []
         overlapping_regions = list()
         for region in self.mne.regions:
             if region.description != self.description or id(self) == id(region):
                 continue
             values = region.getRegion()
-            if any(self.getRegion()[0] <= val <= self.getRegion()[1] for val in values):
+            if (
+                any(self.getRegion()[0] <= val <= self.getRegion()[1] for val in values)
+                or (values[0] <= self.getRegion()[0] <= values[1])
+                and (values[0] <= self.getRegion()[1] <= values[1])
+            ):
                 overlapping_regions.append(region)
+                overlap_has_sca.append(len(region.single_channel_annots) > 0)
+
+        # If this region or an overlapping region have
+        # channel specific annotations then terminate
+        if (len(self.single_channel_annots) > 0 or any(overlap_has_sca)) and len(
+            overlapping_regions
+        ) > 0:
+            dur = self.getRegion()[1] - self.getRegion()[0]
+            self.setRegion((self.old_onset, self.old_onset + dur))
+            warn(
+                "Can not combine channel-based annotations with "
+                "any other annotation."
+            )
+            return
+
         # figure out new boundaries
         regions_ = np.array(
             [region.getRegion() for region in overlapping_regions] + [self.getRegion()]
         )
+
+        self.regionChangeFinished.emit(self)
+
         onset = np.min(regions_[:, 0])
         offset = np.max(regions_[:, 1])
+
+        self.old_onset = onset
+
         logger.debug(f"New {self.description} region: {onset:.2f} - {offset:.2f}")
         # remove overlapping regions
         for region in overlapping_regions:
             self.weakmain()._remove_region(region, from_annot=False)
         # re-set while blocking the signal to avoid re-running this function
-        with SignalBlocker(self):
+        with QSignalBlocker(self):
             self.setRegion((onset, offset))
+
         self.update_label_pos()
 
     def _add_single_channel_annot(self, ch_name):
@@ -2734,7 +2759,7 @@ class AnnotRegion(LinearRegionItem):
         self.single_channel_annots[ch_name].remove()
         self.single_channel_annots.pop(ch_name)
 
-    def _toggle_single_channel_annot(self, ch_name):
+    def _toggle_single_channel_annot(self, ch_name, update_color=True):
         """Add or remove single channel annotations."""
         # Exit if mne-python not updated to support shift-click
         if not hasattr(self.weakmain(), "_toggle_single_channel_annotation"):
@@ -2751,7 +2776,10 @@ class AnnotRegion(LinearRegionItem):
         else:
             self._remove_single_channel_annot(ch_name)
 
-        self.update_color(all_channels=(not list(self.single_channel_annots.keys())))
+        if update_color:
+            self.update_color(
+                all_channels=(not list(self.single_channel_annots.keys()))
+            )
 
     def update_color(self, all_channels=True):
         """Update color of annotation-region.
@@ -2804,6 +2832,7 @@ class AnnotRegion(LinearRegionItem):
 
     def remove(self):
         """Remove annotation-region."""
+        self.removeSingleChannelAnnots.emit(self)
         self.removeRequested.emit(self)
         vb = self.mne.viewbox
         if vb and self.label_item in vb.addedItems:
@@ -2889,7 +2918,7 @@ class AnnotRegion(LinearRegionItem):
             for pos in new_pos:
                 pos.setX(pos.x() - shift)
 
-        with SignalBlocker(self.lines[0]):
+        with QSignalBlocker(self.lines[0]):
             for pos, line in zip(new_pos, self.lines):
                 line.setPos(pos)
         self.prepareGeometryChange()
@@ -3301,9 +3330,9 @@ class AnnotationDock(QDockWidget):
         rgn = region.getRegion()
         self.start_bx.setEnabled(True)
         self.stop_bx.setEnabled(True)
-        with SignalBlocker(self.start_bx):
+        with QSignalBlocker(self.start_bx):
             self.start_bx.setValue(rgn[0])
-        with SignalBlocker(self.stop_bx):
+        with QSignalBlocker(self.stop_bx):
             self.stop_bx.setValue(rgn[1])
 
     def _update_description_cmbx(self):
@@ -3322,9 +3351,9 @@ class AnnotationDock(QDockWidget):
         if self.description_cmbx.count() > 0:
             self.description_cmbx.setCurrentIndex(0)
             self.mne.current_description = self.description_cmbx.currentText()
-        with SignalBlocker(self.start_bx):
+        with QSignalBlocker(self.start_bx):
             self.start_bx.setValue(0)
-        with SignalBlocker(self.stop_bx):
+        with QSignalBlocker(self.stop_bx):
             self.stop_bx.setValue(1 / self.mne.info["sfreq"])
 
     def _show_help(self):
@@ -4337,7 +4366,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         del step
 
         # Get current range and add step to it
-        xmin, xmax = [i + rel_step for i in self.mne.viewbox.viewRange()[0]]
+        xmin, xmax = (i + rel_step for i in self.mne.viewbox.viewRange()[0])
 
         if xmin < 0:
             xmin = 0
@@ -4366,7 +4395,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 step = self.mne.n_channels
             elif step == "-full":
                 step = -self.mne.n_channels
-            ymin, ymax = [i + step for i in self.mne.viewbox.viewRange()[1]]
+            ymin, ymax = (i + step for i in self.mne.viewbox.viewRange()[1])
 
             if ymin < 0:
                 ymin = 0
@@ -4937,9 +4966,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # disable, reset start/stop doubleSpinBox until another region is selected
             self.mne.fig_annotation.start_bx.setEnabled(False)
             self.mne.fig_annotation.stop_bx.setEnabled(False)
-            with SignalBlocker(self.mne.fig_annotation.start_bx):
+            with QSignalBlocker(self.mne.fig_annotation.start_bx):
                 self.mne.fig_annotation.start_bx.setValue(0)
-            with SignalBlocker(self.mne.fig_annotation.stop_bx):
+            with QSignalBlocker(self.mne.fig_annotation.stop_bx):
                 self.mne.fig_annotation.stop_bx.setValue(1 / self.mne.info["sfreq"])
 
         # Remove from annotations
@@ -5432,12 +5461,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 add_points[idx] = self.mne.viewbox.mapViewToScene(Point(*apoint))
 
         elif xform == "none" or xform is None:
-            if isinstance(point, (tuple, list)):
+            if isinstance(point, tuple | list):
                 point = Point(*point)
             else:
                 point = Point(point)
             for idx, apoint in enumerate(add_points):
-                if isinstance(apoint, (tuple, list)):
+                if isinstance(apoint, tuple | list):
                     add_points[idx] = Point(*apoint)
                 else:
                     add_points[idx] = Point(apoint)
@@ -5693,22 +5722,6 @@ def _init_browser(**kwargs):
     browser = MNEQtBrowser(**kwargs)
 
     return browser
-
-
-class SignalBlocker(QSignalBlocker):
-    """Wrapper to use QSignalBlocker as a context manager in PySide2."""
-
-    def __enter__(self):
-        if hasattr(super(), "__enter__"):
-            super().__enter__()
-        else:
-            super().reblock()
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        if hasattr(super(), "__exit__"):
-            super().__exit__(exc_type, exc_value, traceback)
-        else:
-            super().unblock()
 
 
 def _set_window_flags(widget):

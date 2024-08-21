@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Authors: Eric Larson <larson.eric.d@gmail.com>
 #          Martin Schulz <dev@earthman-music.de>
 #
