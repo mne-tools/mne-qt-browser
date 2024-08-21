@@ -499,6 +499,11 @@ class DataTrace(PlotCurveItem):
 
         if self.mne.data_precomputed:
             data = self.mne.data[self.order_idx]
+            data = (
+                data
+                * self.weakmain().precomputed_scalings[self.ch_type]
+                / self.mne.scalings[self.ch_type]
+            )
         else:
             data = self.mne.data[self.range_idx]
         times = self.mne.times
@@ -521,13 +526,6 @@ class DataTrace(PlotCurveItem):
                 data[np.logical_and(start <= times, times <= stop)] = np.nan
 
         assert times.shape[-1] == data.shape[-1]
-
-        if self.mne.data_precomputed:
-            data = (
-                data
-                * self.weakmain().precomputed_scalings[self.ch_type]
-                / self.mne.scalings[self.ch_type]
-            )
 
         self.setData(
             times,
@@ -3413,6 +3411,7 @@ class LoadThread(QThread):
         self.loadingFinished.connect(_methpartial(browser._precompute_finished))
 
     def run(self):
+        print("Doing precompute stuff (i think)")
         """Load and process data in a separate QThread."""
         # Split data loading into 10 chunks to show user progress.
         # Testing showed that e.g. n_chunks=100 extends loading time
@@ -4209,6 +4208,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 del self.mne.keyboard_shortcuts["t"]
             # disable histogram of epoch PTP amplitude
             del self.mne.keyboard_shortcuts["h"]
+
+        # if self.mne.precompute:
+        #     for chii in range(self.mne.global_data.shape[0]):
+        #         ch_type = self.mne.ch_types[chii]
+        #         self.mne.global_data[chii,:] *= self.mne.scalings[ch_type]
 
         self.precomputed_scalings = self.mne.scalings.copy()
 
