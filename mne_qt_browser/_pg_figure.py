@@ -498,11 +498,7 @@ class DataTrace(PlotCurveItem):
 
         if self.mne.data_precomputed:
             data = self.mne.data[self.order_idx]
-            data = (
-                data
-                # * self.weakmain().precomputed_scalings[self.ch_type]
-                / self.mne.scalings[self.ch_type]
-            )
+            data /= self.mne.scalings[self.ch_type]
         else:
             data = self.mne.data[self.range_idx]
         times = self.mne.times
