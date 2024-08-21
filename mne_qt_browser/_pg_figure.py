@@ -5728,6 +5728,22 @@ def _init_browser(**kwargs):
     return browser
 
 
+class SignalBlocker(QSignalBlocker):
+    """Wrapper to use QSignalBlocker as a context manager in PySide2."""
+
+    def __enter__(self):
+        if hasattr(super(), "__enter__"):
+            super().__enter__()
+        else:
+            super().reblock()
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if hasattr(super(), "__exit__"):
+            super().__exit__(exc_type, exc_value, traceback)
+        else:
+            super().unblock()
+
+
 def _set_window_flags(widget):
     if os.getenv("_MNE_BROWSER_BACK", "").lower() == "true":
         widget.setWindowFlags(widget.windowFlags() | Qt.WindowStaysOnBottomHint)

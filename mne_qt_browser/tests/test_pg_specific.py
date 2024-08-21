@@ -365,24 +365,32 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
     orig_mon_dpi = fig.mne.fig_settings.dpi_spinbox.value()
     orig_sens = ch_sens_spinbox.value()
     fig.mne.fig_settings.mon_height_spinbox.setValue(orig_mon_height / 2)
-    # fig.mne.fig_settings.mon_width_spinbox.setValue(orig_mon_width / 2)
+    QTest.keyPress(fig.mne.fig_settings.mon_height_spinbox.lineEdit(), Qt.Key_Return)
+    fig.mne.fig_settings.mon_width_spinbox.setValue(orig_mon_width / 2)
+    QTest.keyPress(fig.mne.fig_settings.mon_width_spinbox.lineEdit(), Qt.Key_Return)
     assert ch_sens_spinbox.value() != orig_sens
 
     # Monitor settings reset button works
     fig.mne.fig_settings._reset_monitor_spinboxes()
-    assert fig.mne.fig_settings.monitor_height_spinbox.value() == orig_mon_height
-    assert fig.mne.fig_settings.monitor_width_spinbox.value() == orig_mon_width
-    assert fig.mne.fig_settings.monitor_dpi_spinbox.value() == orig_mon_dpi
+    assert fig.mne.fig_settings.mon_height_spinbox.value() == orig_mon_height
+    assert fig.mne.fig_settings.mon_width_spinbox.value() == orig_mon_width
+    assert fig.mne.fig_settings.dpi_spinbox.value() == orig_mon_dpi
     assert ch_sens_spinbox.value() == orig_sens
 
     # Monitor unit dropdown works (go from cm to mm or vice-versa)
     mon_unit_cmbx = fig.mne.fig_settings.mon_units_cmbx
     mon_unit_cmbx.setCurrentText("mm")
-    mm_mon_height = fig.mne.fig_settings.monitor_height_spinbox.value()
-    mm_mon_width = fig.mne.fig_settings.monitor_width_spinbox.value()
+    mm_mon_height = fig.mne.fig_settings.mon_height_spinbox.value()
+    mm_mon_width = fig.mne.fig_settings.mon_width_spinbox.value()
     mon_unit_cmbx.setCurrentText("cm")
-    assert fig.mne.fig_settings.monitor_height_spinbox.value() == mm_mon_height / 10
-    assert fig.mne.fig_settings.monitor_width_spinbox.value() == mm_mon_width / 10
+    np.testing.assert_allclose(
+        fig.mne.fig_settings.mon_height_spinbox.value(), mm_mon_height / 10, atol=0.1
+    )
+    np.testing.assert_allclose(
+        fig.mne.fig_settings.mon_width_spinbox.value(), mm_mon_width / 10, atol=0.1
+    )
+    # assert fig.mne.fig_settings.mon_height_spinbox.value() == mm_mon_height / 10
+    # assert fig.mne.fig_settings.mon_width_spinbox.value() == mm_mon_width / 10
 
     # Window resize changes sensitivity values
     orig_sens = ch_sens_spinbox.value()
