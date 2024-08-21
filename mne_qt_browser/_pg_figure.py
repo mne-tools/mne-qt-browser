@@ -500,7 +500,7 @@ class DataTrace(PlotCurveItem):
             data = self.mne.data[self.order_idx]
             data = (
                 data
-                * self.weakmain().precomputed_scalings[self.ch_type]
+                # * self.weakmain().precomputed_scalings[self.ch_type]
                 / self.mne.scalings[self.ch_type]
             )
         else:
@@ -3440,7 +3440,6 @@ class LoadThread(QThread):
         self.loadingFinished.connect(_methpartial(browser._precompute_finished))
 
     def run(self):
-        print("Doing precompute stuff (i think)")
         """Load and process data in a separate QThread."""
         # Split data loading into 10 chunks to show user progress.
         # Testing showed that e.g. n_chunks=100 extends loading time
@@ -3496,6 +3495,11 @@ class LoadThread(QThread):
         self.mne.remove_dc = False
         data = browser._process_data(data, 0, data.shape[-1], picks, self)
         self.mne.remove_dc = stashed_remove_dc
+
+        ch_type_ordered = self.mne.ch_types[self.mne.ch_order]
+        for chii in range(data.shape[0]):
+            ch_type = ch_type_ordered[chii]
+            data[chii, :] *= self.mne.scalings[ch_type]
 
         self.mne.global_data = data
         self.mne.global_times = times
@@ -4237,13 +4241,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 del self.mne.keyboard_shortcuts["t"]
             # disable histogram of epoch PTP amplitude
             del self.mne.keyboard_shortcuts["h"]
-
-        # if self.mne.precompute:
-        #     for chii in range(self.mne.global_data.shape[0]):
-        #         ch_type = self.mne.ch_types[chii]
-        #         self.mne.global_data[chii,:] *= self.mne.scalings[ch_type]
-
-        self.precomputed_scalings = self.mne.scalings.copy()
 
     def _hidpi_mkPen(self, *args, **kwargs):
         kwargs["width"] = self._pixel_ratio * kwargs.get("width", 1.0)
