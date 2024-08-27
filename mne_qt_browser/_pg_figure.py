@@ -1983,6 +1983,7 @@ class SettingsDialog(_BaseDialog):
         self.dpi_spinbox.setMinimumWidth(100)
         self.dpi_spinbox.setRange(0, float("inf"))
         self.dpi_spinbox.setDecimals(2)
+        self.dpi_spinbox.setReadOnly(True)
         self.dpi_spinbox.lineEdit().returnPressed.connect(
             _methpartial(self._update_monitor, dim="dpi")
         )
@@ -2035,23 +2036,25 @@ class SettingsDialog(_BaseDialog):
         px_height = QApplication.primaryScreen().size().height()
         px_width = QApplication.primaryScreen().size().width()
         if dim == "height":
-            new_value = self.mon_height_spinbox.value()
+            new_ht_val = self.mon_height_spinbox.value()
 
             # Get new dpi
             mon_units = self.current_monitor_units
             mon_height_inch = _convert_physical_units(
-                new_value, from_unit=mon_units, to_unit="inch"
+                new_ht_val, from_unit=mon_units, to_unit="inch"
             )
             dpi = (px_height / dpr) / mon_height_inch
 
             # Find new width of monitor
             with SignalBlocker(self.mon_width_spinbox):
-                mon_width_inch = (px_width / dpr) / dpi
-                self.mon_width_spinbox.setValue(
-                    _convert_physical_units(
-                        mon_width_inch, from_unit="inch", to_unit=mon_units
-                    )
-                )
+                # mon_width_inch = (px_width / dpr) / dpi
+                # self.mon_width_spinbox.setValue(
+                #     _convert_physical_units(
+                #         mon_width_inch, from_unit="inch", to_unit=mon_units
+                #     )
+                # )
+                mon_width = self.mne.aspect_ratio * new_ht_val
+                self.mon_width_spinbox.setValue(mon_width)
 
             self.mne.dpi = dpi
             self.dpi_spinbox.setValue(self.mne.dpi)
@@ -2059,23 +2062,25 @@ class SettingsDialog(_BaseDialog):
             self._update_spinbox_values(ch_type="all", source="unit_change")
 
         elif dim == "width":
-            new_value = self.mon_width_spinbox.value()
+            new_wd_value = self.mon_width_spinbox.value()
 
             # Get new dpi
             mon_units = self.current_monitor_units
             mon_width_inch = _convert_physical_units(
-                new_value, from_unit=mon_units, to_unit="inch"
+                new_wd_value, from_unit=mon_units, to_unit="inch"
             )
             dpi = (px_width / dpr) / mon_width_inch
 
             # Find new height of monitor
             with SignalBlocker(self.mon_height_spinbox):
-                mon_height_inch = (px_height / dpr) / dpi
-                self.mon_height_spinbox.setValue(
-                    _convert_physical_units(
-                        mon_height_inch, from_unit="inch", to_unit=mon_units
-                    )
-                )
+                # mon_height_inch = (px_height / dpr) / dpi
+                # self.mon_height_spinbox.setValue(
+                #     _convert_physical_units(
+                #         mon_height_inch, from_unit="inch", to_unit=mon_units
+                #     )
+                # )
+                mon_height = new_wd_value / self.mne.aspect_ratio
+                self.mon_height_spinbox.setValue(mon_height)
 
             self.mne.dpi = dpi
             self.dpi_spinbox.setValue(self.mne.dpi)
@@ -3654,7 +3659,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Scale-Factor
         self.mne.scale_factor = 1
         # DPI
-        self.mne.dpi = QApplication.primaryScreen().logicalDotsPerInch()
+        screen = QApplication.primaryScreen()
+        self.mne.dpi = screen.logicalDotsPerInch()
+        # Aspect Ratio
+        self.mne.aspect_ratio = screen.geometry().width() / screen.geometry().height()
         # Stores channel-types for butterfly-mode
         self.mne.butterfly_type_order = [
             tp for tp in DATA_CH_TYPES_ORDER if tp in self.mne.ch_types
