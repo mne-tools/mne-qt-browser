@@ -2043,7 +2043,7 @@ class SettingsDialog(_BaseDialog):
             mon_height_inch = _convert_physical_units(
                 new_ht_val, from_unit=mon_units, to_unit="inch"
             )
-            dpi = (px_height / dpr) / mon_height_inch
+            dpi = (px_height / mon_height_inch) / dpr
 
             # Find new width of monitor
             with SignalBlocker(self.mon_width_spinbox):
@@ -2069,7 +2069,7 @@ class SettingsDialog(_BaseDialog):
             mon_width_inch = _convert_physical_units(
                 new_wd_value, from_unit=mon_units, to_unit="inch"
             )
-            dpi = (px_width / dpr) / mon_width_inch
+            dpi = (px_width / mon_width_inch) / dpr
 
             # Find new height of monitor
             with SignalBlocker(self.mon_height_spinbox):
@@ -2147,14 +2147,14 @@ class SettingsDialog(_BaseDialog):
         width_mon_units = _convert_physical_units(
             width_mm, from_unit="mm", to_unit=mon_units
         )
-        self.mne.dpi = QApplication.primaryScreen().logicalDotsPerInch()
+
+        screen = QApplication.primaryScreen()
+        self.mne.dpi = screen.physicalDotsPerInch() / screen.devicePixelRatio()
 
         # Set the spinbox values as such
         self.mon_height_spinbox.setValue(height_mon_units)
         self.mon_width_spinbox.setValue(width_mon_units)
         self.dpi_spinbox.setValue(self.mne.dpi)
-
-        self.mne.dpi = QApplication.primaryScreen().logicalDotsPerInch()
 
         # Update sensitivity spinboxes
         self._update_spinbox_values(ch_type="all", source="unit_change")
@@ -3660,7 +3660,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.scale_factor = 1
         # DPI
         screen = QApplication.primaryScreen()
-        self.mne.dpi = screen.logicalDotsPerInch()
+        self.mne.dpi = screen.physicalDotsPerInch() / screen.devicePixelRatio()
+
         # Aspect Ratio
         self.mne.aspect_ratio = screen.geometry().width() / screen.geometry().height()
         # Stores channel-types for butterfly-mode
