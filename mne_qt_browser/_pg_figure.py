@@ -42,6 +42,7 @@ from mne.utils import _check_option, _to_rgb, get_config, logger, sizeof_fmt, wa
 from mne.viz import plot_sensors
 from mne.viz._figure import BrowserBase
 from mne.viz.backends._utils import _init_mne_qtapp, _qt_raise_window
+from mne.viz.ui_events import TimeChange, publish, subscribe
 from mne.viz.utils import _figure_agg, _merge_annotations, _simplify_float
 from pyqtgraph import (
     AxisItem,
@@ -3971,6 +3972,32 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 del self.mne.keyboard_shortcuts["t"]
             # disable histogram of epoch PTP amplitude
             del self.mne.keyboard_shortcuts["h"]
+
+        # Connect to the event system
+        self.mne.plt.sigXRangeChanged.connect(self._notify_event_system_on_x_change)
+
+        # Now subscribe to the event system
+        subscribe(self, "time_change", self._on_time_change_event_system)
+
+    def _notify_event_system_on_x_change(self):
+        """Notify the event system about a change in the x-range."""
+        publish(self, TimeChange(time=self.mne.times[0]))
+
+    def _on_time_change_event_system(self, event):
+        """Response to an event from the event-ui system."""
+        tolerance = 0.005  # 5 ms
+        if np.abs(event.time - self.mne.times[0]) > tolerance:
+            xmin = event.time
+            xmax = event.time + self.mne.duration
+
+            if xmin < 0:
+                xmin = 0
+                xmax = xmin + self.mne.duration
+            elif xmax > self.mne.xmax:
+                xmax = self.mne.xmax
+                xmin = xmax - self.mne.duration
+
+            self.mne.plt.setXRange(xmin, xmax, padding=0)
 
     def _hidpi_mkPen(self, *args, **kwargs):
         kwargs["width"] = self._pixel_ratio * kwargs.get("width", 1.0)
