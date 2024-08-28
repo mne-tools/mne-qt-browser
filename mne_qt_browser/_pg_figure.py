@@ -2043,7 +2043,7 @@ class SettingsDialog(_BaseDialog):
             mon_height_inch = _convert_physical_units(
                 new_ht_val, from_unit=mon_units, to_unit="inch"
             )
-            dpi = (px_height / mon_height_inch) / dpr
+            dpi = px_height / mon_height_inch  # / dpr
 
             # Find new width of monitor
             with SignalBlocker(self.mon_width_spinbox):
@@ -2069,7 +2069,7 @@ class SettingsDialog(_BaseDialog):
             mon_width_inch = _convert_physical_units(
                 new_wd_value, from_unit=mon_units, to_unit="inch"
             )
-            dpi = (px_width / mon_width_inch) / dpr
+            dpi = px_width / mon_width_inch  # / dpr
 
             # Find new height of monitor
             with SignalBlocker(self.mon_height_spinbox):
@@ -2148,8 +2148,7 @@ class SettingsDialog(_BaseDialog):
             width_mm, from_unit="mm", to_unit=mon_units
         )
 
-        screen = QApplication.primaryScreen()
-        self.mne.dpi = screen.physicalDotsPerInch() / screen.devicePixelRatio()
+        self.mne.dpi = QApplication.primaryScreen().physicalDotsPerInch()
 
         # Set the spinbox values as such
         self.mon_height_spinbox.setValue(height_mon_units)
@@ -3660,7 +3659,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.scale_factor = 1
         # DPI
         screen = QApplication.primaryScreen()
-        self.mne.dpi = screen.physicalDotsPerInch() / screen.devicePixelRatio()
+        self.mne.dpi = screen.physicalDotsPerInch()
 
         # Aspect Ratio
         self.mne.aspect_ratio = screen.geometry().width() / screen.geometry().height()
@@ -4468,7 +4467,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.plt.setYRange(ymin, ymax, padding=0)
 
         if self.mne.fig_settings is not None:
-            self.mne.fig_settings._update_spinbox_values()
+            self.mne.fig_settings._update_spinbox_values(ch_type="all", source="chans")
 
     def _remove_vline(self):
         if self.mne.vline is not None:
