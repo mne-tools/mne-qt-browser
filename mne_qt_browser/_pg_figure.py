@@ -3324,6 +3324,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     """A PyQtGraph-backend for 2D data browsing."""
 
     gotClosed = Signal()
+    sigVLineMoved = Signal(float)
 
     @_safe_splash
     def __init__(self, **kwargs):
@@ -3974,30 +3975,24 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             del self.mne.keyboard_shortcuts["h"]
 
         # Connect to the event system
-        self.mne.plt.sigXRangeChanged.connect(self._notify_event_system_on_x_change)
+        self.sigVLineMoved.connect(self._notify_event_system_on_vline_change)
 
         # Now subscribe to the event system
-        subscribe(self, "time_change", self._on_time_change_event_system)
+        subscribe(self, "time_change", self._on_time_change_vline)
 
-    def _notify_event_system_on_x_change(self):
-        """Notify the event system about a change in the x-range."""
-        publish(self, TimeChange(time=self.mne.times[0]))
+    def _notify_event_system_on_vline_change(self, t):
+        publish(self, TimeChange(time=t))
 
-    def _on_time_change_event_system(self, event):
+    def _on_time_change_vline(self, event):
         """Response to an event from the event-ui system."""
-        tolerance = 0.005  # 5 ms
-        if np.abs(event.time - self.mne.times[0]) > tolerance:
-            xmin = event.time
-            xmax = event.time + self.mne.duration
+        # At what point to not worry about accuracy
+        tolerance = 0.005
 
-            if xmin < 0:
-                xmin = 0
-                xmax = xmin + self.mne.duration
-            elif xmax > self.mne.xmax:
-                xmax = self.mne.xmax
-                xmin = xmax - self.mne.duration
-
-            self.mne.plt.setXRange(xmin, xmax, padding=0)
+        if self.mne.vline is not None:
+            if np.abs(self.mne.vline.pos()[0] - event.time) > tolerance:
+                self._add_vline(event.time)
+        else:
+            self._add_vline(event.time)
 
     def _hidpi_mkPen(self, *args, **kwargs):
         kwargs["width"] = self._pixel_ratio * kwargs.get("width", 1.0)
@@ -4276,11 +4271,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 self.mne.vline = VLine(self.mne, t, bounds=(0, self.mne.xmax))
                 self.mne.vline.sigPositionChangeFinished.connect(self._vline_slot)
                 self.mne.plt.addItem(self.mne.vline)
+
             else:
                 self.mne.vline.setPos(t)
 
         self.mne.vline_visible = True
         self.mne.overview_bar.update_vline()
+        self.sigVLineMoved.emit(t)
 
     def _mouse_moved(self, pos):
         """Show Crosshair if enabled at mouse move."""
