@@ -2046,13 +2046,7 @@ class SettingsDialog(_BaseDialog):
             dpi = px_height / mon_height_inch  # / dpr
 
             # Find new width of monitor
-            with SignalBlocker(self.mon_width_spinbox):
-                # mon_width_inch = (px_width / dpr) / dpi
-                # self.mon_width_spinbox.setValue(
-                #     _convert_physical_units(
-                #         mon_width_inch, from_unit="inch", to_unit=mon_units
-                #     )
-                # )
+            with QSignalBlocker(self.mon_width_spinbox):
                 mon_width = self.mne.aspect_ratio * new_ht_val
                 self.mon_width_spinbox.setValue(mon_width)
 
@@ -2072,13 +2066,7 @@ class SettingsDialog(_BaseDialog):
             dpi = px_width / mon_width_inch  # / dpr
 
             # Find new height of monitor
-            with SignalBlocker(self.mon_height_spinbox):
-                # mon_height_inch = (px_height / dpr) / dpi
-                # self.mon_height_spinbox.setValue(
-                #     _convert_physical_units(
-                #         mon_height_inch, from_unit="inch", to_unit=mon_units
-                #     )
-                # )
+            with QSignalBlocker(self.mon_height_spinbox):
                 mon_height = new_wd_value / self.mne.aspect_ratio
                 self.mon_height_spinbox.setValue(mon_height)
 
@@ -2099,10 +2087,10 @@ class SettingsDialog(_BaseDialog):
                 self.mon_width_spinbox.value(), from_unit=old_units, to_unit=new_units
             )
 
-            with SignalBlocker(self.mon_width_spinbox):
+            with QSignalBlocker(self.mon_width_spinbox):
                 self.mon_width_spinbox.setValue(mon_width_units)
 
-            with SignalBlocker(self.mon_height_spinbox):
+            with QSignalBlocker(self.mon_height_spinbox):
                 self.mon_height_spinbox.setValue(mon_height_units)
 
             self.current_monitor_units = new_units
@@ -2112,7 +2100,7 @@ class SettingsDialog(_BaseDialog):
             self.mne.dpi = new_value
             mon_units = self.current_monitor_units
 
-            with SignalBlocker(self.mon_height_spinbox):
+            with QSignalBlocker(self.mon_height_spinbox):
                 mon_height_inch = (px_height / dpr) / new_value
                 self.mon_height_spinbox.setValue(
                     _convert_physical_units(
@@ -2120,7 +2108,7 @@ class SettingsDialog(_BaseDialog):
                     )
                 )
 
-            with SignalBlocker(self.mon_width_spinbox):
+            with QSignalBlocker(self.mon_width_spinbox):
                 mon_width_inch = (px_width / dpr) / new_value
                 self.mon_width_spinbox.setValue(
                     _convert_physical_units(
@@ -2179,7 +2167,7 @@ class SettingsDialog(_BaseDialog):
                         self, ch_type
                     )
 
-                with SignalBlocker(self.ch_sensitivity_spinboxes[ch_type]):
+                with QSignalBlocker(self.ch_sensitivity_spinboxes[ch_type]):
                     self.ch_sensitivity_spinboxes[ch_type].setValue(
                         _calc_chan_type_to_physical(self, ch_type, units=current_units)
                     )
@@ -2200,7 +2188,7 @@ class SettingsDialog(_BaseDialog):
                         / (scaler * self.mne.unit_scalings[ch_type])
                     )
 
-                with SignalBlocker(self.ch_scaling_spinboxes[ch_type]):
+                with QSignalBlocker(self.ch_scaling_spinboxes[ch_type]):
                     self.ch_scaling_spinboxes[ch_type].setValue(
                         _get_channel_scaling(self, ch_type)
                     )
@@ -2211,7 +2199,7 @@ class SettingsDialog(_BaseDialog):
                 new_unit = new_value.split()[-1]
                 ch_types = self.ch_scaling_spinboxes.keys()
                 for ch_type in ch_types:
-                    with SignalBlocker(self.ch_sensitivity_spinboxes[ch_type]):
+                    with QSignalBlocker(self.ch_sensitivity_spinboxes[ch_type]):
                         self.ch_sensitivity_spinboxes[ch_type].setValue(
                             _calc_chan_type_to_physical(self, ch_type, units=new_unit)
                         )
@@ -2230,11 +2218,11 @@ class SettingsDialog(_BaseDialog):
             # Update all spinboxes
             ch_types = self.ch_scaling_spinboxes.keys()
             for ch_type in ch_types:
-                with SignalBlocker(self.ch_scaling_spinboxes[ch_type]):
+                with QSignalBlocker(self.ch_scaling_spinboxes[ch_type]):
                     self.ch_scaling_spinboxes[ch_type].setValue(
                         _get_channel_scaling(self, ch_type)
                     )
-                with SignalBlocker(self.ch_sensitivity_spinboxes[ch_type]):
+                with QSignalBlocker(self.ch_sensitivity_spinboxes[ch_type]):
                     self.ch_sensitivity_spinboxes[ch_type].setValue(
                         _calc_chan_type_to_physical(self, ch_type, units=current_units)
                     )
@@ -5727,22 +5715,6 @@ def _init_browser(**kwargs):
     browser = MNEQtBrowser(**kwargs)
 
     return browser
-
-
-class SignalBlocker(QSignalBlocker):
-    """Wrapper to use QSignalBlocker as a context manager in PySide2."""
-
-    def __enter__(self):
-        if hasattr(super(), "__enter__"):
-            super().__enter__()
-        else:
-            super().reblock()
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        if hasattr(super(), "__exit__"):
-            super().__exit__(exc_type, exc_value, traceback)
-        else:
-            super().unblock()
 
 
 def _set_window_flags(widget):
