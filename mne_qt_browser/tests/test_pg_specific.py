@@ -389,8 +389,6 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
     np.testing.assert_allclose(
         fig.mne.fig_settings.mon_width_spinbox.value(), mm_mon_width / 10, atol=0.1
     )
-    # assert fig.mne.fig_settings.mon_height_spinbox.value() == mm_mon_height / 10
-    # assert fig.mne.fig_settings.mon_width_spinbox.value() == mm_mon_width / 10
 
     # Window resize changes sensitivity values
     orig_sens = ch_sens_spinbox.value()
