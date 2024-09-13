@@ -1801,10 +1801,10 @@ class SettingsDialog(_BaseDialog):
         # Antialiasing
         self.antialiasing_box = QCheckBox()
         self.antialiasing_box.setToolTip("Enable/Disable antialiasing.\n")
+        self.antialiasing_box.setChecked(self.mne.antialiasing)
         self.antialiasing_box.stateChanged.connect(
             _methpartial(self._toggle_antialiasing)
         )
-        self.antialiasing_box.setChecked(self.mne.antialiasing)
         layout.addRow("antialiasing", self.antialiasing_box)
 
         # Downsampling
@@ -1819,11 +1819,11 @@ class SettingsDialog(_BaseDialog):
         )
         self.downsampling_box.setMinimum(0)
         self.downsampling_box.setSpecialValueText("Auto")
-        self.downsampling_box.valueChanged.connect(
-            _methpartial(self._value_changed, value_name="downsampling")
-        )
         self.downsampling_box.setValue(
             0 if self.mne.downsampling == "auto" else self.mne.downsampling
+        )
+        self.downsampling_box.valueChanged.connect(
+            _methpartial(self._value_changed, value_name="downsampling")
         )
         layout.addRow("downsampling", self.downsampling_box)
 
@@ -1845,10 +1845,10 @@ class SettingsDialog(_BaseDialog):
             'Default is "peak".'
         )
         self.ds_method_cmbx.addItems(["subsample", "mean", "peak"])
+        self.ds_method_cmbx.setCurrentText(self.mne.ds_method)
         self.ds_method_cmbx.currentTextChanged.connect(
             _methpartial(self._value_changed, value_name="ds_method")
         )
-        self.ds_method_cmbx.setCurrentText(self.mne.ds_method)
         layout.addRow("ds_method", self.ds_method_cmbx)
 
         # Scrolling sensitivity
@@ -1860,11 +1860,11 @@ class SettingsDialog(_BaseDialog):
             "Adjust this value if the scrolling for example with an horizontal "
             "mouse wheel is too fast or too slow. Default is 100."
         )
+        self.scroll_sensitivity_slider.setValue(self.mne.scroll_sensitivity)
         self.scroll_sensitivity_slider.valueChanged.connect(
             _methpartial(self._value_changed, value_name="scroll_sensitivity")
         )
         # Set default
-        self.scroll_sensitivity_slider.setValue(self.mne.scroll_sensitivity)
         layout.addRow("horizontal scroll sensitivity", self.scroll_sensitivity_slider)
 
         layout.addItem(QSpacerItem(10, 10, QSizePolicy.Minimum, QSizePolicy.Expanding))
