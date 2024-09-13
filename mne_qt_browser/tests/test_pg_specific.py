@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Author: Martin Schulz <dev@earthman-music.de>
 #
 # License: BSD-3-Clause
@@ -101,6 +100,28 @@ def test_annotations_interactions(raw_orig, pg_backend):
     assert fig.msg_box.informativeText() == "Start can't be bigger or " "equal to Stop!"
     fig.msg_box.close()
 
+    # Test that dragging annotation onto the tail of another works
+    annot_dock._remove_description("E")
+    annot_dock._remove_description("C")
+    fig._fake_click(
+        (4.0, 1.0), add_points=[(6.0, 1.0)], xform="data", button=1, kind="drag"
+    )
+    fig._fake_click(
+        (4.0, 1.0), add_points=[(3.0, 1.0)], xform="data", button=1, kind="drag"
+    )
+    assert len(raw_orig.annotations.onset) == 1
+    assert len(fig.mne.regions) == 1
+
+    # Make a smaller annotation and put it into the larger one
+    fig._fake_click(
+        (8.0, 1.0), add_points=[(8.1, 1.0)], xform="data", button=1, kind="drag"
+    )
+    fig._fake_click(
+        (8.0, 1.0), add_points=[(4.0, 1.0)], xform="data", button=1, kind="drag"
+    )
+    assert len(raw_orig.annotations.onset) == 1
+    assert len(fig.mne.regions) == 1
+
 
 def test_ch_specific_annot(raw_orig, pg_backend):
     """Test plotting channel specific annotations."""
@@ -167,6 +188,16 @@ def test_ch_specific_annot(raw_orig, pg_backend):
             modifier=Qt.ShiftModifier,
         )
         assert "MEG 0133" in annot.single_channel_annots.keys()
+
+        # Check that channel specific annotations do not merge
+        fig._fake_click(
+            (2.0, 1.0), add_points=[(3.0, 1.0)], xform="data", button=1, kind="drag"
+        )
+        with pytest.warns(RuntimeWarning, match="combine channel-based"):
+            fig._fake_click(
+                (2.1, 1.0), add_points=[(5.0, 1.0)], xform="data", button=1, kind="drag"
+            )
+
     else:
         # emit a warning if the user tries to test single channel annots
         with pytest.warns(RuntimeWarning, match="updated"):
@@ -277,6 +308,7 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
     assert sensitivities_mne == sensitivity_values
     assert sensitivities_control == sensitivity_values
 
+    # Make sure there are correct number of scaling spinboxes
     ordered_types = fig.mne.ch_types[fig.mne.ch_order]
     unique_types = np.unique(ordered_types)
     unique_types = [
@@ -285,6 +317,7 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
     n_unique_types = len(unique_types)
     assert n_unique_types == len(fig.mne.fig_settings.ch_scaling_spinboxes)
 
+    # Check that scaling spinbox has correct/expected value
     ch_type_test = unique_types[0]
     ch_spinbox = fig.mne.fig_settings.ch_scaling_spinboxes[ch_type_test]
     inv_norm = (
@@ -294,6 +327,74 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
         / fig.mne.scale_factor
     )
     assert inv_norm == ch_spinbox.value()
+
+    # Check that changing scaling values changes sensitivity values
+    ch_scale_spinbox = fig.mne.fig_settings.ch_scaling_spinboxes[ch_type_test]
+    ch_sens_spinbox = fig.mne.fig_settings.ch_sensitivity_spinboxes[ch_type_test]
+    scaling_spinbox_value = ch_spinbox.value()
+    sensitivity_spinbox_value = ch_sens_spinbox.value()
+    scaling_value = fig.mne.scalings[ch_type_test]
+    new_scaling_spinbox_value = scaling_spinbox_value * 2
+    new_expected_sensitivity_spinbox_value = sensitivity_spinbox_value * 2
+    ch_scale_spinbox.setValue(new_scaling_spinbox_value)
+    new_scaling_value = fig.mne.scalings[ch_type_test]
+    assert scaling_value != new_scaling_value
+    np.testing.assert_allclose(
+        ch_sens_spinbox.value(), new_expected_sensitivity_spinbox_value, atol=0.1
+    )
+
+    # Changing sensitivity values changes scaling values
+    ch_scale_spinbox = fig.mne.fig_settings.ch_scaling_spinboxes[ch_type_test]
+    ch_sens_spinbox = fig.mne.fig_settings.ch_sensitivity_spinboxes[ch_type_test]
+    scaling_spinbox_value = ch_spinbox.value()
+    sensitivity_spinbox_value = ch_sens_spinbox.value()
+    scaling_value = fig.mne.scalings[ch_type_test]
+    new_sensitivity_spinbox_value = sensitivity_spinbox_value * 2
+    new_expected_scaling_spinbox_value = scaling_spinbox_value * 2
+    ch_sens_spinbox.setValue(new_sensitivity_spinbox_value)
+    assert scaling_value != fig.mne.scalings[ch_type_test]
+    np.testing.assert_allclose(
+        ch_scale_spinbox.value(),
+        new_expected_scaling_spinbox_value,
+        atol=new_expected_scaling_spinbox_value * 0.05,
+    )
+
+    # Monitor dimension update changes sensitivity values and dpi
+    orig_mon_height = fig.mne.fig_settings.mon_height_spinbox.value()
+    orig_mon_width = fig.mne.fig_settings.mon_width_spinbox.value()
+    orig_mon_dpi = fig.mne.fig_settings.dpi_spinbox.value()
+    orig_sens = ch_sens_spinbox.value()
+    fig.mne.fig_settings.mon_height_spinbox.setValue(orig_mon_height / 2)
+    QTest.keyPress(fig.mne.fig_settings.mon_height_spinbox.lineEdit(), Qt.Key_Return)
+    fig.mne.fig_settings.mon_width_spinbox.setValue(orig_mon_width / 2)
+    QTest.keyPress(fig.mne.fig_settings.mon_width_spinbox.lineEdit(), Qt.Key_Return)
+    assert ch_sens_spinbox.value() != orig_sens
+
+    # Monitor settings reset button works
+    fig.mne.fig_settings._reset_monitor_spinboxes()
+    assert fig.mne.fig_settings.mon_height_spinbox.value() == orig_mon_height
+    assert fig.mne.fig_settings.mon_width_spinbox.value() == orig_mon_width
+    assert fig.mne.fig_settings.dpi_spinbox.value() == orig_mon_dpi
+    assert ch_sens_spinbox.value() == orig_sens
+
+    # Monitor unit dropdown works (go from cm to mm or vice-versa)
+    mon_unit_cmbx = fig.mne.fig_settings.mon_units_cmbx
+    mon_unit_cmbx.setCurrentText("mm")
+    mm_mon_height = fig.mne.fig_settings.mon_height_spinbox.value()
+    mm_mon_width = fig.mne.fig_settings.mon_width_spinbox.value()
+    mon_unit_cmbx.setCurrentText("cm")
+    np.testing.assert_allclose(
+        fig.mne.fig_settings.mon_height_spinbox.value(), mm_mon_height / 10, atol=0.1
+    )
+    np.testing.assert_allclose(
+        fig.mne.fig_settings.mon_width_spinbox.value(), mm_mon_width / 10, atol=0.1
+    )
+
+    # Window resize changes sensitivity values
+    orig_sens = ch_sens_spinbox.value()
+    orig_window_size = fig.size()
+    fig.resize(orig_window_size.width() * 2, orig_window_size.height() * 2)
+    assert ch_sens_spinbox.value() != orig_sens
 
 
 def test_pg_help_dialog(raw_orig, pg_backend):

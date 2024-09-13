@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "mne-qt-browser"
 description = "A new backend based on pyqtgraph for the 2D-Data-Browser in MNE-Python"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { file = "LICENSE" }
 keywords = ["science", "neuroscience", "psychology"]
 authors = [{ name = "Martin Schulz", email = "dev@mgschulz.de" }]
@@ -68,7 +68,7 @@ filterwarnings = [
 ]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "D", "I"]
+select = ["E", "F", "W", "D", "I", "UP"]
 exclude = ["__init__.py"]
 ignore = [
     "D100", # Missing docstring in public module

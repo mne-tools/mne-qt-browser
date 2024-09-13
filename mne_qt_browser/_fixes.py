@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Backports for older installations."""
 
 # Author: Martin Schulz <dev@earthman-music.de>
