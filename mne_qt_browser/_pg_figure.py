@@ -12,6 +12,7 @@ import math
 import os
 import platform
 import sys
+import warnings
 import weakref
 from ast import literal_eval
 from collections import OrderedDict
@@ -3569,7 +3570,11 @@ def _methpartial(meth, **kwargs):
 
 def _disconnect(sig, *, allow_error=False):
     try:
-        sig.disconnect()
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", "Failed to disconnect", category=RuntimeWarning
+            )
+            sig.disconnect()
     except (TypeError, RuntimeError):  # if there are no connections, ignore it
         if not allow_error:
             raise
