@@ -73,8 +73,8 @@ jobs:
           fi
           python -m pip install -ve .${PIP_OPTION} "PyQt6!=6.6.1" "PyQt6-Qt6!=6.6.1,!=6.6.2,!=6.6.3"
           if [[ "${{ matrix.pip }}" == "pre" ]]; then
-            echo "Upgrading to pre-release NumPy, SciPy, and matplotlib"
-            python -m pip install --upgrade --pre --only-binary ":all:" --default-timeout=60 --extra-index-url "https://pypi.anaconda.org/scientific-python-nightly-wheels/simple" "numpy>=2.0.0.dev0" "scipy>=1.14.0.dev0" "matplotlib>=3.9.0.dev0" "scikit-learn>=1.5.dev0"
+            echo "Upgrading to pre-release NumPy, SciPy, matplotlib, and pyqtgraph"
+            python -m pip install --upgrade --pre --only-binary ":all:" --default-timeout=60 --extra-index-url "https://pypi.anaconda.org/scientific-python-nightly-wheels/simple" "numpy>=2.0.0.dev0" "scipy>=1.14.0.dev0" "matplotlib>=3.9.0.dev0" "scikit-learn>=1.5.dev0" "git+https://github.com/pyqtgraph/pyqtgraph.git"
           fi
       - run: ./tools/get_testing_version.sh
         working-directory: ../mne-python
@@ -153,7 +153,7 @@ jobs:
           # Avoid a problematic version of PySide6
           # https://wiki.qt.io/Qt_for_Python_Development_Notes#1._Juni_2023
           if [[ "$QT_LIB" == "PySide6" ]]; then
-            QT_LIB_INSTALL="PySide6!=6.5.1,!=6.7.0,!=6.7.1"
+            QT_LIB_INSTALL="PySide6!=6.5.1,!=6.7.0,!=6.7.1,!=6.8.0,!=6.8.0.1"
           else
             QT_LIB_INSTALL="$QT_LIB"
           fi
