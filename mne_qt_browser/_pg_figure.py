@@ -5248,6 +5248,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.scrollbars_visible = not self.mne.scrollbars_visible
         for bar in [self.mne.ax_hscroll, self.mne.ax_vscroll]:
             bar.setVisible(self.mne.scrollbars_visible)
+        self.statusBar().setVisible(self.mne.scrollbars_visible)
         self.mne.toolbar.setVisible(self.mne.scrollbars_visible)
 
     def _new_child_figure(self, fig_name, window_title, **kwargs):
