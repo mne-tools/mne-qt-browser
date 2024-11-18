@@ -100,7 +100,7 @@ jobs:
       - run: pytest mne_qt_browser/tests/test_speed.py --cov-report=xml --cov-append
         name: Run benchmarks
         if: runner.os != 'macOS'
-      - uses: codecov/codecov-action@v4
+      - uses: codecov/codecov-action@v5
         if: always()
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -190,7 +190,7 @@ jobs:
       - run: pytest mne_qt_browser/tests/test_speed.py --cov-report=xml --cov-append
         name: Run benchmarks
         if: runner.os != 'Linux' || matrix.qt != 'PyQt5'
-      - uses: codecov/codecov-action@v4
+      - uses: codecov/codecov-action@v5
         if: always()
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
