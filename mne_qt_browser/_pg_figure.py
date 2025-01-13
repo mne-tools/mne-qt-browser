@@ -201,7 +201,7 @@ def _get_color_cached(*, color_spec, invert):
         color = mkColor(color_spec)
     except ValueError:
         raise ValueError(
-            f'"{color_spec}" is not a valid matplotlib ' f"color-specifier!"
+            f'"{color_spec}" is not a valid matplotlib color-specifier!'
         ) from None
     if invert:
         # First see if the color is in our inversion dictionary
@@ -1703,7 +1703,7 @@ class ScaleBarText(BaseScaleBar, TextItem):  # noqa: D101
     def update_value(self):
         """Update value of ScaleBarText."""
         inv_norm = _get_channel_scaling(self, self.ch_type)
-        self.setText(f"{_simplify_float(inv_norm)} " f"{self.mne.units[self.ch_type]}")
+        self.setText(f"{_simplify_float(inv_norm)} {self.mne.units[self.ch_type]}")
 
     def _set_position(self, x, y):
         self.setPos(x, y)
@@ -2328,8 +2328,7 @@ class ProjDialog(_BaseDialog):
         # make title
         layout.addWidget(
             QLabel(
-                "Mark projectors applied on the plot.\n"
-                "(Applied projectors are dimmed)."
+                "Mark projectors applied on the plot.\n(Applied projectors are dimmed)."
             )
         )
 
@@ -2709,10 +2708,7 @@ class AnnotRegion(LinearRegionItem):
         ) > 0:
             dur = self.getRegion()[1] - self.getRegion()[0]
             self.setRegion((self.old_onset, self.old_onset + dur))
-            warn(
-                "Can not combine channel-based annotations with "
-                "any other annotation."
-            )
+            warn("Can not combine channel-based annotations with any other annotation.")
             return
 
         # figure out new boundaries
@@ -3504,7 +3500,7 @@ class LoadThread(QThread):
         if self.isRunning():
             wait_time = 10  # max. waiting time in seconds
             logger.info(
-                "Waiting for Loading-Thread to finish... " f"(max. {wait_time} sec)"
+                f"Waiting for Loading-Thread to finish... (max. {wait_time} sec)"
             )
             self.wait(int(wait_time * 1e3))
         _disconnect(self.loadProgress)
@@ -4563,7 +4559,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                             f"{_simplify_float(yvalue * inv_norm)} "
                             f"{self.mne.units[trace.ch_type]}"
                         )
-                        self.statusBar().showMessage(f"x={x:.3f} s, " f"y={label}")
+                        self.statusBar().showMessage(f"x={x:.3f} s, y={label}")
 
     def _toggle_crosshair(self):
         self.mne.crosshair_enabled = not self.mne.crosshair_enabled
