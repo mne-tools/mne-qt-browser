@@ -97,7 +97,7 @@ def test_annotations_interactions(raw_orig, pg_backend):
     annot_dock.start_bx.setValue(6)
     annot_dock.start_bx.editingFinished.emit()
     assert fig.msg_box.isVisible()
-    assert fig.msg_box.informativeText() == "Start can't be bigger or " "equal to Stop!"
+    assert fig.msg_box.informativeText() == "Start can't be bigger or equal to Stop!"
     fig.msg_box.close()
 
     # Test that dragging annotation onto the tail of another works

@@ -49,6 +49,6 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
         for name, vals in results.items():
             writer.line(
                 f"{name}:\n"
-                f'    Horizontal: {vals["h"]:6.2f}\n'
-                f'    Vertical:   {vals["v"]:6.2f}'
+                f"    Horizontal: {vals['h']:6.2f}\n"
+                f"    Vertical:   {vals['v']:6.2f}"
             )
