@@ -1437,9 +1437,8 @@ class RawViewBox(ViewBox):
                 elif event.isFinish():
                     drag_stop = self.mapSceneToView(event.scenePos()).x()
                     drag_stop = 0 if drag_stop < 0 else drag_stop
-                    drag_stop = (
-                        self.mne.xmax if self.mne.xmax < drag_stop else drag_stop
-                    )
+                    xmax = self.mne.xmax + 1 / self.mne.info["sfreq"]
+                    drag_stop = xmax if xmax < drag_stop else drag_stop
                     self._drag_region.setRegion((self._drag_start, drag_stop))
                     plot_onset = min(self._drag_start, drag_stop)
                     plot_offset = max(self._drag_start, drag_stop)
@@ -2659,7 +2658,7 @@ class AnnotRegion(LinearRegionItem):
             orientation="vertical",
             movable=True,
             swapMode="sort",
-            bounds=(0, mne.xmax),
+            bounds=(0, mne.xmax + 1 / mne.info["sfreq"]),
         )
         # Set default z-value to 0 to be behind other items in scene
         self.setZValue(0)
@@ -3035,7 +3034,7 @@ class AnnotationDock(QDockWidget):
         self.start_bx = QDoubleSpinBox()
         self.start_bx.setDecimals(time_decimals)
         self.start_bx.setMinimum(0)
-        self.start_bx.setMaximum(self.mne.xmax - 1 / self.mne.info["sfreq"])
+        self.start_bx.setMaximum(self.mne.xmax)
         self.start_bx.setSingleStep(0.05)
         self.start_bx.valueChanged.connect(self._start_changed)
         layout.addWidget(self.start_bx)
@@ -3043,8 +3042,8 @@ class AnnotationDock(QDockWidget):
         layout.addWidget(QLabel("Stop:"))
         self.stop_bx = QDoubleSpinBox()
         self.stop_bx.setDecimals(time_decimals)
-        self.stop_bx.setMinimum(1 / self.mne.info["sfreq"])
-        self.stop_bx.setMaximum(self.mne.xmax)
+        self.stop_bx.setMinimum(0)
+        self.stop_bx.setMaximum(self.mne.xmax + 1 / self.mne.info["sfreq"])
         self.stop_bx.setSingleStep(0.05)
         self.stop_bx.valueChanged.connect(self._stop_changed)
         layout.addWidget(self.stop_bx)
