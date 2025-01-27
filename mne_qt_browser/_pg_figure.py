@@ -3261,7 +3261,7 @@ class AnnotationDock(QDockWidget):
         start = self.start_bx.value()
         sel_region = self.mne.selected_region
         stop = sel_region.getRegion()[1]
-        if start < stop:
+        if start <= stop:
             self.mne.selected_region.setRegion((start, stop))
             # Make channel specific fillBetweens stay in sync with annot region
             # if len(sel_region.single_channel_annots.keys()) > 0:
@@ -3269,7 +3269,7 @@ class AnnotationDock(QDockWidget):
         else:
             self.weakmain().message_box(
                 text="Invalid value!",
-                info_text="Start can't be bigger or equal to Stop!",
+                info_text="Start can't be bigger than Stop!",
                 icon=QMessageBox.Critical,
                 modal=False,
             )
@@ -3279,12 +3279,12 @@ class AnnotationDock(QDockWidget):
         stop = self.stop_bx.value()
         sel_region = self.mne.selected_region
         start = sel_region.getRegion()[0]
-        if start < stop:
+        if start <= stop:
             sel_region.setRegion((start, stop))
         else:
             self.weakmain().message_box(
                 text="Invalid value!",
-                info_text="Stop can't be smaller or equal to Start!",
+                info_text="Stop can't be smaller than Start!",
                 icon=QMessageBox.Critical,
             )
             self.stop_bx.setValue(sel_region.getRegion()[1])
