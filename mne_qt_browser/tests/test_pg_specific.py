@@ -23,6 +23,96 @@ TOGGLE_ANNOTATIONS = "Toggle annotations mode"
 SHOW_PROJECTORS = "Show projectors"
 
 
+def test_annotations_single_sample(raw_orig, pg_backend):
+    """Test anotations with duration of 0 s."""
+    # Crop and resample to avoid failing tests due to rounding in browser
+    # Resampling also significantly speeds up the tests
+    raw_orig = raw_orig.copy().crop(tmax=20.0).resample(100)
+    # Add first annotation to initialize the description "A"
+    onset = 2
+    duration = 1
+    description = "A"
+    first_time = raw_orig.first_time
+    raw_orig.annotations.append(onset + first_time, duration, description)
+    fig = raw_orig.plot(duration=raw_orig.duration)
+    fig.test_mode = True
+    # Activate annotation_mode
+    fig._fake_keypress("a")
+
+    # Select Annotation
+    fig._fake_click((2.5, 1.0), xform="data")
+    # Assert that annotation was selected
+    annot_dock = fig.mne.fig_annotation
+    assert annot_dock.start_bx.value() == 2
+    assert annot_dock.stop_bx.value() == 3
+
+    # Test by setting values with Spinboxes
+    # First, test zero duration annotation at recording start.
+    annot_dock.start_bx.setValue(0)
+    annot_dock.start_bx.editingFinished.emit()
+    annot_dock.stop_bx.setValue(0)
+    annot_dock.stop_bx.editingFinished.emit()
+    # Assert that annotation starts and ends at 0 and duration is 0
+    assert_allclose(raw_orig.annotations.onset[0], 0 + first_time, atol=1e-4)
+    assert_allclose(raw_orig.annotations.duration[0], 0, atol=1e-4)
+
+    # Now test zero duration annotation at arbitrary time.
+    sample_time = raw_orig.times[10]
+    annot_dock.stop_bx.setValue(sample_time)
+    annot_dock.stop_bx.editingFinished.emit()
+    annot_dock.start_bx.setValue(sample_time)
+    annot_dock.start_bx.editingFinished.emit()
+    # Assert that annotation starts and ends at selected time and duration is 0
+    assert_allclose(raw_orig.annotations.onset[0], sample_time + first_time, atol=1e-4)
+    assert_allclose(raw_orig.annotations.duration[0], 0, atol=1e-4)
+
+    # Finally, test zero duration annotation at recording end.
+    last_time = raw_orig.times[-1]
+    annot_dock.stop_bx.setValue(last_time)
+    annot_dock.stop_bx.editingFinished.emit()
+    annot_dock.start_bx.setValue(last_time)
+    annot_dock.start_bx.editingFinished.emit()
+    # Assert that annotation starts and ends at last sample and duration is 0
+    assert_allclose(raw_orig.annotations.onset[0], last_time + first_time, atol=1e-4)
+    assert_allclose(raw_orig.annotations.duration[0], 0, atol=1e-4)
+
+
+def test_annotations_recording_end(raw_orig, pg_backend):
+    """Test anotations at the end of recording."""
+    # Crop and resample to avoid failing tests due to rounding in browser
+    # Resampling also significantly speeds up the tests
+    raw_orig = raw_orig.copy().crop(tmax=20.0).resample(100)
+    # Add first annotation to initialize the description "A"
+    onset = 2
+    duration = 1
+    description = "A"
+    first_time = raw_orig.first_time
+    raw_orig.annotations.append(onset + first_time, duration, description)
+    n_anns = len(raw_orig.annotations)
+    fig = raw_orig.plot(duration=raw_orig.duration)
+    fig.test_mode = True
+    # Activate annotation_mode
+    fig._fake_keypress("a")
+
+    # Draw additional annotation that extends to the end of the current view
+    fig._fake_click(
+        (0.0, 1.0),
+        add_points=[(1.0, 1.0)],
+        xform="ax",
+        button=1,
+        kind="drag",
+    )
+    # Assert number of annotations did not change
+    assert len(raw_orig.annotations) == n_anns
+    new_annot_end = raw_orig.annotations.onset[0] + raw_orig.annotations.duration[0]
+    # Assert that the annotation end extends 1 sample above the recording
+    assert_allclose(
+        new_annot_end,
+        raw_orig.times[-1] + first_time + 1 / raw_orig.info["sfreq"],
+        atol=1e-4,
+    )
+
+
 def test_annotations_interactions(raw_orig, pg_backend):
     """Test interactions specific to pyqtgraph-backend."""
     # Add test-annotations
@@ -97,7 +187,7 @@ def test_annotations_interactions(raw_orig, pg_backend):
     annot_dock.start_bx.setValue(6)
     annot_dock.start_bx.editingFinished.emit()
     assert fig.msg_box.isVisible()
-    assert fig.msg_box.informativeText() == "Start can't be bigger or equal to Stop!"
+    assert fig.msg_box.informativeText() == "Start can't be bigger than Stop!"
     fig.msg_box.close()
 
     # Test that dragging annotation onto the tail of another works
