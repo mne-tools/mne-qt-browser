@@ -2228,86 +2228,88 @@ class SettingsDialog(_BaseDialog):
                     )
 
 
-class HelpDialog(_BaseDialog):
-    """Shows all keyboard-shortcuts."""
+# Replaced this class with a function declared in MNEQtBrowser
 
-    def __init__(self, main, **kwargs):
-        super().__init__(main, title="Help", **kwargs)
+# class HelpDialog(_BaseDialog):
+#     """Shows all keyboard-shortcuts."""
 
-        # Show all keyboard-shortcuts in a Scroll-Area
-        layout = QVBoxLayout()
-        keyboard_label = QLabel("Keyboard Shortcuts")
-        keyboard_label.setFont(_q_font(16, bold=True))
-        layout.addWidget(keyboard_label)
+#     def __init__(self, main, **kwargs):
+#         super().__init__(main, title="Help", **kwargs)
 
-        scroll_area = QScrollArea()
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll_area.setSizePolicy(
-            QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding
-        )
-        scroll_widget = QWidget()
-        form_layout = QFormLayout()
-        for key in main.mne.keyboard_shortcuts:
-            key_dict = main.mne.keyboard_shortcuts[key]
-            if "description" in key_dict:
-                if "alias" in key_dict:
-                    key = key_dict["alias"]
-                for idx, key_des in enumerate(key_dict["description"]):
-                    key_name = key
-                    if "modifier" in key_dict:
-                        mod = key_dict["modifier"][idx]
-                        if mod is not None:
-                            key_name = mod + " + " + key_name
-                    form_layout.addRow(key_name, QLabel(key_des))
-        scroll_widget.setLayout(form_layout)
-        scroll_area.setWidget(scroll_widget)
-        layout.addWidget(scroll_area)
+#         # Show all keyboard-shortcuts in a Scroll-Area
+#         layout = QVBoxLayout()
+#         keyboard_label = QLabel("Keyboard Shortcuts")
+#         keyboard_label.setFont(_q_font(16, bold=True))
+#         layout.addWidget(keyboard_label)
 
-        # Additional help for mouse interaction
-        inst = self.mne.instance_type
-        is_raw = inst == "raw"
-        is_epo = inst == "epochs"
-        is_ica = inst == "ica"
-        ch_cmp = "component" if is_ica else "channel"
-        ch_epo = "epoch" if is_epo else "channel"
-        ica_bad = "Mark/unmark component for exclusion"
-        lclick_data = ica_bad if is_ica else f"Mark/unmark bad {ch_epo}"
-        lclick_name = ica_bad if is_ica else "Mark/unmark bad channel"
-        ldrag = "add annotation (in annotation mode)" if is_raw else None
-        rclick_name = dict(
-            ica="Show diagnostics for component",
-            epochs="Show imageplot for channel",
-            raw="Show channel location",
-        )[inst]
-        mouse_help = [
-            (f"Left-click {ch_cmp} name", lclick_name),
-            (f"Left-click {ch_cmp} data", lclick_data),
-            ("Left-click-and-drag on plot", ldrag),
-            ("Left-click on plot background", "Place vertical guide"),
-            ("Right-click on plot background", "Clear vertical guide"),
-            ("Right-click on channel name", rclick_name),
-        ]
+#         scroll_area = QScrollArea()
+#         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+#         scroll_area.setSizePolicy(
+#             QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding
+#         )
+#         scroll_widget = QWidget()
+#         form_layout = QFormLayout()
+#         for key in main.mne.keyboard_shortcuts:
+#             key_dict = main.mne.keyboard_shortcuts[key]
+#             if "description" in key_dict:
+#                 if "alias" in key_dict:
+#                     key = key_dict["alias"]
+#                 for idx, key_des in enumerate(key_dict["description"]):
+#                     key_name = key
+#                     if "modifier" in key_dict:
+#                         mod = key_dict["modifier"][idx]
+#                         if mod is not None:
+#                             key_name = mod + " + " + key_name
+#                     form_layout.addRow(key_name, QLabel(key_des))
+#         scroll_widget.setLayout(form_layout)
+#         scroll_area.setWidget(scroll_widget)
+#         layout.addWidget(scroll_area)
 
-        mouse_label = QLabel("Mouse Interaction")
-        mouse_label.setFont(_q_font(16, bold=True))
-        layout.addWidget(mouse_label)
-        mouse_widget = QWidget()
-        mouse_layout = QFormLayout()
-        for interaction, description in mouse_help:
-            if description is not None:
-                mouse_layout.addRow(f"{interaction}:", QLabel(description))
-        mouse_widget.setLayout(mouse_layout)
-        layout.addWidget(mouse_widget)
+#         # Additional help for mouse interaction
+#         inst = self.mne.instance_type
+#         is_raw = inst == "raw"
+#         is_epo = inst == "epochs"
+#         is_ica = inst == "ica"
+#         ch_cmp = "component" if is_ica else "channel"
+#         ch_epo = "epoch" if is_epo else "channel"
+#         ica_bad = "Mark/unmark component for exclusion"
+#         lclick_data = ica_bad if is_ica else f"Mark/unmark bad {ch_epo}"
+#         lclick_name = ica_bad if is_ica else "Mark/unmark bad channel"
+#         ldrag = "add annotation (in annotation mode)" if is_raw else None
+#         rclick_name = dict(
+#             ica="Show diagnostics for component",
+#             epochs="Show imageplot for channel",
+#             raw="Show channel location",
+#         )[inst]
+#         mouse_help = [
+#             (f"Left-click {ch_cmp} name", lclick_name),
+#             (f"Left-click {ch_cmp} data", lclick_data),
+#             ("Left-click-and-drag on plot", ldrag),
+#             ("Left-click on plot background", "Place vertical guide"),
+#             ("Right-click on plot background", "Clear vertical guide"),
+#             ("Right-click on channel name", rclick_name),
+#         ]
 
-        self.setLayout(layout)
-        self.show()
+#         mouse_label = QLabel("Mouse Interaction")
+#         mouse_label.setFont(_q_font(16, bold=True))
+#         layout.addWidget(mouse_label)
+#         mouse_widget = QWidget()
+#         mouse_layout = QFormLayout()
+#         for interaction, description in mouse_help:
+#             if description is not None:
+#                 mouse_layout.addRow(f"{interaction}:", QLabel(description))
+#         mouse_widget.setLayout(mouse_layout)
+#         layout.addWidget(mouse_widget)
 
-        # Set minimum width to avoid horizontal scrolling
-        scroll_area.setMinimumWidth(
-            scroll_widget.minimumSizeHint().width()
-            + scroll_area.verticalScrollBar().width()
-        )
-        self.update()
+#         self.setLayout(layout)
+#         self.show()
+
+#         # Set minimum width to avoid horizontal scrolling
+#         scroll_area.setMinimumWidth(
+#             scroll_widget.minimumSizeHint().width()
+#             + scroll_area.verticalScrollBar().width()
+#         )
+#         self.update()
 
 
 class ProjDialog(_BaseDialog):
@@ -4017,10 +4019,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         asettings.triggered.connect(self._toggle_settings_fig)
         self.mne.toolbar.addAction(asettings)
 
-        ahelp = QAction(self._qicon("help"), "Help", parent=self)
-        ahelp.triggered.connect(self._toggle_help_fig)
-        self.mne.toolbar.addAction(ahelp)
-
         # Set Start-Range (after all necessary elements are initialized)
         self.mne.plt.setXRange(
             self.mne.t_start, self.mne.t_start + self.mne.duration, padding=0
@@ -4233,6 +4231,95 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 del self.mne.keyboard_shortcuts["t"]
             # disable histogram of epoch PTP amplitude
             del self.mne.keyboard_shortcuts["h"]
+
+        help_menu = QMenu("&Help", self)
+        keyboard_action = help_menu.addAction("Keyboard Shortcuts")
+        keyboard_action.triggered.connect(self._show_keyboard_shortcuts)
+        mouse_action = help_menu.addAction("Mouse Shortcuts")
+        mouse_action.triggered.connect(self._show_mouse_shortcuts)
+
+        help_btn = QToolButton()
+        help_btn.setIcon(self._qicon("help"))
+        help_btn.setText("Help")
+        help_btn.setMenu(self._create_help_menu())
+        help_btn.setPopupMode(QToolButton.InstantPopup)
+        self.mne.toolbar.addWidget(help_btn)
+
+    def _show_keyboard_shortcuts(self):
+        """Display keyboard shortcuts in a popup."""
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Keyboard Shortcuts")
+
+        text = "<b>Keyboard Controls:</b><ul>"
+        for key, spec in self.mne.keyboard_shortcuts.items():
+            if "description" in spec:
+                text += f"<li>{', '.join(spec['description'])}</li>"
+        text += "</ul>"
+
+        msg.setText(text)
+        msg.exec_()
+
+    def _show_mouse_shortcuts(self):
+        """Display mouse shortcuts in a popup."""
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Mouse Shortcuts")
+
+        text = """<b>Mouse Controls:</b>
+        <ul>
+        <li>Left-click channel name: Mark/unmark bad channel</li>
+        <li>Left-click data: Mark/unmark bad segment</li>
+        <li>Right-click plot: Context menu</li>
+        <li>Drag: Create annotation (annotation mode)</li>
+        <li>Scroll: Navigate time/channels</li>
+        </ul>"""
+
+        msg.setText(text)
+        msg.exec_()
+
+    def _create_help_menu(self):
+        """Create help menu dynamically from HelpDialog content."""
+        help_menu = QMenu("&Help", self)
+
+        # Ensure we correctly access `keyboard_shortcuts`
+        keyboard_shortcuts = getattr(self.mne, "keyboard_shortcuts", None)
+
+        if keyboard_shortcuts:
+            keyboard_menu = QMenu("Keyboard Shortcuts", self)
+
+            for key, spec in keyboard_shortcuts.items():
+                key_name = spec.get("alias", key)
+                descriptions = spec.get("description", [])
+                modifiers = spec.get("modifier", [None] * len(descriptions))
+
+                for mod, desc in zip(modifiers, descriptions):
+                    key_combination = f"{mod} + {key_name}" if mod else key_name
+                    shortcut_text = (
+                        f"{desc}\t{key_combination}"  # Align key to the right
+                    )
+                    action = QAction(shortcut_text, self)
+                    keyboard_menu.addAction(action)
+
+            help_menu.addMenu(keyboard_menu)
+
+        # Mouse Controls
+        mouse_menu = QMenu("Mouse Controls", self)
+        mouse_interactions = [
+            ("Left-click component name", "Mark/unmark bad channel"),
+            ("Left-click component data", "Mark/unmark bad segment"),
+            ("Left-click-and-drag on plot", "Add annotation (annotation mode)"),
+            ("Right-click plot", "Context menu"),
+            ("Scroll", "Navigate time/channels"),
+            ("Shift+Click", "Add/remove channels from annotations"),
+        ]
+
+        for action_text, description in mouse_interactions:
+            shortcut_text = f"{description}\t{action_text}"
+            action = QAction(shortcut_text, self)
+            mouse_menu.addAction(action)
+
+        help_menu.addMenu(mouse_menu)
+
+        return help_menu
 
     def _hidpi_mkPen(self, *args, **kwargs):
         kwargs["width"] = self._pixel_ratio * kwargs.get("width", 1.0)
