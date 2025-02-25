@@ -2227,6 +2227,7 @@ class SettingsDialog(_BaseDialog):
                         _calc_chan_type_to_physical(self, ch_type, units=current_units)
                     )
 
+
 # Replaced this class with a function declared in MNEQtBrowser
 
 # class HelpDialog(_BaseDialog):
@@ -4231,11 +4232,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # disable histogram of epoch PTP amplitude
             del self.mne.keyboard_shortcuts["h"]
 
-
         help_menu = QMenu("&Help", self)
         keyboard_action = help_menu.addAction("Keyboard Shortcuts")
         keyboard_action.triggered.connect(self._show_keyboard_shortcuts)
-        mouse_action = help_menu.addAction("Mouse Shortcuts") 
+        mouse_action = help_menu.addAction("Mouse Shortcuts")
         mouse_action.triggered.connect(self._show_mouse_shortcuts)
 
         help_btn = QToolButton()
@@ -4245,20 +4245,17 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         help_btn.setPopupMode(QToolButton.InstantPopup)
         self.mne.toolbar.addWidget(help_btn)
 
-        
-
-
     def _show_keyboard_shortcuts(self):
         """Display keyboard shortcuts in a popup."""
         msg = QMessageBox(self)
         msg.setWindowTitle("Keyboard Shortcuts")
-        
+
         text = "<b>Keyboard Controls:</b><ul>"
         for key, spec in self.mne.keyboard_shortcuts.items():
-            if 'description' in spec:
+            if "description" in spec:
                 text += f"<li>{', '.join(spec['description'])}</li>"
         text += "</ul>"
-        
+
         msg.setText(text)
         msg.exec_()
 
@@ -4266,7 +4263,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         """Display mouse shortcuts in a popup."""
         msg = QMessageBox(self)
         msg.setWindowTitle("Mouse Shortcuts")
-        
+
         text = """<b>Mouse Controls:</b>
         <ul>
         <li>Left-click channel name: Mark/unmark bad channel</li>
@@ -4275,28 +4272,30 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         <li>Drag: Create annotation (annotation mode)</li>
         <li>Scroll: Navigate time/channels</li>
         </ul>"""
-        
+
         msg.setText(text)
         msg.exec_()
 
     def _create_help_menu(self):
         """Create help menu dynamically from HelpDialog content."""
         help_menu = QMenu("&Help", self)
-        
+
         # Ensure we correctly access `keyboard_shortcuts`
         keyboard_shortcuts = getattr(self.mne, "keyboard_shortcuts", None)
-        
+
         if keyboard_shortcuts:
             keyboard_menu = QMenu("Keyboard Shortcuts", self)
 
             for key, spec in keyboard_shortcuts.items():
-                key_name = spec.get('alias', key)
-                descriptions = spec.get('description', [])
-                modifiers = spec.get('modifier', [None] * len(descriptions))
+                key_name = spec.get("alias", key)
+                descriptions = spec.get("description", [])
+                modifiers = spec.get("modifier", [None] * len(descriptions))
 
                 for mod, desc in zip(modifiers, descriptions):
                     key_combination = f"{mod} + {key_name}" if mod else key_name
-                    shortcut_text = f"{desc}\t{key_combination}"  # Align key to the right
+                    shortcut_text = (
+                        f"{desc}\t{key_combination}"  # Align key to the right
+                    )
                     action = QAction(shortcut_text, self)
                     keyboard_menu.addAction(action)
 
@@ -4321,7 +4320,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         help_menu.addMenu(mouse_menu)
 
         return help_menu
-
 
     def _hidpi_mkPen(self, *args, **kwargs):
         kwargs["width"] = self._pixel_ratio * kwargs.get("width", 1.0)
