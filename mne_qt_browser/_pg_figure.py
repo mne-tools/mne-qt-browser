@@ -2227,6 +2227,7 @@ class SettingsDialog(_BaseDialog):
                         _calc_chan_type_to_physical(self, ch_type, units=current_units)
                     )
 
+
 class ProjDialog(_BaseDialog):
     """A dialog to toggle projections."""
 
@@ -5136,13 +5137,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         else:
             self.mne.fig_settings.close()
             self.mne.fig_settings = None
-
-    def _toggle_help_fig(self):
-        if self.mne.fig_help is None:
-            HelpDialog(self, name="fig_help")
-        else:
-            self.mne.fig_help.close()
-            self.mne.fig_help = None
 
     def _set_butterfly(self, butterfly):
         self.mne.butterfly = butterfly
