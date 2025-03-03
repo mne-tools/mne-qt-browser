@@ -2227,6 +2227,7 @@ class SettingsDialog(_BaseDialog):
                         _calc_chan_type_to_physical(self, ch_type, units=current_units)
                     )
 
+
 class ProjDialog(_BaseDialog):
     """A dialog to toggle projections."""
 
