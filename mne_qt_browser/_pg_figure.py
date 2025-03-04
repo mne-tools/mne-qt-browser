@@ -2309,6 +2309,7 @@ class HelpDialog(_BaseDialog):
         )
         self.update()
 
+
 class ProjDialog(_BaseDialog):
     """A dialog to toggle projections."""
 
@@ -5218,7 +5219,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         else:
             self.mne.fig_settings.close()
             self.mne.fig_settings = None
-    
+
     def _toggle_help_fig(self):
         if self.mne.fig_help is None:
             HelpDialog(self, name="fig_help")
