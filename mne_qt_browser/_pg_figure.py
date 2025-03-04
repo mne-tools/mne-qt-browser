@@ -2228,6 +2228,87 @@ class SettingsDialog(_BaseDialog):
                     )
 
 
+class HelpDialog(_BaseDialog):
+    """Shows all keyboard-shortcuts."""
+
+    def __init__(self, main, **kwargs):
+        super().__init__(main, title="Help", **kwargs)
+
+        # Show all keyboard-shortcuts in a Scroll-Area
+        layout = QVBoxLayout()
+        keyboard_label = QLabel("Keyboard Shortcuts")
+        keyboard_label.setFont(_q_font(16, bold=True))
+        layout.addWidget(keyboard_label)
+
+        scroll_area = QScrollArea()
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll_area.setSizePolicy(
+            QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding
+        )
+        scroll_widget = QWidget()
+        form_layout = QFormLayout()
+        for key in main.mne.keyboard_shortcuts:
+            key_dict = main.mne.keyboard_shortcuts[key]
+            if "description" in key_dict:
+                if "alias" in key_dict:
+                    key = key_dict["alias"]
+                for idx, key_des in enumerate(key_dict["description"]):
+                    key_name = key
+                    if "modifier" in key_dict:
+                        mod = key_dict["modifier"][idx]
+                        if mod is not None:
+                            key_name = mod + " + " + key_name
+                    form_layout.addRow(key_name, QLabel(key_des))
+        scroll_widget.setLayout(form_layout)
+        scroll_area.setWidget(scroll_widget)
+        layout.addWidget(scroll_area)
+
+        # Additional help for mouse interaction
+        inst = self.mne.instance_type
+        is_raw = inst == "raw"
+        is_epo = inst == "epochs"
+        is_ica = inst == "ica"
+        ch_cmp = "component" if is_ica else "channel"
+        ch_epo = "epoch" if is_epo else "channel"
+        ica_bad = "Mark/unmark component for exclusion"
+        lclick_data = ica_bad if is_ica else f"Mark/unmark bad {ch_epo}"
+        lclick_name = ica_bad if is_ica else "Mark/unmark bad channel"
+        ldrag = "add annotation (in annotation mode)" if is_raw else None
+        rclick_name = dict(
+            ica="Show diagnostics for component",
+            epochs="Show imageplot for channel",
+            raw="Show channel location",
+        )[inst]
+        mouse_help = [
+            (f"Left-click {ch_cmp} name", lclick_name),
+            (f"Left-click {ch_cmp} data", lclick_data),
+            ("Left-click-and-drag on plot", ldrag),
+            ("Left-click on plot background", "Place vertical guide"),
+            ("Right-click on plot background", "Clear vertical guide"),
+            ("Right-click on channel name", rclick_name),
+        ]
+
+        mouse_label = QLabel("Mouse Interaction")
+        mouse_label.setFont(_q_font(16, bold=True))
+        layout.addWidget(mouse_label)
+        mouse_widget = QWidget()
+        mouse_layout = QFormLayout()
+        for interaction, description in mouse_help:
+            if description is not None:
+                mouse_layout.addRow(f"{interaction}:", QLabel(description))
+        mouse_widget.setLayout(mouse_layout)
+        layout.addWidget(mouse_widget)
+
+        self.setLayout(layout)
+        self.show()
+
+        # Set minimum width to avoid horizontal scrolling
+        scroll_area.setMinimumWidth(
+            scroll_widget.minimumSizeHint().width()
+            + scroll_area.verticalScrollBar().width()
+        )
+        self.update()
+
 class ProjDialog(_BaseDialog):
     """A dialog to toggle projections."""
 
@@ -5137,6 +5218,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         else:
             self.mne.fig_settings.close()
             self.mne.fig_settings = None
+    
+    def _toggle_help_fig(self):
+        if self.mne.fig_help is None:
+            HelpDialog(self, name="fig_help")
+        else:
+            self.mne.fig_help.close()
+            self.mne.fig_help = None
 
     def _set_butterfly(self, butterfly):
         self.mne.butterfly = butterfly
