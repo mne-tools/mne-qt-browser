@@ -4236,7 +4236,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def create_menus(self):
         """Creates and returns the application's menu bar with properly aligned shortcuts."""
-
         if not self.menuBar():
             self.setMenuBar(QMenuBar(self))
         menu_bar = self.menuBar()
@@ -4272,7 +4271,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 ("Toggle Events visibility     ", "E"),
                 ("Toggle Projection Figure / all projections     ", "J"),
             ],
-
             view_menu: [
                 ("Add/remove channels     ", "Shift + Click"),
                 ("Decrease duration (¼ page)     ", "Home"),
@@ -4291,13 +4289,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 ("Toggle Crosshair     ", "X"),
                 ("Toggle Zen Mode     ", "Z"),
             ],
-
             help_menu: [
                 ("Show Help     ", "?"),
                 ("Toggle Fullscreen     ", "F11"),
                 ("Close     ", "Escape"),
             ],
-
             scroll_menu: [
                 ("Scroll left (¼ page/full page)     ", "← / →"),
                 ("Scroll up (full page)     ", "↑"),

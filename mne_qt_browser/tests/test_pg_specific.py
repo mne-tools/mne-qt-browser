@@ -486,6 +486,7 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
     fig.resize(orig_window_size.width() * 2, orig_window_size.height() * 2)
     assert ch_sens_spinbox.value() != orig_sens
 
+
 def test_pg_toolbar_time_plus_minus(raw_orig, pg_backend):
     """Test time controls."""
     fig = raw_orig.plot()
@@ -650,6 +651,7 @@ def test_pg_toolbar_actions(raw_orig, pg_backend):
     assert pg_backend._get_n_figs() == 3
     fig._fake_click_on_toolbar_action("Settings", wait_after=100)
     assert pg_backend._get_n_figs() == 2
+
 
 # LAB values taken from colorspacious on 2024/06/10
 @pytest.mark.parametrize(
