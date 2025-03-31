@@ -22,6 +22,8 @@ from os.path import getsize
 from pathlib import Path
 
 import numpy as np
+from PyQt5.QtTest import QTest
+from PyQt5.QtWidgets import QMenuBar
 
 try:
     from qtpy.QtCore import Qt
@@ -4230,97 +4232,83 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # disable histogram of epoch PTP amplitude
             del self.mne.keyboard_shortcuts["h"]
 
+        self.create_menus()
 
-        help_menu = QMenu("&Help", self)
-        keyboard_action = help_menu.addAction("Keyboard Shortcuts")
-        keyboard_action.triggered.connect(self._show_keyboard_shortcuts)
-        mouse_action = help_menu.addAction("Mouse Shortcuts") 
-        mouse_action.triggered.connect(self._show_mouse_shortcuts)
+    def create_menus(self):
+        """Creates and returns the application's menu bar with properly aligned shortcuts."""
 
-        help_btn = QToolButton()
-        help_btn.setIcon(self._qicon("help"))
-        help_btn.setText("Help")
-        help_btn.setMenu(self._create_help_menu())
-        help_btn.setPopupMode(QToolButton.InstantPopup)
-        self.mne.toolbar.addWidget(help_btn)
+        if not self.menuBar():
+            self.setMenuBar(QMenuBar(self))
+        menu_bar = self.menuBar()
+        mne_python = menu_bar.addMenu("MNE-Python")
+        view_menu = menu_bar.addMenu("View")
+        help_menu = menu_bar.addMenu("Help")
+        scroll_menu = view_menu.addMenu("Scroll")
 
-        
+        def add_menu_action(menu, description, shortcut):
+            widget = QWidget()
+            layout = QHBoxLayout(widget)
+            layout.setContentsMargins(10, 2, 10, 2)
 
+            desc_label = QLabel(description)
+            shortcut_label = QLabel(shortcut)
 
-    def _show_keyboard_shortcuts(self):
-        """Display keyboard shortcuts in a popup."""
-        msg = QMessageBox(self)
-        msg.setWindowTitle("Keyboard Shortcuts")
-        
-        text = "<b>Keyboard Controls:</b><ul>"
-        for key, spec in self.mne.keyboard_shortcuts.items():
-            if 'description' in spec:
-                text += f"<li>{', '.join(spec['description'])}</li>"
-        text += "</ul>"
-        
-        msg.setText(text)
-        msg.exec_()
+            layout.addWidget(desc_label)
+            layout.addStretch()
+            layout.addWidget(shortcut_label)
 
-    def _show_mouse_shortcuts(self):
-        """Display mouse shortcuts in a popup."""
-        msg = QMessageBox(self)
-        msg.setWindowTitle("Mouse Shortcuts")
-        
-        text = """<b>Mouse Controls:</b>
-        <ul>
-        <li>Left-click channel name: Mark/unmark bad channel</li>
-        <li>Left-click data: Mark/unmark bad segment</li>
-        <li>Right-click plot: Context menu</li>
-        <li>Drag: Create annotation (annotation mode)</li>
-        <li>Scroll: Navigate time/channels</li>
-        </ul>"""
-        
-        msg.setText(text)
-        msg.exec_()
+            action = QWidgetAction(self)
+            action.setDefaultWidget(widget)
+            menu.addAction(action)
 
-    def _create_help_menu(self):
-        """Create help menu dynamically from HelpDialog content."""
-        help_menu = QMenu("&Help", self)
-        
-        # Ensure we correctly access `keyboard_shortcuts`
-        keyboard_shortcuts = getattr(self.mne, "keyboard_shortcuts", None)
-        
-        if keyboard_shortcuts:
-            keyboard_menu = QMenu("Keyboard Shortcuts", self)
+        shortcut_data = {
+            mne_python: [
+                ("Create annotation     ", "Click + Drag"),
+                ("Mark/unmark bad channel     ", "Left-click channel"),
+                ("Mark/unmark bad segment     ", "Left-click data"),
+                ("Toggle Annotation Tool / Visibility     ", "A"),
+                ("Toggle Butterfly     ", "B"),
+                ("Toggle DC Correction     ", "D"),
+                ("Toggle Events visibility     ", "E"),
+                ("Toggle Projection Figure / all projections     ", "J"),
+            ],
 
-            for key, spec in keyboard_shortcuts.items():
-                key_name = spec.get('alias', key)
-                descriptions = spec.get('description', [])
-                modifiers = spec.get('modifier', [None] * len(descriptions))
+            view_menu: [
+                ("Add/remove channels     ", "Shift + Click"),
+                ("Decrease duration (¼ page)     ", "Home"),
+                ("Decrease Scale     ", "-"),
+                ("Decrease shown channels (1/10)     ", "Page Up"),
+                ("Increase duration (¼ page)     ", "End"),
+                ("Increase Scale     ", "+ / ="),
+                ("Increase shown channels (1/10)     ", "Page Down"),
+                ("Navigate time/channels     ", "Scroll"),
+                ("Open context menu     ", "Right-click plot"),
+                ("Toggle Antialiasing     ", "L"),
+                ("Toggle Overview Bar     ", "O"),
+                ("Toggle Time Format     ", "T"),
+                ("Toggle Scalebars     ", "S"),
+                ("Toggle Whitening     ", "W"),
+                ("Toggle Crosshair     ", "X"),
+                ("Toggle Zen Mode     ", "Z"),
+            ],
 
-                for mod, desc in zip(modifiers, descriptions):
-                    key_combination = f"{mod} + {key_name}" if mod else key_name
-                    shortcut_text = f"{desc}\t{key_combination}"  # Align key to the right
-                    action = QAction(shortcut_text, self)
-                    keyboard_menu.addAction(action)
+            help_menu: [
+                ("Show Help     ", "?"),
+                ("Toggle Fullscreen     ", "F11"),
+                ("Close     ", "Escape"),
+            ],
 
-            help_menu.addMenu(keyboard_menu)
+            scroll_menu: [
+                ("Scroll left (¼ page/full page)     ", "← / →"),
+                ("Scroll up (full page)     ", "↑"),
+                ("Scroll down (full page)     ", "↓"),
+            ],
+        }
 
-        # Mouse Controls
-        mouse_menu = QMenu("Mouse Controls", self)
-        mouse_interactions = [
-            ("Left-click component name", "Mark/unmark bad channel"),
-            ("Left-click component data", "Mark/unmark bad segment"),
-            ("Left-click-and-drag on plot", "Add annotation (annotation mode)"),
-            ("Right-click plot", "Context menu"),
-            ("Scroll", "Navigate time/channels"),
-            ("Shift+Click", "Add/remove channels from annotations"),
-        ]
-
-        for action_text, description in mouse_interactions:
-            shortcut_text = f"{description}\t{action_text}"
-            action = QAction(shortcut_text, self)
-            mouse_menu.addAction(action)
-
-        help_menu.addMenu(mouse_menu)
-
-        return help_menu
-
+        for menu, items in shortcut_data.items():
+            for description, shortcut in items:
+                add_menu_action(menu, description, shortcut)
+        return menu_bar
 
     def _hidpi_mkPen(self, *args, **kwargs):
         kwargs["width"] = self._pixel_ratio * kwargs.get("width", 1.0)
@@ -4336,7 +4324,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         range)
         """
         self.mne.scalebars.clear()
-        # To keep order (np.unique sorts)
         ordered_types = self.mne.ch_types[self.mne.ch_order]
         unique_type_idxs = np.unique(ordered_types, return_index=True)[1]
         ch_types_ordered = [ordered_types[idx] for idx in sorted(unique_type_idxs)]
