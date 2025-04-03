@@ -4704,6 +4704,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             times = self.mne.times
             data = self.mne.data
             n_ch = data.shape[0]
+            if data.shape[1] % ds != 0:
+                data = np.pad(
+                    data,
+                    ((0, 0), (0, data.shape[1] - (data.shape[1] // ds) * ds)),
+                    mode="edge",
+                )
 
             if self.mne.ds_method == "subsample":
                 times = times[::ds]
@@ -4837,8 +4843,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 )
                 return False
 
-    def _process_data(self, data, start, stop, picks, signals=None):
-        data = super()._process_data(data, start, stop, picks, signals)
+    def _process_data(self, *args, **kwargs):
+        data = super()._process_data(*args, **kwargs)
 
         # Invert Data to be displayed from top on inverted Y-Axis
         data *= -1
