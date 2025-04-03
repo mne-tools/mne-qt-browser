@@ -2650,7 +2650,7 @@ class AnnotRegion(LinearRegionItem):
     removeRequested = Signal(object)
     removeSingleChannelAnnots = Signal(object)
     sigToggleVisibility = Signal(bool)
-    sigUpdateColor = Signal(str)
+    sigUpdateColor = Signal(str | tuple)
 
     def __init__(self, mne, description, values, weakmain, ch_names=None):
         super().__init__(
