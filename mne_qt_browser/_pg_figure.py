@@ -4704,12 +4704,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             times = self.mne.times
             data = self.mne.data
             n_ch = data.shape[0]
-            if data.shape[1] % ds != 0:
-                data = np.pad(
-                    data,
-                    ((0, 0), (0, data.shape[1] - (data.shape[1] // ds) * ds)),
-                    mode="edge",
-                )
 
             if self.mne.ds_method == "subsample":
                 times = times[::ds]
