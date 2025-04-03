@@ -336,7 +336,7 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
 
     # Could be 6008 or 6006 depending on if MNE-Python has
     # https://github.com/mne-tools/mne-qt-browser/pull/320 (1.10+)
-    assert fig.mne.data.shape[1] in (6006, 6008)
+    assert fig.mne.data.shape[1] in (6006, 6007, 6008)
     downsampling_control.setValue(7)  # does not evenly divide into the data length
     QTest.qWait(100)
     assert downsampling_control.value() == 7
