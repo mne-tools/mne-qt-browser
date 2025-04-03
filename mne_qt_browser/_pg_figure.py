@@ -2650,7 +2650,7 @@ class AnnotRegion(LinearRegionItem):
     removeRequested = Signal(object)
     removeSingleChannelAnnots = Signal(object)
     sigToggleVisibility = Signal(bool)
-    sigUpdateColor = Signal(str)
+    sigUpdateColor = Signal(object)  # can be str or tuple
 
     def __init__(self, mne, description, values, weakmain, ch_names=None):
         super().__init__(
@@ -4837,8 +4837,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 )
                 return False
 
-    def _process_data(self, data, start, stop, picks, signals=None):
-        data = super()._process_data(data, start, stop, picks, signals)
+    def _process_data(self, *args, **kwargs):
+        data = super()._process_data(*args, **kwargs)
 
         # Invert Data to be displayed from top on inverted Y-Axis
         data *= -1
