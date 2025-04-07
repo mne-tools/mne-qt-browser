@@ -2589,7 +2589,10 @@ class SingleChannelAnnot(FillBetweenItem):
         self.ch_name = ch_name
 
         ypos = np.where(self.mne.ch_names[self.mne.ch_order] == self.ch_name)[0] + 1
-        self.ypos = ypos + np.array([-0.5, 0.5])
+        if ypos is not None and len(ypos) > 0:
+            self.ypos = ypos + np.array([-0.5, 0.5])
+        else:
+            self.ypos = np.array([])  # Prevent broadcasting error
 
         # self.lower = PlotCurveItem()
         # self.upper = PlotCurveItem()
