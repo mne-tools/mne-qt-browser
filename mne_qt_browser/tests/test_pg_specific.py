@@ -334,9 +334,15 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
     assert downsampling_control.value() == 2
     assert downsampling_control.value() == fig.mne.downsampling
 
-    downsampling_control.setValue(3)
+    # Could be 6008 or 6006 depending on if MNE-Python has
+    # https://github.com/mne-tools/mne-qt-browser/pull/320 (1.10+)
+    assert fig.mne.data.shape[1] in (6006, 6007, 6008)
+    assert (
+        fig.mne.data.shape[1] % 11 != 0
+    )  # does not evenly divide into the data length
+    downsampling_control.setValue(11)
     QTest.qWait(100)
-    assert downsampling_control.value() == 3
+    assert downsampling_control.value() == 11
     assert downsampling_control.value() == fig.mne.downsampling
 
     QTest.qWait(100)
@@ -347,16 +353,22 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
     QTest.qWait(100)
     assert downsampling_method_control.currentText() == "mean"
     assert fig.mne.ds_method == "mean"
+    fig._redraw(update_data=True)  # make sure it works
+    assert fig.mne.data.shape[-1] == len(fig.mne.times)
 
     downsampling_method_control.setCurrentText("subsample")
     QTest.qWait(100)
     assert downsampling_method_control.currentText() == "subsample"
     assert fig.mne.ds_method == "subsample"
+    fig._redraw(update_data=True)  # make sure it works
+    assert fig.mne.data.shape[-1] == len(fig.mne.times)
 
     downsampling_method_control.setCurrentText("peak")
     QTest.qWait(100)
     assert downsampling_method_control.currentText() == "peak"
     assert fig.mne.ds_method == "peak"
+    fig._redraw(update_data=True)  # make sure it works
+    assert fig.mne.data.shape[-1] == len(fig.mne.times)
 
     downsampling_method_control.setCurrentText("invalid_method_name")
     QTest.qWait(100)
