@@ -220,7 +220,8 @@ def test_ch_specific_annot(raw_orig, pg_backend):
     annots = Annotations([annot_onset], [annot_dur], "some_chs", ch_names=[ch_names])
     raw_orig.set_annotations(annots)
 
-    fig = raw_orig.plot()
+    ch_names.pop(-1)  # don't plot the last one!
+    fig = raw_orig.plot(picks=ch_names)  # omit the first one
     fig_ch_names = list(fig.mne.ch_names[fig.mne.ch_order])
     fig.test_mode = True
     annot_dock = fig.mne.fig_annotation
@@ -228,13 +229,14 @@ def test_ch_specific_annot(raw_orig, pg_backend):
     # one FillBetweenItem for each channel in a channel specific annot
     annot = fig.mne.regions[0]
     assert (
-        len(annot.single_channel_annots) == 4
+        len(annot.single_channel_annots) == 4  # we still make them even for invisible
     )  # 4 channels in annots[0].single_channel_annots
 
     # check that a channel specific annot is plotted at the correct ypos
-    single_channel_annot = annot.single_channel_annots["MEG 0423"]
+    which_name = raw_orig.annotations.ch_names[0][-2]
+    single_channel_annot = annot.single_channel_annots[which_name]
     # the +1 is needed because ypos indexing of the traces starts at 1, not 0
-    want_index = fig_ch_names.index(raw_orig.annotations.ch_names[0][-1]) + 1
+    want_index = fig_ch_names.index(which_name) + 1
     got_index = np.mean(single_channel_annot.ypos).astype(int)
     assert got_index == want_index  # should be 28
 
