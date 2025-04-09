@@ -2588,18 +2588,27 @@ class SingleChannelAnnot(FillBetweenItem):
         self.annot = annot
         self.ch_name = ch_name
 
-        ypos = np.where(self.mne.ch_names[self.mne.ch_order] == self.ch_name)[0] + 1
-        self.ypos = ypos + np.array([-0.5, 0.5])
+        # We have a choice here: some channel-specific annotations will have
+        # channels that are not plotted (e.g., with raw.plot(..., order=[0, 1])).
+        # Here we choose to add them as invisible plot items so that if you for example
+        # remove all *visible* channels from the annot it won't suddenly become an
+        # all-channel annotation. It will instead disappear from the plot, but still
+        # live in raw.annotations. We could emit a warning, but it would probably
+        # become annoying. At some point we could add a warning
+        # *when you delete the last visible channel* to let people know that the
+        # annot still exists but can no longer be modified, or something similar.
+        # It would be good to have this be driven by an actual use case / experience.
+        idx = np.where(self.mne.ch_names[self.mne.ch_order] == self.ch_name)[0]
+        if len(idx) == 1:  # should be 1 or 0 (if channel not plotted at all)
+            self.ypos = idx + np.array([0.5, 1.5])
+        else:
+            self.ypos = np.full(2, np.nan)
 
-        # self.lower = PlotCurveItem()
-        # self.upper = PlotCurveItem()
         self.upper = PlotDataItem()
         self.lower = PlotDataItem()
 
         # init
         super().__init__(self.lower, self.upper)
-
-        # self.setCurves(self.lower, self.upper)
 
         self.update_plot_curves()
 

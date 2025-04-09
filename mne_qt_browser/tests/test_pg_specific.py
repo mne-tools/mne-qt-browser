@@ -220,7 +220,8 @@ def test_ch_specific_annot(raw_orig, pg_backend):
     annots = Annotations([annot_onset], [annot_dur], "some_chs", ch_names=[ch_names])
     raw_orig.set_annotations(annots)
 
-    fig = raw_orig.plot()
+    ch_names.pop(-1)  # don't plot the last one!
+    fig = raw_orig.plot(picks=ch_names)  # omit the first one
     fig_ch_names = list(fig.mne.ch_names[fig.mne.ch_order])
     fig.test_mode = True
     annot_dock = fig.mne.fig_annotation
@@ -228,13 +229,14 @@ def test_ch_specific_annot(raw_orig, pg_backend):
     # one FillBetweenItem for each channel in a channel specific annot
     annot = fig.mne.regions[0]
     assert (
-        len(annot.single_channel_annots) == 4
+        len(annot.single_channel_annots) == 4  # we still make them even for invisible
     )  # 4 channels in annots[0].single_channel_annots
 
     # check that a channel specific annot is plotted at the correct ypos
-    single_channel_annot = annot.single_channel_annots["MEG 0423"]
+    which_name = raw_orig.annotations.ch_names[0][-2]
+    single_channel_annot = annot.single_channel_annots[which_name]
     # the +1 is needed because ypos indexing of the traces starts at 1, not 0
-    want_index = fig_ch_names.index(raw_orig.annotations.ch_names[0][-1]) + 1
+    want_index = fig_ch_names.index(which_name) + 1
     got_index = np.mean(single_channel_annot.ypos).astype(int)
     assert got_index == want_index  # should be 28
 
@@ -336,13 +338,14 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
 
     # Could be 6008 or 6006 depending on if MNE-Python has
     # https://github.com/mne-tools/mne-qt-browser/pull/320 (1.10+)
-    assert fig.mne.data.shape[1] in (6006, 6007, 6008)
-    assert (
-        fig.mne.data.shape[1] % 11 != 0
-    )  # does not evenly divide into the data length
-    downsampling_control.setValue(11)
+    allowed = (6006, 6007, 6008)
+    ds = 17
+    assert fig.mne.data.shape[1] in allowed
+    # does not evenly divide into the data length
+    assert all(x % ds != 0 for x in allowed)
+    downsampling_control.setValue(ds)
     QTest.qWait(100)
-    assert downsampling_control.value() == 11
+    assert downsampling_control.value() == ds
     assert downsampling_control.value() == fig.mne.downsampling
 
     QTest.qWait(100)
