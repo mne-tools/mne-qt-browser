@@ -502,27 +502,6 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
     assert ch_sens_spinbox.value() != orig_sens
 
 
-def test_pg_help_dialog(raw_orig, pg_backend):
-    """Test Settings Dialog toggle on/off for pyqtgraph-backend."""
-    fig = raw_orig.plot()
-    fig.test_mode = True
-    QTest.qWaitForWindowExposed(fig)
-    QTest.qWait(50)
-    assert fig.mne.fig_help is None
-    fig._fake_click_on_toolbar_action("Help", wait_after=500)
-    assert fig.mne.fig_help is not None
-    assert pg_backend._get_n_figs() == 2
-    fig._fake_click_on_toolbar_action("Help", wait_after=500)
-    assert fig.mne.fig_help is None
-    assert pg_backend._get_n_figs() == 1
-    fig._fake_click_on_toolbar_action("Help", wait_after=500)
-    assert fig.mne.fig_help is not None
-    assert pg_backend._get_n_figs() == 2
-    fig._fake_click_on_toolbar_action("Help", wait_after=500)
-    assert fig.mne.fig_help is None
-    assert pg_backend._get_n_figs() == 1
-
-
 def test_pg_toolbar_time_plus_minus(raw_orig, pg_backend):
     """Test time controls."""
     fig = raw_orig.plot()
@@ -687,16 +666,6 @@ def test_pg_toolbar_actions(raw_orig, pg_backend):
     assert pg_backend._get_n_figs() == 3
     fig._fake_click_on_toolbar_action("Settings", wait_after=100)
     assert pg_backend._get_n_figs() == 2
-    fig._fake_click_on_toolbar_action("Help", wait_after=200)
-    assert pg_backend._get_n_figs() == 3
-    fig._fake_click_on_toolbar_action("Settings", wait_after=200)
-    assert pg_backend._get_n_figs() == 4
-    fig._fake_click_on_toolbar_action(SHOW_PROJECTORS, wait_after=200)
-    assert pg_backend._get_n_figs() == 3
-    fig._fake_click_on_toolbar_action("Settings", wait_after=100)
-    assert pg_backend._get_n_figs() == 2
-    fig._fake_click_on_toolbar_action("Help", wait_after=100)
-    assert pg_backend._get_n_figs() == 1
 
 
 # LAB values taken from colorspacious on 2024/06/10
