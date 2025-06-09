@@ -23,6 +23,96 @@ TOGGLE_ANNOTATIONS = "Toggle annotations mode"
 SHOW_PROJECTORS = "Show projectors"
 
 
+def test_annotations_single_sample(raw_orig, pg_backend):
+    """Test anotations with duration of 0 s."""
+    # Crop and resample to avoid failing tests due to rounding in browser
+    # Resampling also significantly speeds up the tests
+    raw_orig = raw_orig.copy().crop(tmax=20.0).resample(100)
+    # Add first annotation to initialize the description "A"
+    onset = 2
+    duration = 1
+    description = "A"
+    first_time = raw_orig.first_time
+    raw_orig.annotations.append(onset + first_time, duration, description)
+    fig = raw_orig.plot(duration=raw_orig.duration)
+    fig.test_mode = True
+    # Activate annotation_mode
+    fig._fake_keypress("a")
+
+    # Select Annotation
+    fig._fake_click((2.5, 1.0), xform="data")
+    # Assert that annotation was selected
+    annot_dock = fig.mne.fig_annotation
+    assert annot_dock.start_bx.value() == 2
+    assert annot_dock.stop_bx.value() == 3
+
+    # Test by setting values with Spinboxes
+    # First, test zero duration annotation at recording start.
+    annot_dock.start_bx.setValue(0)
+    annot_dock.start_bx.editingFinished.emit()
+    annot_dock.stop_bx.setValue(0)
+    annot_dock.stop_bx.editingFinished.emit()
+    # Assert that annotation starts and ends at 0 and duration is 0
+    assert_allclose(raw_orig.annotations.onset[0], 0 + first_time, atol=1e-4)
+    assert_allclose(raw_orig.annotations.duration[0], 0, atol=1e-4)
+
+    # Now test zero duration annotation at arbitrary time.
+    sample_time = raw_orig.times[10]
+    annot_dock.stop_bx.setValue(sample_time)
+    annot_dock.stop_bx.editingFinished.emit()
+    annot_dock.start_bx.setValue(sample_time)
+    annot_dock.start_bx.editingFinished.emit()
+    # Assert that annotation starts and ends at selected time and duration is 0
+    assert_allclose(raw_orig.annotations.onset[0], sample_time + first_time, atol=1e-4)
+    assert_allclose(raw_orig.annotations.duration[0], 0, atol=1e-4)
+
+    # Finally, test zero duration annotation at recording end.
+    last_time = raw_orig.times[-1]
+    annot_dock.stop_bx.setValue(last_time)
+    annot_dock.stop_bx.editingFinished.emit()
+    annot_dock.start_bx.setValue(last_time)
+    annot_dock.start_bx.editingFinished.emit()
+    # Assert that annotation starts and ends at last sample and duration is 0
+    assert_allclose(raw_orig.annotations.onset[0], last_time + first_time, atol=1e-4)
+    assert_allclose(raw_orig.annotations.duration[0], 0, atol=1e-4)
+
+
+def test_annotations_recording_end(raw_orig, pg_backend):
+    """Test anotations at the end of recording."""
+    # Crop and resample to avoid failing tests due to rounding in browser
+    # Resampling also significantly speeds up the tests
+    raw_orig = raw_orig.copy().crop(tmax=20.0).resample(100)
+    # Add first annotation to initialize the description "A"
+    onset = 2
+    duration = 1
+    description = "A"
+    first_time = raw_orig.first_time
+    raw_orig.annotations.append(onset + first_time, duration, description)
+    n_anns = len(raw_orig.annotations)
+    fig = raw_orig.plot(duration=raw_orig.duration)
+    fig.test_mode = True
+    # Activate annotation_mode
+    fig._fake_keypress("a")
+
+    # Draw additional annotation that extends to the end of the current view
+    fig._fake_click(
+        (0.0, 1.0),
+        add_points=[(1.0, 1.0)],
+        xform="ax",
+        button=1,
+        kind="drag",
+    )
+    # Assert number of annotations did not change
+    assert len(raw_orig.annotations) == n_anns
+    new_annot_end = raw_orig.annotations.onset[0] + raw_orig.annotations.duration[0]
+    # Assert that the annotation end extends 1 sample above the recording
+    assert_allclose(
+        new_annot_end,
+        raw_orig.times[-1] + first_time + 1 / raw_orig.info["sfreq"],
+        atol=1e-4,
+    )
+
+
 def test_annotations_interactions(raw_orig, pg_backend):
     """Test interactions specific to pyqtgraph-backend."""
     # Add test-annotations
@@ -97,7 +187,7 @@ def test_annotations_interactions(raw_orig, pg_backend):
     annot_dock.start_bx.setValue(6)
     annot_dock.start_bx.editingFinished.emit()
     assert fig.msg_box.isVisible()
-    assert fig.msg_box.informativeText() == "Start can't be bigger or " "equal to Stop!"
+    assert fig.msg_box.informativeText() == "Start can't be bigger than Stop!"
     fig.msg_box.close()
 
     # Test that dragging annotation onto the tail of another works
@@ -130,7 +220,8 @@ def test_ch_specific_annot(raw_orig, pg_backend):
     annots = Annotations([annot_onset], [annot_dur], "some_chs", ch_names=[ch_names])
     raw_orig.set_annotations(annots)
 
-    fig = raw_orig.plot()
+    ch_names.pop(-1)  # don't plot the last one!
+    fig = raw_orig.plot(picks=ch_names)  # omit the first one
     fig_ch_names = list(fig.mne.ch_names[fig.mne.ch_order])
     fig.test_mode = True
     annot_dock = fig.mne.fig_annotation
@@ -138,13 +229,14 @@ def test_ch_specific_annot(raw_orig, pg_backend):
     # one FillBetweenItem for each channel in a channel specific annot
     annot = fig.mne.regions[0]
     assert (
-        len(annot.single_channel_annots) == 4
+        len(annot.single_channel_annots) == 4  # we still make them even for invisible
     )  # 4 channels in annots[0].single_channel_annots
 
     # check that a channel specific annot is plotted at the correct ypos
-    single_channel_annot = annot.single_channel_annots["MEG 0423"]
+    which_name = raw_orig.annotations.ch_names[0][-2]
+    single_channel_annot = annot.single_channel_annots[which_name]
     # the +1 is needed because ypos indexing of the traces starts at 1, not 0
-    want_index = fig_ch_names.index(raw_orig.annotations.ch_names[0][-1]) + 1
+    want_index = fig_ch_names.index(which_name) + 1
     got_index = np.mean(single_channel_annot.ypos).astype(int)
     assert got_index == want_index  # should be 28
 
@@ -244,9 +336,16 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
     assert downsampling_control.value() == 2
     assert downsampling_control.value() == fig.mne.downsampling
 
-    downsampling_control.setValue(3)
+    # Could be 6008 or 6006 depending on if MNE-Python has
+    # https://github.com/mne-tools/mne-qt-browser/pull/320 (1.10+)
+    allowed = (6006, 6007, 6008)
+    ds = 17
+    assert fig.mne.data.shape[1] in allowed
+    # does not evenly divide into the data length
+    assert all(x % ds != 0 for x in allowed)
+    downsampling_control.setValue(ds)
     QTest.qWait(100)
-    assert downsampling_control.value() == 3
+    assert downsampling_control.value() == ds
     assert downsampling_control.value() == fig.mne.downsampling
 
     QTest.qWait(100)
@@ -257,16 +356,22 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
     QTest.qWait(100)
     assert downsampling_method_control.currentText() == "mean"
     assert fig.mne.ds_method == "mean"
+    fig._redraw(update_data=True)  # make sure it works
+    assert fig.mne.data.shape[-1] == len(fig.mne.times)
 
     downsampling_method_control.setCurrentText("subsample")
     QTest.qWait(100)
     assert downsampling_method_control.currentText() == "subsample"
     assert fig.mne.ds_method == "subsample"
+    fig._redraw(update_data=True)  # make sure it works
+    assert fig.mne.data.shape[-1] == len(fig.mne.times)
 
     downsampling_method_control.setCurrentText("peak")
     QTest.qWait(100)
     assert downsampling_method_control.currentText() == "peak"
     assert fig.mne.ds_method == "peak"
+    fig._redraw(update_data=True)  # make sure it works
+    assert fig.mne.data.shape[-1] == len(fig.mne.times)
 
     downsampling_method_control.setCurrentText("invalid_method_name")
     QTest.qWait(100)
@@ -308,6 +413,7 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
     assert sensitivities_mne == sensitivity_values
     assert sensitivities_control == sensitivity_values
 
+    # Make sure there are correct number of scaling spinboxes
     ordered_types = fig.mne.ch_types[fig.mne.ch_order]
     unique_types = np.unique(ordered_types)
     unique_types = [
@@ -316,6 +422,7 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
     n_unique_types = len(unique_types)
     assert n_unique_types == len(fig.mne.fig_settings.ch_scaling_spinboxes)
 
+    # Check that scaling spinbox has correct/expected value
     ch_type_test = unique_types[0]
     ch_spinbox = fig.mne.fig_settings.ch_scaling_spinboxes[ch_type_test]
     inv_norm = (
@@ -326,6 +433,7 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
     )
     assert inv_norm == ch_spinbox.value()
 
+    # Check that changing scaling values changes sensitivity values
     ch_scale_spinbox = fig.mne.fig_settings.ch_scaling_spinboxes[ch_type_test]
     ch_sens_spinbox = fig.mne.fig_settings.ch_sensitivity_spinboxes[ch_type_test]
     scaling_spinbox_value = ch_spinbox.value()
@@ -339,6 +447,59 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
     np.testing.assert_allclose(
         ch_sens_spinbox.value(), new_expected_sensitivity_spinbox_value, atol=0.1
     )
+
+    # Changing sensitivity values changes scaling values
+    ch_scale_spinbox = fig.mne.fig_settings.ch_scaling_spinboxes[ch_type_test]
+    ch_sens_spinbox = fig.mne.fig_settings.ch_sensitivity_spinboxes[ch_type_test]
+    scaling_spinbox_value = ch_spinbox.value()
+    sensitivity_spinbox_value = ch_sens_spinbox.value()
+    scaling_value = fig.mne.scalings[ch_type_test]
+    new_sensitivity_spinbox_value = sensitivity_spinbox_value * 2
+    new_expected_scaling_spinbox_value = scaling_spinbox_value * 2
+    ch_sens_spinbox.setValue(new_sensitivity_spinbox_value)
+    assert scaling_value != fig.mne.scalings[ch_type_test]
+    np.testing.assert_allclose(
+        ch_scale_spinbox.value(),
+        new_expected_scaling_spinbox_value,
+        atol=new_expected_scaling_spinbox_value * 0.05,
+    )
+
+    # Monitor dimension update changes sensitivity values and dpi
+    orig_mon_height = fig.mne.fig_settings.mon_height_spinbox.value()
+    orig_mon_width = fig.mne.fig_settings.mon_width_spinbox.value()
+    orig_mon_dpi = fig.mne.fig_settings.dpi_spinbox.value()
+    orig_sens = ch_sens_spinbox.value()
+    fig.mne.fig_settings.mon_height_spinbox.setValue(orig_mon_height / 2)
+    QTest.keyPress(fig.mne.fig_settings.mon_height_spinbox.lineEdit(), Qt.Key_Return)
+    fig.mne.fig_settings.mon_width_spinbox.setValue(orig_mon_width / 2)
+    QTest.keyPress(fig.mne.fig_settings.mon_width_spinbox.lineEdit(), Qt.Key_Return)
+    assert ch_sens_spinbox.value() != orig_sens
+
+    # Monitor settings reset button works
+    fig.mne.fig_settings._reset_monitor_spinboxes()
+    assert fig.mne.fig_settings.mon_height_spinbox.value() == orig_mon_height
+    assert fig.mne.fig_settings.mon_width_spinbox.value() == orig_mon_width
+    assert fig.mne.fig_settings.dpi_spinbox.value() == orig_mon_dpi
+    assert ch_sens_spinbox.value() == orig_sens
+
+    # Monitor unit dropdown works (go from cm to mm or vice-versa)
+    mon_unit_cmbx = fig.mne.fig_settings.mon_units_cmbx
+    mon_unit_cmbx.setCurrentText("mm")
+    mm_mon_height = fig.mne.fig_settings.mon_height_spinbox.value()
+    mm_mon_width = fig.mne.fig_settings.mon_width_spinbox.value()
+    mon_unit_cmbx.setCurrentText("cm")
+    np.testing.assert_allclose(
+        fig.mne.fig_settings.mon_height_spinbox.value(), mm_mon_height / 10, atol=0.1
+    )
+    np.testing.assert_allclose(
+        fig.mne.fig_settings.mon_width_spinbox.value(), mm_mon_width / 10, atol=0.1
+    )
+
+    # Window resize changes sensitivity values
+    orig_sens = ch_sens_spinbox.value()
+    orig_window_size = fig.size()
+    fig.resize(orig_window_size.width() * 2, orig_window_size.height() * 2)
+    assert ch_sens_spinbox.value() != orig_sens
 
 
 def test_pg_help_dialog(raw_orig, pg_backend):
