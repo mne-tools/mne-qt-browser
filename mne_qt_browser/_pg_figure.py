@@ -4533,6 +4533,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                     vl.setPos(xt)
         self.mne.overview_bar.update_vline()
 
+    def _vline_drag_slot(self, vline):
+        publish(self, TimeChange(time=vline.value()))
+
     def _add_vline(self, t):
         if self.mne.is_epochs:
             ts = self._get_vline_times(t)
@@ -4550,8 +4553,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                     # Avoid off-by-one-error at bmax for VlineLabel
                     bmax -= 1 / self.mne.info["sfreq"]
                     vl = VLine(self.mne, xt, bounds=(bmin, bmax))
-                    # Should only be emitted when dragged
+                    # Connect signals for both drag and position change
                     vl.sigPositionChangeFinished.connect(self._vline_slot)
+                    vl.sigDragged.connect(self._vline_drag_slot)
                     self.mne.vline.append(vl)
                     self.mne.plt.addItem(vl)
             else:
@@ -4561,6 +4565,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             if self.mne.vline is None:
                 self.mne.vline = VLine(self.mne, t, bounds=(0, self.mne.xmax))
                 self.mne.vline.sigPositionChangeFinished.connect(self._vline_slot)
+                self.mne.vline.sigDragged.connect(self._vline_drag_slot)
                 self.mne.plt.addItem(self.mne.vline)
 
             else:
