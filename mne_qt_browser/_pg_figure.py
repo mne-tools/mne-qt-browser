@@ -44,7 +44,7 @@ from mne.viz import plot_sensors
 from mne.viz._figure import BrowserBase
 from mne.viz.backends._utils import _init_mne_qtapp, _qt_raise_window
 from mne.viz.ui_events import (
-    ChannelBrowse,
+    ChannelsSelect,
     TimeBrowse,
     TimeChange,
     disable_ui_events,
@@ -4259,7 +4259,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         # Subscribe to channel browse
         # self.mne.plt.sigYRangeChanged.connect(self._on_channel_browse_event)
-        subscribe(self, "channel_browse", self._on_channel_browse_event)
+        subscribe(self, "channels_select", self._on_channel_browse_event)
 
     def _on_time_change_event(self, event):
         """Response to TimeChange event from the event-ui system."""
@@ -4272,12 +4272,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             self.mne.plt.setXRange(event.time_start, event.time_end, padding=0)
 
     def _on_channel_browse_event(self, event):
-        """Response to ChannelBrowse event from the event-ui system."""
+        """Response to ChannelsSelect event from the event-ui system."""
         # Get the indices of the subset in the full set of channels
         all_channels = self.mne.ch_names[self.mne.ch_order]
         # KRUFT
         # ch_indices = [np.where(all_channels == ch)[0][0] for ch in event.channels]
-        ch_indices = np.where(np.isin(all_channels, event.channels))[0]
+        ch_indices = np.where(np.isin(all_channels, event.ch_names))[0]
 
         # Take the start index and set range
         with disable_ui_events(self):
@@ -4736,7 +4736,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             trace.update_data()
 
         # Publish to event system
-        publish(self, ChannelBrowse(channels=self.mne.ch_names[self.mne.picks]))
+        publish(self, ChannelsSelect(ch_names=self.mne.ch_names[self.mne.picks]))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     # DATA HANDLING
