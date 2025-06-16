@@ -50,6 +50,7 @@ from mne.viz.ui_events import (
     disable_ui_events,
     publish,
     subscribe,
+    unsubscribe,
 )
 from mne.viz.utils import _figure_agg, _merge_annotations, _simplify_float
 from pyqtgraph import (
@@ -5667,6 +5668,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if getattr(self, "load_thread", None) is not None:
             self.load_thread.clean()
             self.load_thread = None
+
+        # Ensure all event handlers are unsubscribed
+        unsubscribe(self, ["time_change", "time_browse", "channels_select"])
 
         # Remove self from browser_instances in globals
         if self in _browser_instances:
