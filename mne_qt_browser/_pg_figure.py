@@ -4275,13 +4275,18 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         """Response to ChannelBrowse event from the event-ui system."""
         # Get the indices of the subset in the full set of channels
         all_channels = self.mne.ch_names[self.mne.ch_order]
-        ch_indices = np.where(np.isin(event.channels, all_channels))[0][0]
+        # KRUFT
+        # ch_indices = [np.where(all_channels == ch)[0][0] for ch in event.channels]
+        ch_indices = np.where(np.isin(all_channels, event.channels))[0]
 
         # Take the start index and set range
         with disable_ui_events(self):
-            start_idx = ch_indices[0]
-            n_chans = len(ch_indices)
-            self.mne.plt.setYRange(start_idx, start_idx + n_chans + 1, padding=0)
+            start_idx, end_idx = ch_indices.min(), ch_indices.max() + 2
+            # KRUFT
+            # start_idx = ch_indices[0]
+            # n_chans = len(ch_indices)
+            # end_idx = start_idx+n_chans+1
+            self.mne.plt.setYRange(start_idx, end_idx, padding=0)
 
     def _hidpi_mkPen(self, *args, **kwargs):
         kwargs["width"] = self._pixel_ratio * kwargs.get("width", 1.0)
