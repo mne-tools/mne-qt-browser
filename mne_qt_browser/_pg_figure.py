@@ -4275,7 +4275,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         """Response to ChannelBrowse event from the event-ui system."""
         # Get the indices of the subset in the full set of channels
         all_channels = self.mne.ch_names[self.mne.ch_order]
-        ch_indices = [np.where(all_channels == ch)[0][0] for ch in event.channels]
+        ch_indices = np.where(np.isin(event.channels, all_channels))[0][0]
 
         # Take the start index and set range
         with disable_ui_events(self):
