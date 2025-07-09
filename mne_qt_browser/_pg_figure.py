@@ -2348,10 +2348,10 @@ class ProjDialog(_BaseDialog):
         self.setLayout(layout)
         self.show()
 
-    def _proj_changed(self, state, idx):
+    def _proj_changed(self, state=None, idx=None):
         # Only change if proj wasn't already applied.
         if not self.mne.projs_active[idx]:
-            self.mne.projs_on[idx] = state
+            self.mne.projs_on[idx] = not self.mne.projs_on[idx]
             self.weakmain()._apply_update_projectors()
 
     def toggle_all(self):
