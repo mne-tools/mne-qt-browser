@@ -3676,7 +3676,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Load from QSettings if available
         for qparam in qsettings_params:
             default = qsettings_params[qparam]
-            qvalue = QSettings().value(qparam, defaultValue=default)
+            qvalue = QSettings("mne-tools", "mne-qt-browser").value(
+                qparam, defaultValue=default
+            )
             # QSettings may alter types depending on OS
             if not isinstance(qvalue, type(default)):
                 try:
@@ -5563,8 +5565,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         """Customize close event."""
         event.accept()
         if hasattr(self, "mne"):
-            # Explicit disconnects to avoid reference cycles that gc can't
-            # properly resolve ()
+            # Explicit disconnects to avoid reference cycles that gc can't properly
+            # resolve ()
             if hasattr(self.mne, "plt"):
                 _disconnect(self.mne.plt.sigXRangeChanged)
                 _disconnect(self.mne.plt.sigYRangeChanged)
@@ -5575,7 +5577,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # Save settings going into QSettings.
             for qsetting in qsettings_params:
                 value = getattr(self.mne, qsetting)
-                QSettings().setValue(qsetting, value)
+                QSettings("mne-tools", "mne-qt-browser").setValue(qsetting, value)
             for attr in (
                 "keyboard_shortcuts",
                 "traces",
