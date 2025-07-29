@@ -4243,6 +4243,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # disable histogram of epoch PTP amplitude
             del self.mne.keyboard_shortcuts["h"]
 
+    def _save_setting(self, key, value):
+        """Save a setting to QSettings."""
+        QSettings("mne-tools", "mne-qt-browser").setValue(key, value)
+
     def _hidpi_mkPen(self, *args, **kwargs):
         kwargs["width"] = self._pixel_ratio * kwargs.get("width", 1.0)
         return mkPen(*args, **kwargs)
@@ -4318,6 +4322,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _overview_mode_changed(self, new_mode):
         self.mne.overview_mode = new_mode
+        self._save_setting("overview_mode", new_mode)
         self.mne.overview_bar.set_background()
         if not self.mne.overview_bar.isVisible():
             self._toggle_overview_bar()
@@ -5247,6 +5252,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 item.setChecked(visible)
                 break
         self.mne.overview_bar.setVisible(visible)
+        self._save_setting("overview_visible", visible)
 
     def _toggle_zenmode(self):
         self.mne.scrollbars_visible = not self.mne.scrollbars_visible
