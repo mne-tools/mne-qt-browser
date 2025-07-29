@@ -3971,21 +3971,30 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         atoggle_proj.triggered.connect(self._toggle_proj_fig)
         self.mne.toolbar.addAction(atoggle_proj)
 
+        atoggle_crosshair = QAction(
+            self._qicon("crosshair"), "Toggle crosshair", parent=self
+        )
+        atoggle_crosshair.setCheckable(True)
+        atoggle_crosshair.triggered.connect(self._toggle_crosshair)
+        self.mne.crosshair_action = atoggle_crosshair
+        self.mne.toolbar.addAction(atoggle_crosshair)
+
         button = QToolButton(self.mne.toolbar)
         button.setToolTip(
-            "<h2>Overview-Modes</h2>"
+            "<h2>Overview Modes</h2>"
             "<ul>"
-            "<li>empty:<br>"
+            "<li>Empty:<br>"
             "Display no background.</li>"
-            "<li>channels:<br>"
-            "Display each channel with its channel-type color.</li>"
-            "<li>zscore:<br>"
-            "Display the zscore for the data from each channel across time. "
-            "Red indicates high zscores, blue indicates low zscores, "
+            "<li>Channels:<br>"
+            "Display each channel with its channel type color.</li>"
+            "<li>Z-score:<br>"
+            "Display the z-score for the data from each channel across time. "
+            "Red indicates high z-scores, blue indicates low z-scores, "
             "and the boundaries of the color gradient are defined by the "
-            "minimum/maximum zscore."
+            "minimum and maximum z-scores."
             'This only works if precompute is set to "True", or if it is '
             'enabled with "auto" and enough free RAM is available.</li>'
+            "</ul>"
         )
         button.setText("Overview Bar")
         button.setIcon(self._qicon("overview_bar"))
@@ -4569,11 +4578,16 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                         )
                         self.statusBar().showMessage(f"x={x:.3f} s, y={label}")
 
-    def _toggle_crosshair(self):
-        self.mne.crosshair_enabled = not self.mne.crosshair_enabled
+    def _toggle_crosshair(self, checked=None):
+        if checked is None:
+            checked = not self.mne.crosshair_enabled
+        self.mne.crosshair_enabled = checked
+        self.mne.crosshair_action.setChecked(checked)
         if self.mne.crosshair:
             self.mne.plt.removeItem(self.mne.crosshair)
             self.mne.crosshair = None
+        if not checked:
+            self.statusBar().clearMessage()
 
     def _xrange_changed(self, _, xrange):
         # Update data
