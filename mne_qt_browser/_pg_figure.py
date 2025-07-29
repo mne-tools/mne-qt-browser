@@ -4322,7 +4322,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if not self.mne.overview_bar.isVisible():
             self._toggle_overview_bar()
 
-    def _overview_radio_clicked(self, checked, *, menu, new_mode):
+    def _overview_radio_clicked(self, checked=False, *, menu, new_mode):
         menu.close()
         self._overview_mode_changed(new_mode=new_mode)
 
