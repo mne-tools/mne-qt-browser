@@ -23,7 +23,7 @@ The backend supports plotting for the following MNE-Python methods:
 - [`mne.preprocessing.ICA.plot_sources(raw)`](https://mne.tools/stable/generated/mne.preprocessing.ICA.html)
 - [`mne.preprocessing.ICA.plot_sources(epochs)`](https://mne.tools/stable/generated/mne.preprocessing.ICA.html)
 
-The following example demonstrates how to read and plot M/EEG the [MNE sample](https://mne.tools/stable/generated/mne.datasets.sample.data_path.html) dataset:
+The following example demonstrates how to read and plot the [MNE sample](https://mne.tools/stable/generated/mne.datasets.sample.data_path.html) dataset:
 
 ```python
 import mne
