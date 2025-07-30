@@ -4,10 +4,11 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mne-qt-browser"
-description = "A new backend based on pyqtgraph for the 2D-Data-Browser in MNE-Python"
+description = "PyQtGraph-based backend for MNE-Python's raw data browser"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { file = "LICENSE" }
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
 keywords = ["science", "neuroscience", "psychology"]
 authors = [{ name = "Martin Schulz", email = "dev@mgschulz.de" }]
 classifiers = [
