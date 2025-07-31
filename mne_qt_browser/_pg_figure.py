@@ -3541,6 +3541,10 @@ qsettings_params = {
     "downsampling": 1,
     # Downsampling-Method (set SettingsDialog for details)
     "ds_method": "peak",
+    # Overview mode
+    "overview_mode": "channels",
+    # Overview visibility
+    "overview_visible": True,
 }
 
 
@@ -3676,7 +3680,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Load from QSettings if available
         for qparam in qsettings_params:
             default = qsettings_params[qparam]
-            qvalue = QSettings().value(qparam, defaultValue=default)
+            qvalue = QSettings("mne-tools", "mne-qt-browser").value(
+                qparam, defaultValue=default
+            )
             # QSettings may alter types depending on OS
             if not isinstance(qvalue, type(default)):
                 try:
@@ -3766,9 +3772,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         _check_option(
             "overview_mode", self.mne.overview_mode, list(overview_items) + ["hidden"]
         )
-        hide_overview = False
         if self.mne.overview_mode == "hidden":
-            hide_overview = True
+            self.mne.overview_visible = False
             self.mne.overview_mode = "channels"
 
         # Initialize data (needed in DataTrace.update_data).
@@ -4008,14 +4013,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         visible = QAction("Visible", parent=menu)
         menu.addAction(visible)
         visible.setCheckable(True)
-        visible.setChecked(True)
-        self.mne.overview_bar.setVisible(True)
+        visible.setChecked(self.mne.overview_visible)
+        self.mne.overview_bar.setVisible(self.mne.overview_visible)
         visible.triggered.connect(self._toggle_overview_bar)
-        if hide_overview:
-            # This doesn't work because it hasn't been shown yet:
-            # self._toggle_overview_bar()
-            visible.setChecked(False)
-            self.mne.overview_bar.setVisible(False)
+
         button.setMenu(self.mne.overview_menu)
         button.setPopupMode(QToolButton.InstantPopup)
         self.mne.toolbar.addWidget(button)
@@ -4243,6 +4244,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # disable histogram of epoch PTP amplitude
             del self.mne.keyboard_shortcuts["h"]
 
+    def _save_setting(self, key, value):
+        """Save a setting to QSettings."""
+        QSettings("mne-tools", "mne-qt-browser").setValue(key, value)
+
     def _hidpi_mkPen(self, *args, **kwargs):
         kwargs["width"] = self._pixel_ratio * kwargs.get("width", 1.0)
         return mkPen(*args, **kwargs)
@@ -4318,11 +4323,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _overview_mode_changed(self, new_mode):
         self.mne.overview_mode = new_mode
+        self._save_setting("overview_mode", new_mode)
         self.mne.overview_bar.set_background()
         if not self.mne.overview_bar.isVisible():
             self._toggle_overview_bar()
 
-    def _overview_radio_clicked(self, checked, *, menu, new_mode):
+    def _overview_radio_clicked(self, checked=False, *, menu, new_mode):
         menu.close()
         self._overview_mode_changed(new_mode=new_mode)
 
@@ -5247,6 +5253,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 item.setChecked(visible)
                 break
         self.mne.overview_bar.setVisible(visible)
+        self.mne.overview_visible = visible
+        self._save_setting("overview_visible", visible)
 
     def _toggle_zenmode(self):
         self.mne.scrollbars_visible = not self.mne.scrollbars_visible
@@ -5575,7 +5583,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # Save settings going into QSettings.
             for qsetting in qsettings_params:
                 value = getattr(self.mne, qsetting)
-                QSettings().setValue(qsetting, value)
+                self._save_setting(qsetting, value)
             for attr in (
                 "keyboard_shortcuts",
                 "traces",
