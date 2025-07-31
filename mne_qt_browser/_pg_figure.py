@@ -22,6 +22,8 @@ from os.path import getsize
 from pathlib import Path
 
 import numpy as np
+from PyQt5.QtTest import QTest
+from PyQt5.QtWidgets import QMenuBar
 
 try:
     from qtpy.QtCore import Qt
@@ -4026,10 +4028,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         asettings.triggered.connect(self._toggle_settings_fig)
         self.mne.toolbar.addAction(asettings)
 
-        ahelp = QAction(self._qicon("help"), "Help", parent=self)
-        ahelp.triggered.connect(self._toggle_help_fig)
-        self.mne.toolbar.addAction(ahelp)
-
         # Set Start-Range (after all necessary elements are initialized)
         self.mne.plt.setXRange(
             self.mne.t_start, self.mne.t_start + self.mne.duration, padding=0
@@ -4243,6 +4241,80 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # disable histogram of epoch PTP amplitude
             del self.mne.keyboard_shortcuts["h"]
 
+        self.create_menus()
+
+    def create_menus(self):
+        """Creates and returns the application's menu bar with properly aligned shortcuts."""
+        if not self.menuBar():
+            self.setMenuBar(QMenuBar(self))
+        menu_bar = self.menuBar()
+        mne_python = menu_bar.addMenu("MNE-Python")
+        view_menu = menu_bar.addMenu("View")
+        help_menu = menu_bar.addMenu("Help")
+        scroll_menu = view_menu.addMenu("Scroll")
+
+        def add_menu_action(menu, description, shortcut):
+            widget = QWidget()
+            layout = QHBoxLayout(widget)
+            layout.setContentsMargins(10, 2, 10, 2)
+
+            desc_label = QLabel(description)
+            shortcut_label = QLabel(shortcut)
+
+            layout.addWidget(desc_label)
+            layout.addStretch()
+            layout.addWidget(shortcut_label)
+
+            action = QWidgetAction(self)
+            action.setDefaultWidget(widget)
+            menu.addAction(action)
+
+        shortcut_data = {
+            mne_python: [
+                ("Create annotation     ", "Click + Drag"),
+                ("Mark/unmark bad channel     ", "Left-click channel"),
+                ("Mark/unmark bad segment     ", "Left-click data"),
+                ("Toggle Annotation Tool / Visibility     ", "A"),
+                ("Toggle Butterfly     ", "B"),
+                ("Toggle DC Correction     ", "D"),
+                ("Toggle Events visibility     ", "E"),
+                ("Toggle Projection Figure / all projections     ", "J"),
+            ],
+            view_menu: [
+                ("Add/remove channels     ", "Shift + Click"),
+                ("Decrease duration (¼ page)     ", "Home"),
+                ("Decrease Scale     ", "-"),
+                ("Decrease shown channels (1/10)     ", "Page Up"),
+                ("Increase duration (¼ page)     ", "End"),
+                ("Increase Scale     ", "+ / ="),
+                ("Increase shown channels (1/10)     ", "Page Down"),
+                ("Navigate time/channels     ", "Scroll"),
+                ("Open context menu     ", "Right-click plot"),
+                ("Toggle Antialiasing     ", "L"),
+                ("Toggle Overview Bar     ", "O"),
+                ("Toggle Time Format     ", "T"),
+                ("Toggle Scalebars     ", "S"),
+                ("Toggle Whitening     ", "W"),
+                ("Toggle Crosshair     ", "X"),
+                ("Toggle Zen Mode     ", "Z"),
+            ],
+            help_menu: [
+                ("Show Help     ", "?"),
+                ("Toggle Fullscreen     ", "F11"),
+                ("Close     ", "Escape"),
+            ],
+            scroll_menu: [
+                ("Scroll left (¼ page/full page)     ", "← / →"),
+                ("Scroll up (full page)     ", "↑"),
+                ("Scroll down (full page)     ", "↓"),
+            ],
+        }
+
+        for menu, items in shortcut_data.items():
+            for description, shortcut in items:
+                add_menu_action(menu, description, shortcut)
+        return menu_bar
+
     def _hidpi_mkPen(self, *args, **kwargs):
         kwargs["width"] = self._pixel_ratio * kwargs.get("width", 1.0)
         return mkPen(*args, **kwargs)
@@ -4257,7 +4329,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         range)
         """
         self.mne.scalebars.clear()
-        # To keep order (np.unique sorts)
         ordered_types = self.mne.ch_types[self.mne.ch_order]
         unique_type_idxs = np.unique(ordered_types, return_index=True)[1]
         ch_types_ordered = [ordered_types[idx] for idx in sorted(unique_type_idxs)]
