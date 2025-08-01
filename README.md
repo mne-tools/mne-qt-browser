@@ -1,91 +1,72 @@
-# mne-qt-browser
+# MNE Qt Browser
 
-## A new backend based on pyqtgraph for the 2D-Data-Browser in MNE-Python.
+![Screenshot of MNE Qt Browser](https://github.com/mne-tools/mne-qt-browser/raw/main/screenshot.png)
 
-![Screenshot of mne-qt-browser](https://github.com/mne-tools/mne-qt-browser/raw/main/screenshot.png)
+MNE Qt Browser is an alternative backend for plotting multichannel time series data (such as EEG or MEG) with [MNE-Python](https://github.com/mne-tools/mne-python). The backend is based on [PyQtGraph](https://github.com/pyqtgraph/pyqtgraph), which in turn uses [Qt](https://www.qt.io/product/framework) under the hood.
 
-This repository hosts the code for an alternative backend for plotting 2D-Data with 
-[MNE-Python](https://github.com/mne-tools/mne-python).
-
-The backend is based on [pyqtgraph](https://github.com/pyqtgraph/pyqtgraph) 
-which uses Qt's [Graphics View Framework](https://doc.qt.io/qt-5/graphicsview.html)
-for the plotting.
-Development started as a [2021's Google Summer of Code Project](https://github.com/marsipu/gsoc2021).
 
 ## Installation
-Install **full MNE-Python version 1.0 or greater** with the instructions provided [here](https://mne.tools/stable/install/mne_python.html#d-plotting-and-source-analysis) or install **minimal MNE-Python** with
-### pip
-```
-pip install "mne>=1.0" matplotlib mne-qt-browser
-```
-or
-### conda
-```
-conda install -c conda-forge mne-base matplotlib mne-qt-browser
-```
 
-## Update
-Refer to the [MNE-Python documentation](https://mne.tools/stable/install/updating.html) for updating MNE-Python.
-To update this package, do:
-```
-pip install -U mne-qt-browser
-```
-To update this package to the development version, do:
-```
-pip install -U --no-deps https://github.com/mne-tools/mne-qt-browser/archive/refs/heads/main.zip
-```
+MNE Qt Browser is not a standalone package—it requires MNE-Python to be installed. The easiest way to use it is by installing MNE-Python through the [official installers](https://mne.tools/stable/install/installers.html), which include the browser by default.
+
+The browser is also supported by [MNELAB](https://github.com/cbrnr/mnelab), a graphical user interface for MNE-Python. The recommended way to install MNELAB is via the official installers as well. In this case, MNE Qt Browser will be installed automatically—you just need to enable it in the settings by selecting *Qt* as the plot backend.
+
+If you already have the `mne` package installed in your Python environment, you can also install `mne-qt-browser` separately (e.g., using `pip`, `uv`, or `conda`).
+
 
 ## Usage
 
 The backend supports plotting for the following MNE-Python methods:
 
-- [`mne.io.Raw.plot()`](https://mne.tools/dev/generated/mne.io.Raw.html?highlight=raw%20plot#mne.io.Raw.plot)
-- [`mne.Epochs.plot()`](https://mne.tools/dev/generated/mne.Epochs.html?highlight=epochs%20plot#mne.Epochs.plot)
-- [`mne.preprocessing.ICA.plot_sources(raw)`](https://mne.tools/dev/generated/mne.preprocessing.ICA.html?highlight=ica%20plot_sources#mne.preprocessing.ICA.plot_sources)
-- [`mne.preprocessing.ICA.plot_sources(epochs)`](https://mne.tools/dev/generated/mne.preprocessing.ICA.html?highlight=ica%20plot_sources#mne.preprocessing.ICA.plot_sources)
+- [`mne.io.Raw.plot()`](https://mne.tools/stable/generated/mne.io.Raw.html)
+- [`mne.Epochs.plot()`](https://mne.tools/stable/generated/mne.Epochs.html)
+- [`mne.preprocessing.ICA.plot_sources(raw)`](https://mne.tools/stable/generated/mne.preprocessing.ICA.html)
+- [`mne.preprocessing.ICA.plot_sources(epochs)`](https://mne.tools/stable/generated/mne.preprocessing.ICA.html)
 
-In the following example, we'll read M/EEG raw data from the MNE `sample` dataset
-and plot it using the `qt`-backend.
-(For mne-version >= 1.0 the `qt`-backend will be the default)
+The following example demonstrates how to read and plot the [MNE sample](https://mne.tools/stable/generated/mne.datasets.sample.data_path.html) dataset:
 
 ```python
-from pathlib import Path
 import mne
 
-sample_dir = mne.datasets.sample.data_path()
-raw_path = Path(sample_dir) / 'MEG' / 'sample' / 'sample_audvis_raw.fif'
-raw = mne.io.read_raw(raw_path)
+raw = mne.io.read_raw(
+    mne.datasets.sample.data_path() / "MEG" / "sample" / "sample_audvis_raw.fif"
+)
 
-mne.viz.set_browser_backend('qt')  # Enable mne-qt-browser backend if mne < 1.0
 raw.plot(block=True)
 ```
 
-If the plot is not showing, search for solutions in the
-[troubleshooting](#troubleshooting) section below.
+If the plot does not appear, check the [troubleshooting](#troubleshooting) section below for possible solutions.
 
-This will use the `mne-qt-browser` for the current Python session. If you
-want to make this change permanent, so you don't have to use the
-`set_browser_backend()` each time after restarting Python, run the following
-line to modify your MNE configuration file:
+MNE ≥ 1.0.0 will automatically use the Qt backend for plotting if it is available. If you want to set the backend explicitly, you can do so by calling:
 
 ```python
-import mne
-mne.set_config('MNE_BROWSER_BACKEND', 'qt')
+mne.viz.set_browser_backend("qt")  # or "matplotlib"
 ```
+
+You can set the backend to `"qt"` or `"matplotlib"`. If you want to make this setting permanent, you can modify your MNE configuration file by running:
+
+```python
+mne.set_config("MNE_BROWSER_BACKEND", "qt")  # or "matplotlib"
+```
+
 
 ## Troubleshooting
 
 ### Running from a script
 
-If you are running a script containing `raw.plot()` like
+If you run a script containing `raw.plot()` as follows, the plot will close immediately after the script finishes:
 
 ```console
 python example_script.py
 ```
 
-the plot will not stay open when the script is done. 
+To keep the plot open, you can either use blocking mode:
 
-To solve this either change `raw.plot()` to `raw.plot(block=True)` or run the script with the interactive flag
+```python
+raw.plot(block=True)
+```
+
+Alternatively, you can run the script in interactive mode:
 
 ```console
 python -i example_script.py
@@ -93,38 +74,42 @@ python -i example_script.py
 
 ### IPython
 
-If the integration of the Qt event loop is not activated for IPython, a plot with `raw.plot()` will freeze.
-Do avoid that either change `raw.plot()` to `raw.plot(block=True)` or activate the integration of the event loop with
+When using an interactive IPython console, calling `raw.plot()` in non-blocking mode may cause the plot window to freeze or become unresponsive. This happens because IPython must be configured to run the Qt event loop to handle plot interactions.
 
-```console
-%gui qt5
+To fix this, you can either use blocking mode, which runs its own event loop:
+
+```python
+raw.plot(block=True)
 ```
 
-### Report Bugs & Feature Requests
+Alternatively, enable Qt event loop integration in your IPython session by running the following magic command before you plot:
 
-Please report bugs and feature requests in the [issues](https://github.com/mne-tools/mne-qt-browser/issues) of this repository.
+```console
+%gui qt
+```
 
-### Development and testing
 
-You can run a benchmark locally with:
+## Development and testing
+
+You can run the included benchmarks locally with:
 
 ```console
 pytest -m benchmark mne_qt_browser
 ```
 
-To run the PyQtGraph tests you have to run:
+To run the PyQtGraph tests, use:
+
 ```
 pytest mne_qt_browser/tests/test_pg_specific.py
 ```
 
-Additionally, clone mne-python, and then run:
+You can also run additional tests from the MNE-Python repository. The following command assumes that you have cloned the MNE-Python repository in the parent directory of this repository:
 
 ```console
 pytest -m pgtest ../mne-python/mne/viz/tests
 ```
 
-If you do not have OpenGL installed, this will currently raise errors, and
-you'll need to add this line to `mne/conftest.py` after the `error::` line:
+These tests require `PyOpenGL` to be installed. If OpenGL is not available on your system, you may encounter errors. To suppress these, add the following line to `mne/conftest.py` *after* the existing `error::` line:
 
 ```raw
     ignore:.*PyOpenGL was not found.*:RuntimeWarning
