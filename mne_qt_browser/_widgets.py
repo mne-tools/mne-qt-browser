@@ -5,25 +5,43 @@ import datetime
 import platform
 import weakref
 from collections import OrderedDict
+from copy import copy
 
 import numpy as np
 from mne.annotations import _sync_onset
+from mne.utils import logger
 from mne.viz.utils import _merge_annotations
 from pyqtgraph import AxisItem, GraphicsView, Point, ViewBox, mkBrush
 from qtpy.QtCore import QLineF, QPoint, QPointF, QRectF, QSignalBlocker, Qt
 from qtpy.QtGui import QImage, QPixmap
 from qtpy.QtWidgets import (
+    QCheckBox,
+    QColorDialog,
+    QComboBox,
+    QDialog,
+    QDockWidget,
+    QDoubleSpinBox,
     QGraphicsScene,
     QGraphicsView,
+    QGridLayout,
+    QHBoxLayout,
+    QIcon,
+    QInputDialog,
+    QLabel,
     QMessageBox,
+    QPushButton,
+    QScrollArea,
     QScrollBar,
     QStyle,
     QStyleOptionSlider,
+    QVBoxLayout,
+    QWidget,
 )
 
 from mne_qt_browser._colors import _get_color
+from mne_qt_browser._dialogs import _AnnotEditDialog
 from mne_qt_browser._graphic_items import AnnotRegion
-from mne_qt_browser._utils import DATA_CH_TYPES_ORDER, _screen_geometry
+from mne_qt_browser._utils import DATA_CH_TYPES_ORDER, _methpartial, _screen_geometry
 
 
 def _mouse_event_position(ev):
@@ -31,6 +49,397 @@ def _mouse_event_position(ev):
         return ev.position()
     except AttributeError:
         return ev.pos()
+
+
+class AnnotationDock(QDockWidget):
+    """Dock window for annotation management."""
+
+    def __init__(self, main):
+        super().__init__("Annotations")
+        self.weakmain = weakref.ref(main)
+        self.mne = main.mne
+        del main
+        self._init_ui()
+
+        self.setFeatures(
+            QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable
+        )
+
+    def _init_ui(self):
+        widget = QWidget()
+        layout = QHBoxLayout()
+        layout.setAlignment(Qt.AlignLeft)
+
+        self.description_cmbx = QComboBox()
+        self.description_cmbx.setSizeAdjustPolicy(QComboBox.AdjustToContents)
+        self.description_cmbx.currentIndexChanged.connect(self._description_changed)
+        self._update_description_cmbx()
+        layout.addWidget(self.description_cmbx)
+
+        add_bt = QPushButton("Add Description")
+        add_bt.clicked.connect(self._add_description_dlg)
+        layout.addWidget(add_bt)
+
+        rm_bt = QPushButton("Remove Description")
+        rm_bt.clicked.connect(self._remove_description_dlg)
+        layout.addWidget(rm_bt)
+
+        edit_bt = QPushButton("Edit Description")
+        edit_bt.clicked.connect(self._edit_description_dlg)
+        layout.addWidget(edit_bt)
+
+        # Uncomment when custom colors for annotations are implemented in MNE-Python
+        # color_bt = QPushButton('Edit Color')
+        # color_bt.clicked.connect(self._set_color)
+        # layout.addWidget(color_bt)
+
+        select_bt = QPushButton("Select Visible")
+        select_bt.clicked.connect(self._select_annotations)
+        layout.addWidget(select_bt)
+
+        # Determine reasonable time decimals from sampling frequency
+        time_decimals = int(np.ceil(np.log10(self.mne.info["sfreq"])))
+
+        layout.addWidget(QLabel("Start:"))
+        self.start_bx = QDoubleSpinBox()
+        self.start_bx.setDecimals(time_decimals)
+        self.start_bx.setMinimum(0)
+        self.start_bx.setMaximum(self.mne.xmax)
+        self.start_bx.setSingleStep(0.05)
+        self.start_bx.valueChanged.connect(self._start_changed)
+        layout.addWidget(self.start_bx)
+
+        layout.addWidget(QLabel("Stop:"))
+        self.stop_bx = QDoubleSpinBox()
+        self.stop_bx.setDecimals(time_decimals)
+        self.stop_bx.setMinimum(0)
+        self.stop_bx.setMaximum(self.mne.xmax + 1 / self.mne.info["sfreq"])
+        self.stop_bx.setSingleStep(0.05)
+        self.stop_bx.valueChanged.connect(self._stop_changed)
+        layout.addWidget(self.stop_bx)
+
+        help_bt = QPushButton(QIcon.fromTheme("help"), "Help")
+        help_bt.clicked.connect(self._show_help)
+        layout.addWidget(help_bt)
+
+        widget.setLayout(layout)
+        self.setWidget(widget)
+
+    def _add_description_to_cmbx(self, description):
+        color_pixmap = QPixmap(25, 25)
+        color = _get_color(
+            self.mne.annotation_segment_colors[description], self.mne.dark
+        )
+        color.setAlpha(75)
+        color_pixmap.fill(color)
+        color_icon = QIcon(color_pixmap)
+        self.description_cmbx.addItem(color_icon, description)
+
+    def _add_description(self, new_description):
+        self.mne.new_annotation_labels.append(new_description)
+        self.mne.visible_annotations[new_description] = True
+        self.weakmain()._setup_annotation_colors()
+        self._add_description_to_cmbx(new_description)
+        self.mne.current_description = new_description
+        self.description_cmbx.setCurrentText(new_description)
+
+    def _add_description_dlg(self):
+        new_description, ok = QInputDialog.getText(
+            self, "Set new description!", "New description: "
+        )
+        if (
+            ok
+            and new_description
+            and new_description not in self.mne.new_annotation_labels
+        ):
+            self._add_description(new_description)
+
+    def _edit_description_all(self, new_des):
+        """Update descriptions of all annotations with the same description."""
+        old_des = self.description_cmbx.currentText()
+        edit_regions = [r for r in self.mne.regions if r.description == old_des]
+        # Update regions & annotations
+        for ed_region in edit_regions:
+            idx = self.weakmain()._get_onset_idx(ed_region.getRegion()[0])
+            self.mne.inst.annotations.description[idx] = new_des
+            ed_region.update_description(new_des)
+        # Update containers with annotation attributes
+        self.mne.new_annotation_labels.remove(old_des)
+        self.mne.new_annotation_labels = self.weakmain()._get_annotation_labels()
+        self.mne.visible_annotations[new_des] = self.mne.visible_annotations.pop(
+            old_des
+        )
+        self.mne.annotation_segment_colors[new_des] = (
+            self.mne.annotation_segment_colors.pop(old_des)
+        )
+
+        # Update related widgets
+        self.weakmain()._setup_annotation_colors()
+        self._update_regions_colors()
+        self._update_description_cmbx()
+        self.mne.current_description = new_des
+        self.mne.overview_bar.update_annotations()
+
+    def _edit_description_selected(self, new_des):
+        """Update description only of selected region."""
+        old_des = self.mne.selected_region.description
+        idx = self.weakmain()._get_onset_idx(self.mne.selected_region.getRegion()[0])
+        # Update regions & annotations
+        self.mne.inst.annotations.description[idx] = new_des
+        self.mne.selected_region.update_description(new_des)
+        # Update containers with annotation attributes
+        if new_des not in self.mne.new_annotation_labels:
+            self.mne.new_annotation_labels.append(new_des)
+        self.mne.visible_annotations[new_des] = copy(
+            self.mne.visible_annotations[old_des]
+        )
+        if old_des not in self.mne.inst.annotations.description:
+            self.mne.new_annotation_labels.remove(old_des)
+            self.mne.visible_annotations.pop(old_des)
+            self.mne.annotation_segment_colors[new_des] = (
+                self.mne.annotation_segment_colors.pop(old_des)
+            )
+
+        # Update related widgets
+        self.weakmain()._setup_annotation_colors()
+        self._update_regions_colors()
+        self._update_description_cmbx()
+        self.mne.overview_bar.update_annotations()
+
+    def _edit_description_dlg(self):
+        if len(self.mne.inst.annotations.description) > 0:
+            _AnnotEditDialog(self)
+        else:
+            self.weakmain().message_box(
+                text="No Annotations!",
+                info_text="There are no annotations yet to edit!",
+                icon=QMessageBox.Information,
+            )
+
+    def _remove_description(self, rm_description):
+        if rm_description != "":
+            # Remove regions
+            for rm_region in [
+                r for r in self.mne.regions if r.description == rm_description
+            ]:
+                rm_region.remove()
+
+            # Remove from descriptions
+            self.mne.new_annotation_labels.remove(rm_description)
+            self._update_description_cmbx()
+
+            # Remove from visible annotations
+            self.mne.visible_annotations.pop(rm_description)
+
+            # Remove from color mapping
+            if rm_description in self.mne.annotation_segment_colors:
+                self.mne.annotation_segment_colors.pop(rm_description)
+
+            # Set first description in combobox to current description
+            if self.description_cmbx.count() > 0:
+                self.description_cmbx.setCurrentIndex(0)
+                self.mne.current_description = self.description_cmbx.currentText()
+
+    def _remove_description_dlg(self):
+        rm_description = self.description_cmbx.currentText()
+        existing_annot = list(self.mne.inst.annotations.description).count(
+            rm_description
+        )
+        if existing_annot > 0:
+            text = f"Remove annotations with {rm_description}?"
+            info_text = (
+                f"There exist {existing_annot} annotations with "
+                f'"{rm_description}".\n'
+                f"Do you really want to remove them?"
+            )
+            buttons = QMessageBox.Yes | QMessageBox.No
+            ans = self.weakmain().message_box(
+                text=text,
+                info_text=info_text,
+                buttons=buttons,
+                default_button=QMessageBox.Yes,
+                icon=QMessageBox.Question,
+            )
+        else:
+            ans = QMessageBox.Yes
+
+        if ans == QMessageBox.Yes:
+            self._remove_description(rm_description)
+
+    def _set_visible_region(self, state, *, description):
+        self.mne.visible_annotations[description] = bool(state)
+
+    def _select_annotations(self):
+        logger.debug("Annotation selected")
+        select_dlg = QDialog(self)
+        chkbxs = list()
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel("Select visible labels:"))
+
+        # Add descriptions to scroll area to be scalable
+        scroll_area = QScrollArea()
+        scroll_widget = QWidget()
+        scroll_layout = QVBoxLayout()
+
+        for des in self.mne.visible_annotations:
+            chkbx = QCheckBox(des)
+            chkbx.setChecked(self.mne.visible_annotations[des])
+            chkbx.stateChanged.connect(
+                _methpartial(self._set_visible_region, description=des)
+            )
+            chkbxs.append(chkbx)
+            scroll_layout.addWidget(chkbx)
+
+        scroll_widget.setLayout(scroll_layout)
+        scroll_area.setWidget(scroll_widget)
+        layout.addWidget(scroll_area)
+
+        bt_layout = QGridLayout()
+
+        all_bt = QPushButton("All")
+        all_bt.clicked.connect(lambda: [chkbx.setChecked(True) for chkbx in chkbxs])
+        bt_layout.addWidget(all_bt, 0, 0)
+
+        clear_bt = QPushButton("Clear")
+        clear_bt.clicked.connect(lambda: [chkbx.setChecked(False) for chkbx in chkbxs])
+        bt_layout.addWidget(clear_bt, 0, 1)
+
+        ok_bt = QPushButton("Ok")
+        ok_bt.clicked.connect(select_dlg.close)
+        bt_layout.addWidget(ok_bt, 1, 0, 1, 2)
+
+        layout.addLayout(bt_layout)
+
+        select_dlg.setLayout(layout)
+        select_dlg.exec()
+        all_bt.clicked.disconnect()
+        clear_bt.clicked.disconnect()
+
+        self.weakmain()._update_regions_visible()
+
+    def _description_changed(self, descr_idx):
+        new_descr = self.description_cmbx.itemText(descr_idx)
+        self.mne.current_description = new_descr
+        # increase z-value of currently selected annotation and decrease all the others
+        for region in self.mne.regions:
+            if region.description == self.mne.current_description:
+                region.setZValue(2)
+            else:
+                region.setZValue(1)
+
+    def _start_changed(self):
+        start = self.start_bx.value()
+        sel_region = self.mne.selected_region
+        stop = sel_region.getRegion()[1]
+        if start <= stop:
+            self.mne.selected_region.setRegion((start, stop))
+            # Make channel specific fillBetweens stay in sync with annot region
+            # if len(sel_region.single_channel_annots.keys()) > 0:
+            #    sel_region.single_channel_annots(start, stop)
+        else:
+            self.weakmain().message_box(
+                text="Invalid value!",
+                info_text="Start can't be bigger than Stop!",
+                icon=QMessageBox.Critical,
+                modal=False,
+            )
+            self.start_bx.setValue(sel_region.getRegion()[0])
+
+    def _stop_changed(self):
+        stop = self.stop_bx.value()
+        sel_region = self.mne.selected_region
+        start = sel_region.getRegion()[0]
+        if start <= stop:
+            sel_region.setRegion((start, stop))
+        else:
+            self.weakmain().message_box(
+                text="Invalid value!",
+                info_text="Stop can't be smaller than Start!",
+                icon=QMessageBox.Critical,
+            )
+            self.stop_bx.setValue(sel_region.getRegion()[1])
+
+    def _set_color(self):
+        curr_descr = self.description_cmbx.currentText()
+        if curr_descr in self.mne.annotation_segment_colors:
+            curr_col = self.mne.annotation_segment_colors[curr_descr]
+        else:
+            curr_col = None
+        color = QColorDialog.getColor(
+            _get_color(curr_col, self.mne.dark), self, f"Choose color for {curr_descr}!"
+        )
+        if color.isValid():
+            # Invert it (we only want to display inverted colors, all stored
+            # colors should be for light mode)
+            color = _get_color(color.getRgb(), self.mne.dark)
+            self.mne.annotation_segment_colors[curr_descr] = color
+            self._update_regions_colors()
+            self._update_description_cmbx()
+            self.mne.overview_bar.update_annotations()
+
+    def update_values(self, region):
+        """Update spinbox values from region."""
+        rgn = region.getRegion()
+        self.start_bx.setEnabled(True)
+        self.stop_bx.setEnabled(True)
+        with QSignalBlocker(self.start_bx):
+            self.start_bx.setValue(rgn[0])
+        with QSignalBlocker(self.stop_bx):
+            self.stop_bx.setValue(rgn[1])
+
+    def _update_description_cmbx(self):
+        self.description_cmbx.clear()
+        descriptions = self.weakmain()._get_annotation_labels()
+        for description in descriptions:
+            self._add_description_to_cmbx(description)
+        self.description_cmbx.setCurrentText(self.mne.current_description)
+
+    def _update_regions_colors(self):
+        for region in self.mne.regions:
+            region.update_color()
+
+    def reset(self):
+        """Reset to default state."""
+        if self.description_cmbx.count() > 0:
+            self.description_cmbx.setCurrentIndex(0)
+            self.mne.current_description = self.description_cmbx.currentText()
+        with QSignalBlocker(self.start_bx):
+            self.start_bx.setValue(0)
+        with QSignalBlocker(self.stop_bx):
+            self.stop_bx.setValue(1 / self.mne.info["sfreq"])
+
+    def _show_help(self):
+        info_text = (
+            "<h1>Help</h1>"
+            "<h2>Annotations</h2>"
+            "<h3>Add Annotations</h3>"
+            "Drag inside the data-view to create annotations with "
+            "the description currently selected (leftmost item of "
+            "the toolbar).If there is no description yet, add one "
+            'with the button "Add description".'
+            "<h3>Remove Annotations</h3>"
+            "You can remove single annotations by right-clicking on "
+            "them."
+            "<h3>Edit Annotations</h3>"
+            "You can edit annotations by dragging them or their "
+            "boundaries. Or you can use the dials in the toolbar to "
+            "adjust the boundaries for the current selected "
+            "annotation."
+            "<h2>Descriptions</h2>"
+            "<h3>Add Description</h3>"
+            "Add a new description with "
+            'the button "Add description".'
+            "<h3>Edit Description</h3>"
+            "You can edit the description of one single annotation "
+            "or all annotations of the currently selected kind with "
+            'the button "Edit description".'
+            "<h3>Remove Description</h3>"
+            "You can remove all annotations of the currently "
+            'selected kind with the button "Remove description".'
+        )
+        self.weakmain().message_box(
+            text="Annotations-Help", info_text=info_text, icon=QMessageBox.Information
+        )
 
 
 class BrowserView(GraphicsView):
