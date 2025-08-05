@@ -122,6 +122,7 @@ from mne_qt_browser._widgets import (
 
 name = "pyqtgraph"
 
+
 def _select_all(chkbxs):
     for chkbx in chkbxs:
         chkbx.setChecked(True)
