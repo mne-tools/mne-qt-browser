@@ -123,7 +123,7 @@ name = "pyqtgraph"
 
 
 class AnnotationDock(QDockWidget):
-    """Dock-Window for Management of annotations."""
+    """Dock window for annotation management."""
 
     def __init__(self, main):
         super().__init__("Annotations")
