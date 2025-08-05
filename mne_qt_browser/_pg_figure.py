@@ -170,8 +170,7 @@ class AnnotationDock(QDockWidget):
         edit_bt.clicked.connect(self._edit_description_dlg)
         layout.addWidget(edit_bt)
 
-        # Uncomment when custom colors for annotations are implemented in
-        # MNE-Python.
+        # Uncomment when custom colors for annotations are implemented in MNE-Python
         # color_bt = QPushButton('Edit Color')
         # color_bt.clicked.connect(self._set_color)
         # layout.addWidget(color_bt)
@@ -180,7 +179,7 @@ class AnnotationDock(QDockWidget):
         select_bt.clicked.connect(self._select_annotations)
         layout.addWidget(select_bt)
 
-        # Determine reasonable time decimals from sampling frequency.
+        # Determine reasonable time decimals from sampling frequency
         time_decimals = int(np.ceil(np.log10(self.mne.info["sfreq"])))
 
         layout.addWidget(QLabel("Start:"))
@@ -246,7 +245,7 @@ class AnnotationDock(QDockWidget):
             idx = self.weakmain()._get_onset_idx(ed_region.getRegion()[0])
             self.mne.inst.annotations.description[idx] = new_des
             ed_region.update_description(new_des)
-        # Update containers with annotation-attributes
+        # Update containers with annotation attributes
         self.mne.new_annotation_labels.remove(old_des)
         self.mne.new_annotation_labels = self.weakmain()._get_annotation_labels()
         self.mne.visible_annotations[new_des] = self.mne.visible_annotations.pop(
@@ -270,7 +269,7 @@ class AnnotationDock(QDockWidget):
         # Update regions & annotations
         self.mne.inst.annotations.description[idx] = new_des
         self.mne.selected_region.update_description(new_des)
-        # Update containers with annotation-attributes
+        # Update containers with annotation attributes
         if new_des not in self.mne.new_annotation_labels:
             self.mne.new_annotation_labels.append(new_des)
         self.mne.visible_annotations[new_des] = copy(
@@ -314,11 +313,11 @@ class AnnotationDock(QDockWidget):
             # Remove from visible annotations
             self.mne.visible_annotations.pop(rm_description)
 
-            # Remove from color-mapping
+            # Remove from color mapping
             if rm_description in self.mne.annotation_segment_colors:
                 self.mne.annotation_segment_colors.pop(rm_description)
 
-            # Set first description in Combo-Box to current description
+            # Set first description in combobox to current description
             if self.description_cmbx.count() > 0:
                 self.description_cmbx.setCurrentIndex(0)
                 self.mne.current_description = self.description_cmbx.currentText()
@@ -359,7 +358,7 @@ class AnnotationDock(QDockWidget):
         layout = QVBoxLayout()
         layout.addWidget(QLabel("Select visible labels:"))
 
-        # Add descriptions to scroll-area to be scalable.
+        # Add descriptions to scroll area to be scalable
         scroll_area = QScrollArea()
         scroll_widget = QWidget()
         scroll_layout = QVBoxLayout()
@@ -403,7 +402,7 @@ class AnnotationDock(QDockWidget):
     def _description_changed(self, descr_idx):
         new_descr = self.description_cmbx.itemText(descr_idx)
         self.mne.current_description = new_descr
-        # increase zValue of currently selected annotation and decrease all the others
+        # increase z-value of currently selected annotation and decrease all the others
         for region in self.mne.regions:
             if region.description == self.mne.current_description:
                 region.setZValue(2)
@@ -461,7 +460,7 @@ class AnnotationDock(QDockWidget):
             self.mne.overview_bar.update_annotations()
 
     def update_values(self, region):
-        """Update spinbox-values from region."""
+        """Update spinbox values from region."""
         rgn = region.getRegion()
         self.start_bx.setEnabled(True)
         self.stop_bx.setEnabled(True)
