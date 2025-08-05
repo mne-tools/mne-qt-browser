@@ -13,7 +13,7 @@ from mne.utils import logger
 from mne.viz.utils import _merge_annotations
 from pyqtgraph import AxisItem, GraphicsView, Point, ViewBox, mkBrush
 from qtpy.QtCore import QLineF, QPoint, QPointF, QRectF, QSignalBlocker, Qt
-from qtpy.QtGui import QImage, QPixmap
+from qtpy.QtGui import QIcon, QImage, QPixmap
 from qtpy.QtWidgets import (
     QCheckBox,
     QColorDialog,
@@ -25,7 +25,6 @@ from qtpy.QtWidgets import (
     QGraphicsView,
     QGridLayout,
     QHBoxLayout,
-    QIcon,
     QInputDialog,
     QLabel,
     QMessageBox,
