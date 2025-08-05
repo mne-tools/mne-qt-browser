@@ -214,8 +214,7 @@ class LoadThread(QThread):
 class _PGMetaClass(type(QMainWindow), type(BrowserBase)):
     """Class is necessary to prevent a metaclass conflict.
 
-    The conflict arises due to the different types of QMainWindow and
-    BrowserBase.
+    The conflict arises due to the different types of QMainWindow and BrowserBase.
     """
 
     pass
@@ -234,8 +233,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         BrowserBase.__init__(self, **kwargs)
         QMainWindow.__init__(self)
 
-        # Add to list to keep a reference and avoid premature
-        # garbage-collection.
+        # Add to list to keep a reference and avoid premature garbage collection
         _browser_instances.append(self)
 
         # Set the browser style
@@ -268,19 +266,19 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # control raising with _qt_raise_window
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
 
-        # Initialize attributes which are only used by pyqtgraph, not by
-        # matplotlib and add them to MNEBrowseParams.
+        # Initialize attributes which are only used by pyqtgraph, not by matplotlib and
+        # add them to MNEBrowseParams
 
         # Exactly one MessageBox for messages to facilitate testing/debugging
         self.msg_box = QMessageBox(self)
-        # MessageBox modality needs to be adapted for tests
-        # (otherwise test execution blocks)
+        # MessageBox modality needs to be adapted for tests (otherwise test execution
+        # blocks)
         self.test_mode = False
-        # A Settings-Dialog
+        # Settings dialog
         self.mne.fig_settings = None
         # Stores decimated data
         self.mne.decim_data = None
-        # Stores ypos for selection-mode
+        # Stores ypos for selection mode
         self.mne.selection_ypos_dict = dict()
         # Parameters for precomputing
         self.mne.enable_precompute = False
@@ -289,15 +287,15 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.zscore_rgba = None
         # Container for traces
         self.mne.traces = list()
-        # Scale-Factor
+        # Scale factor
         self.mne.scale_factor = 1
         # DPI
         screen = QApplication.primaryScreen()
         self.mne.dpi = screen.physicalDotsPerInch()
 
-        # Aspect Ratio
+        # Aspect ratio
         self.mne.aspect_ratio = screen.geometry().width() / screen.geometry().height()
-        # Stores channel-types for butterfly-mode
+        # Stores channel types for butterfly mode
         self.mne.butterfly_type_order = [
             tp for tp in DATA_CH_TYPES_ORDER if tp in self.mne.ch_types
         ]
@@ -327,7 +325,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                         qvalue = default
             setattr(self.mne, qparam, qvalue)
 
-        # Initialize channel-colors for faster indexing later
+        # Initialize channel colors for faster indexing later
         self.mne.ch_color_ref = dict()
         for idx, ch_name in enumerate(self.mne.ch_names):
             ch_type = self.mne.ch_types[idx]
@@ -358,7 +356,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             bad_idxs = np.isin(self.mne.ch_names, self.mne.info["bads"])
             self.mne.epoch_color_ref[bad_idxs, :] = to_rgba_array(self.mne.ch_color_bad)
 
-        # Add Load-Progressbar for loading in a thread
+        # Add progress bar for loading in a thread
         self.mne.load_prog_label = QLabel("Loading...")
         self.statusBar().addWidget(self.mne.load_prog_label)
         self.mne.load_prog_label.hide()
@@ -375,7 +373,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         widget = QWidget()
         layout = QGridLayout()
 
-        # Initialize Axis-Items
+        # Initialize axis items
         self.mne.time_axis = TimeAxis(self.mne)
         if self.mne.is_epochs:
             self.mne.time_axis.setLabel(text="Epoch Index", units=None)
@@ -388,7 +386,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Start precomputing if enabled
         self._init_precompute()
 
-        # Parameters for overviewbar
+        # Parameters for overview bar
         self.mne.overview_mode = getattr(self.mne, "overview_mode", "channels")
         overview_items = dict(
             empty="Empty",
@@ -412,25 +410,25 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Initialize data (needed in DataTrace.update_data).
         self._update_data()
 
-        # Initialize Trace-Plot
+        # Initialize trace plot
         self.mne.plt = PlotItem(
             viewBox=self.mne.viewbox,
             axisItems={"bottom": self.mne.time_axis, "left": self.mne.channel_axis},
         )
-        # Hide AutoRange-Button
+        # Hide AutoRange button
         self.mne.plt.hideButtons()
-        # Configure XY-Range
+        # Configure XY range
         if self.mne.is_epochs:
             self.mne.xmax = (
                 len(self.mne.inst.times) * len(self.mne.inst) / self.mne.info["sfreq"]
             )
         else:
             self.mne.xmax = self.mne.inst.times[-1]
-        # Add one empty line as padding at top (y=0).
-        # Negative Y-Axis to display channels from top.
+        # Add one empty line as padding at top (y=0)
+        # Negative y-axis to display channels from top
         self.mne.ymax = len(self.mne.ch_order) + 1
         self.mne.plt.setLimits(xMin=0, xMax=self.mne.xmax, yMin=0, yMax=self.mne.ymax)
-        # Connect Signals from PlotItem
+        # Connect signals from PlotItem
         self.mne.plt.sigXRangeChanged.connect(self._xrange_changed)
         self.mne.plt.sigYRangeChanged.connect(self._yrange_changed)
 
@@ -438,7 +436,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         for ch_idx in self.mne.picks:
             DataTrace(self, ch_idx)
 
-        # Initialize Epochs Grid
+        # Initialize epochs grid
         if self.mne.is_epochs:
             grid_pen = self.mne.mkPen(color="k", width=2, style=Qt.DashLine)
             for x_grid in self.mne.boundary_times[1:-1]:
@@ -456,14 +454,14 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         else:
             self.mne.events_visible = False
 
-        # Add Scale-Bars
+        # Add scale bars
         self._add_scalebars()
 
         # Check for OpenGL
         # If a user doesn't specify whether or not to use it:
         # 1. If on macOS, enable it by default to avoid segfault
-        # 2. Otherwise, disable it (performance differences seem minimal, and
-        #    PyOpenGL is an optional requirement)
+        # 2. Otherwise, disable it (performance differences seem minimal, and PyOpenGL
+        #    is an optional requirement)
         opengl_key = "MNE_BROWSER_USE_OPENGL"
         if self.mne.use_opengl is None:  # default: opt-in
             # OpenGL needs to be enabled on macOS
@@ -476,10 +474,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             try:
                 import OpenGL
             except (ModuleNotFoundError, ImportError) as exc:
-                # On macOS, if use_opengl is True we raise an error because
-                # it can lead to segfaults. If a user really knows what they
-                # are doing, they can pass use_opengl=False (or set
-                # MNE_BROWSER_USE_OPENGL=false)
+                # On macOS, if use_opengl is True we raise an error because it can lead
+                # to segfaults. If a user really knows what they are doing, they can
+                # pass use_opengl=False (or set MNE_BROWSER_USE_OPENGL=false)
                 if platform.system() == "Darwin":
                     raise RuntimeError(
                         "Plotting on macOS without OpenGL may be unstable! "
@@ -509,7 +506,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.view.setBackground(_get_color(bgcolor, self.mne.dark))
         layout.addWidget(self.mne.view, 0, 0)
 
-        # Initialize Scroll-Bars
+        # Initialize scrollbars
         self.mne.ax_hscroll = TimeScrollBar(self.mne)
         layout.addWidget(self.mne.ax_hscroll, 1, 0, 1, 2)
 
@@ -526,7 +523,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.crosshair = None
         self.mne.view.sigSceneMouseMoved.connect(self._mouse_moved)
 
-        # Initialize Annotation-Widgets
+        # Initialize annotation widgets
         self.mne.annotation_mode = False
         if not self.mne.is_epochs:
             self._init_annot_mode()
@@ -538,15 +535,15 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         widget.setLayout(layout)
         self.setCentralWidget(widget)
 
-        # Initialize Selection-Dialog
+        # Initialize selection dialog
         if getattr(self.mne, "group_by", None) in ["position", "selection"]:
             self._create_selection_fig()
 
-        # Initialize Projectors-Dialog if show_options=True
+        # Initialize projectors dialog if show_options=True
         if getattr(self.mne, "show_options", False):
             self._toggle_proj_fig()
 
-        # Initialize Toolbar
+        # Initialize toolbar
         self.mne.toolbar = self.addToolBar("Tools")
         # tool_button_style = Qt.ToolButtonTextBesideIcon
         tool_button_style = Qt.ToolButtonIconOnly
@@ -673,7 +670,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         ahelp.triggered.connect(self._toggle_help_fig)
         self.mne.toolbar.addAction(ahelp)
 
-        # Set Start-Range (after all necessary elements are initialized)
+        # Set start range (after all necessary elements are initialized)
         self.mne.plt.setXRange(
             self.mne.t_start, self.mne.t_start + self.mne.duration, padding=0
         )
@@ -682,12 +679,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         else:
             self.mne.plt.setYRange(0, self.mne.n_channels + 1, padding=0)
 
-        # Set Size
+        # Set size
         width = int(self.mne.figsize[0] * self.logicalDpiX())
         height = int(self.mne.figsize[1] * self.logicalDpiY())
         self.resize(width, height)
 
-        # Initialize Keyboard-Shortcuts
+        # Initialize keyboard shortcuts
         is_mac = platform.system() == "Darwin"
         dur_keys = ("fn + ←", "fn + →") if is_mac else ("Home", "End")
         ch_keys = ("fn + ↑", "fn + ↓") if is_mac else ("Page up", "Page down")
@@ -898,10 +895,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.channel_axis.repaint()
 
     def _add_scalebars(self):
-        """Add scalebars for all channel-types.
+        """Add scalebars for all channel types.
 
-        (scene handles showing them in when in view
-        range)
+        The scene handles showing them in when in view range.
         """
         self.mne.scalebars.clear()
         # To keep order (np.unique sorts)
@@ -982,11 +978,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if self.mne.clipping is not None:
             self._update_data()
 
-        # Scale Traces (by scaling the Item, not the data)
+        # Scale traces (by scaling the item, not the data)
         for line in self.mne.traces:
             line.update_scale()
 
-        # Update Scalebars
+        # Update scalebars
         self._update_scalebar_values()
 
         # Update spinboxes in settings dialog
@@ -1177,7 +1173,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.overview_bar.update_vline()
 
     def _mouse_moved(self, pos):
-        """Show Crosshair if enabled at mouse move."""
+        """Show crosshair if enabled at mouse move."""
         if self.mne.crosshair_enabled:
             if self.mne.plt.sceneBoundingRect().contains(pos):
                 mousePoint = self.mne.viewbox.mapSceneToView(pos)
@@ -1262,13 +1258,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         self._redraw(update_data=True)
 
-        # Update Time-Bar
+        # Update time bar
         self.mne.ax_hscroll.update_value(xrange[0])
 
-        # Update Overview-Bar
+        # Update overview bar
         self.mne.overview_bar.update_viewrange()
 
-        # Update Scalebars
+        # Update scalebars
         self._update_scalebar_x_positions()
 
         # Update annotations
@@ -1283,14 +1279,14 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 )
                 self.mne.n_channels = round(yrange[1] - yrange[0] - 1)
                 self._update_picks()
-                # Update Channel-Bar
+                # Update channel bar
                 self.mne.ax_vscroll.update_value(self.mne.ch_start)
             self._update_data()
 
-        # Update Overview-Bar
+        # Update overview bar
         self.mne.overview_bar.update_viewrange()
 
-        # Update Scalebars
+        # Update scalebars
         self._update_scalebar_y_positions()
 
         off_traces = [tr for tr in self.mne.traces if tr.ch_idx not in self.mne.picks]
@@ -1302,26 +1298,26 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         for trace in [tr for tr in self.mne.traces if tr not in off_traces]:
             trace.update_range_idx()
 
-        # Update number of traces.
+        # Update number of traces
         trace_diff = len(self.mne.picks) - len(self.mne.traces)
 
-        # Remove unnecessary traces.
+        # Remove unnecessary traces
         if trace_diff < 0:
-            # Only remove from traces not in picks.
+            # Only remove from traces not in picks
             remove_traces = off_traces[: abs(trace_diff)]
             for trace in remove_traces:
                 trace.remove()
                 off_traces.remove(trace)
 
-        # Add new traces if necessary.
+        # Add new traces if necessary
         if trace_diff > 0:
-            # Make copy to avoid skipping iteration.
+            # Make copy to avoid skipping iteration
             idxs_copy = add_idxs.copy()
             for aidx in idxs_copy[:trace_diff]:
                 DataTrace(self, aidx)
                 add_idxs.remove(aidx)
 
-        # Update data of traces outside of yrange (reuse remaining trace-items)
+        # Update data of traces outside of yrange (reuse remaining trace items)
         for trace, ch_idx in zip(off_traces, add_idxs):
             trace.set_ch_idx(ch_idx)
             trace.update_color()
@@ -1332,13 +1328,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     def _apply_downsampling(self):
         """
-        Get ds-factor and apply ds with one of multiple methods.
+        Get downsampling factor and apply with one of multiple methods.
 
-        The methods are taken from PlotDataItem in pyqtgraph
-        and adjusted to multi-channel data.
+        The methods are taken from PlotDataItem in PyQtGraph and adjusted to
+        multi-channel data.
         """
-        # Get Downsampling-Factor
-        # Auto-Downsampling from pyqtgraph
+        # Get downsampling factor
+        # Auto-Downsampling from PyQtGraph
         if self.mne.downsampling == "auto":
             ds = 1
             if all([hasattr(self.mne, a) for a in ["viewbox", "times"]]):
@@ -1356,12 +1352,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                         x1 = view_range.right() / dx
                         width = vb.width()
                         if width != 0.0:
-                            # Auto-Downsampling with 5 samples per pixel
+                            # Auto-downsampling with 5 samples per pixel
                             ds = int(max(1, (x1 - x0) / (width * 5)))
         else:
             ds = self.mne.downsampling
 
-        # Apply Downsampling
+        # Apply downsampling
         if ds not in [None, 1]:
             times = self.mne.times
             data = self.mne.data
@@ -1445,9 +1441,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             import psutil
         except ImportError:
             logger.info(
-                "Free RAM space could not be determined because"
-                '"psutil" is not installed. '
-                "Setting precompute to False."
+                "Free RAM could not be determined because "
+                '"psutil" is not installed. Setting precompute to False.'
             )
             return False
         else:
@@ -1456,20 +1451,19 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             else:
                 files = self.mne.inst.filenames
             if files[0] is not None:
-                # Get disk-space of raw-file(s)
+                # Get disk space of raw file(s)
                 disk_space = 0
                 for fn in files:
                     disk_space += getsize(fn)
 
-                # Determine expected RAM space based on orig_format
+                # Determine expected RAM based on orig_format
                 fmt_multipliers = {"double": 1, "single": 2, "int": 2, "short": 4}
 
-                # Epochs and ICA don't have this attribute, assume single
-                # on disk
+                # Epochs and ICA don't have this attribute, assume single on disk
                 fmt = getattr(self.mne.inst, "orig_format", "single")
-                # Apply size change to 64-bit float in memory
-                # (* 2 because when loading data will be loaded into a copy
-                # of self.mne.inst._data to apply processing.
+                # Apply size change to 64-bit float in memory (* 2 because when loading
+                # data will be loaded into a copy of self.mne.inst._data to apply
+                # processing.
                 expected_ram = disk_space * fmt_multipliers[fmt] * 2
             else:
                 expected_ram = sys.getsizeof(self.mne.inst._data)
@@ -1502,14 +1496,14 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def _process_data(self, *args, **kwargs):
         data = super()._process_data(*args, **kwargs)
 
-        # Invert Data to be displayed from top on inverted Y-Axis
+        # Invert data to be displayed from top on inverted y-axis
         data *= -1
 
         return data
 
     def _update_data(self):
         if self.mne.data_precomputed:
-            # get start/stop-samples
+            # get start/stop samples
             start, stop = self._get_start_stop()
             self.mne.times = self.mne.global_times[start:stop]
             self.mne.data = self.mne.global_data[:, start:stop]
@@ -1520,8 +1514,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                     self.mne.data, axis=1, keepdims=True
                 )
         else:
-            # While data is not precomputed get data only from shown range and
-            # process only those.
+            # While data is not precomputed get data only from shown range and process
+            # only those
             super()._update_data()
 
         # Initialize decim
@@ -1538,7 +1532,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 abs(self.mne.data * self.mne.scale_factor) > self.mne.clipping
             ] = np.nan
 
-        # Apply Downsampling (if enabled)
+        # Apply downsampling (if enabled)
         self._apply_downsampling()
 
     def _get_zscore(self, data):
@@ -1631,12 +1625,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             idx = self._get_onset_idx(region.getRegion()[0])
             self.mne.inst.annotations.delete(idx)
 
-        # Update Overview-Bar
+        # Update overview bar
         self.mne.overview_bar.update_annotations()
 
     def _region_selected(self, region):
         old_region = self.mne.selected_region
-        # Remove selected-status from old region
+        # Remove selected status from old region
         if old_region and old_region != region:
             old_region.select(False)
         self.mne.selected_region = region
@@ -1651,7 +1645,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         rgn = region.getRegion()
         region.select(True)
         idx = self._get_onset_idx(region.old_onset)
-        # update Spinboxes of Annot-Dock
+        # update spinboxes of annot dock
         self.mne.fig_annotation.update_values(region)
         # edit inst.annotations
         onset = _sync_onset(self.mne.inst, rgn[0], inverse=True)
@@ -1663,12 +1657,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             region.description,
             self.mne.inst.annotations,
         )
-        # update overview-bar
+        # update overview bar
         self.mne.overview_bar.update_annotations()
 
     def _draw_annotations(self):
-        # All regions are constantly added to the Scene and handled by Qt
-        # which is faster than handling adding/removing in Python.
+        # All regions are constantly added to the scene and handled by Qt, which is
+        # faster than handling adding/removing in Python
         pass
 
     def _init_annot_mode(self):
@@ -1682,7 +1676,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.regions = list()
         self.mne.selected_region = None
 
-        # Initialize Annotation-Dock
+        # Initialize annotation dock
         existing_dock = getattr(self.mne, "fig_annotation", None)
         if existing_dock is None:
             self.mne.fig_annotation = AnnotationDock(self)
@@ -1707,13 +1701,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _change_annot_mode(self):
         if not self.mne.annotation_mode:
-            # Reset Widgets in Annotation-Figure
+            # Reset widgets in annotation figure
             self.mne.fig_annotation.reset()
 
-        # Show Annotation-Dock if activated.
+        # Show annotation dock if activated
         self.mne.fig_annotation.setVisible(self.mne.annotation_mode)
 
-        # Make Regions movable if activated and move into foreground
+        # Make regions movable if activated and move into foreground
         for region in self.mne.regions:
             region.setMovable(self.mne.annotation_mode)
             if self.mne.annotation_mode:
@@ -1723,7 +1717,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             else:
                 region.setZValue(0)
 
-        # Add/Remove selection-rectangle.
+        # Add/Remove selection-rectangle
         if self.mne.selected_region:
             self.mne.selected_region.select(self.mne.annotation_mode)
 
@@ -1766,7 +1760,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             new_state[applied] = True
             self.mne.projs_on = new_state
         self._update_projector()
-        # If data was precomputed it needs to be precomputed again.
+        # If data was precomputed it needs to be precomputed again
         self._rerun_precompute()
         self._redraw()
 
@@ -1786,7 +1780,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def _toggle_whitening(self):
         if self.mne.noise_cov is not None:
             super()._toggle_whitening()
-            # If data was precomputed it needs to be precomputed again.
+            # If data was precomputed it needs to be precomputed again
             self._rerun_precompute()
             self._redraw()
 
@@ -1834,7 +1828,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             )
 
         if self.mne.fig_selection is not None:
-            # Update Selection-Dialog
+            # Update selection dialog
             self.mne.fig_selection._style_butterfly()
 
         # Set vertical scrollbar visible
@@ -1842,10 +1836,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             not butterfly or self.mne.fig_selection is not None
         )
 
-        # update overview-bar
+        # update overview bar
         self.mne.overview_bar.update_viewrange()
 
-        # update ypos and color for butterfly-mode
+        # update ypos and color for butterfly mode
         for trace in self.mne.traces:
             trace.update_color()
             trace.update_ypos()
@@ -1982,7 +1976,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if icon is not None:
             self.msg_box.setIcon(icon)
 
-        # Allow interacting with message_box in test-mode.
+        # Allow interacting with message_box in test mode.
         # Set modal=False only if no return value is expected.
         self.msg_box.setModal(False if self.test_mode else modal)
         if self.test_mode or not modal:
@@ -1992,8 +1986,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def keyPressEvent(self, event):
         """Customize key press events."""
-        # On MacOs additionally KeypadModifier is set when arrow-keys
-        # are pressed.
+        # On macOS additionally KeypadModifier is set when arrow keys are pressed
         mods = event.modifiers()
         try:
             mods = int(mods)  # PyQt < 5.13
@@ -2055,7 +2048,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         else:
             modifier = Qt.NoModifier
 
-        # Use pytest-qt's exception-hook
+        # Use pytest-qt's exception hook
         with capture_exceptions() as exceptions:
             QTest.keyPress(fig, self.mne.keyboard_shortcuts[key]["qt_key"], modifier)
 
@@ -2077,10 +2070,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         modifier=None,
     ):
         add_points = add_points or list()
-        # Wait until Window is fully shown.
+        # Wait until window is fully shown
         QTest.qWaitForWindowExposed(self)
-        # Scene-Dimensions still seem to change to final state when waiting
-        # for a short time.
+        # Scene dimensions still seem to change to final state when waiting for a short
+        # time
         QTest.qWait(10)
 
         # Qt: right-button=2, matplotlib: right-button=3
@@ -2090,14 +2083,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             button = Qt.RightButton
 
         # For Qt, fig or ax both would be the widget to test interaction on.
-        # If View
         fig = ax or fig or self.mne.view
 
         if xform == "ax":
-            # For Qt, the equivalent of matplotlibs transAxes
-            # would be a transformation to View Coordinates.
-            # But for the View top-left is (0, 0) and bottom-right is
-            # (view-width, view-height).
+            # For Qt, the equivalent of Matplotlib's transAxes would be a transformation
+            # to view coordinates. But for the View, top-left is (0, 0) and bottom-right
+            # is (view-width, view-height).
             view_width = fig.width()
             view_height = fig.height()
             x = view_width * point[0]
@@ -2109,10 +2100,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 add_points[idx] = Point(x2, y2)
 
         elif xform == "data":
-            # For Qt, the equivalent of matplotlibs transData
-            # would be a transformation to
-            # the coordinate system of the ViewBox.
-            # This only works on the View (self.mne.view)
+            # For Qt, the equivalent of Matplotlib's transData would be a transformation
+            # to the coordinate system of the ViewBox. This only works on the View
+            # (self.mne.view).
             fig = self.mne.view
             point = self.mne.viewbox.mapViewToScene(Point(*point))
             for idx, apoint in enumerate(add_points):
@@ -2129,13 +2119,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 else:
                     add_points[idx] = Point(apoint)
 
-        # Use pytest-qt's exception-hook
+        # Use pytest-qt's exception hook
         with capture_exceptions() as exceptions:
             widget = fig.viewport() if isinstance(fig, QGraphicsView) else fig
             if kind == "press":
-                # always click because most interactivity comes form
-                # mouseClickEvent from pyqtgraph (just press doesn't suffice
-                # here).
+                # always click because most interactivity comes from mouseClickEvent
+                # from pyqtgraph (just press doesn't suffice here).
                 _mouseClick(widget=widget, pos=point, button=button, modifier=modifier)
             elif kind == "release":
                 _mouseRelease(
@@ -2157,16 +2146,16 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 f"event loop (look above for traceback)."
             )
 
-        # Waiting some time for events to be processed.
+        # Wait some time for events to be processed
         QTest.qWait(50)
 
     def _fake_scroll(self, x, y, step, fig=None):
-        # QTest doesn't support simulating scrolling-wheel
+        # QTest doesn't support simulating scroll wheel
         self.vscroll(step)
 
     def _click_ch_name(self, ch_index, button):
         self.mne.channel_axis.repaint()
-        # Wait because channel-axis may need time
+        # Wait because channel axis may need time
         # (came up with test_epochs::test_plot_epochs_clicks)
         QTest.qWait(100)
         if not self.mne.butterfly:
@@ -2192,7 +2181,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         return tuple(t.toPlainText() for t in self.mne.scalebar_texts.values())
 
     def show(self):  # noqa: D102
-        # Set raise_window like matplotlib if possible
+        # Set raise_window like Matplotlib if possible
         super().show()
         _qt_raise_window(self)
 
@@ -2208,7 +2197,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             fig.close()
 
     def _check_close(self):
-        """Close annotations-mode before closing the browser."""
+        """Close annotations mode before closing the browser."""
         if self.mne.annotation_mode:
             self._toggle_annotation_fig()
         else:
@@ -2218,8 +2207,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         """Customize close event."""
         event.accept()
         if hasattr(self, "mne"):
-            # Explicit disconnects to avoid reference cycles that gc can't
-            # properly resolve ()
+            # Explicit disconnects to avoid reference cycles that GC can't properly
+            # resolve
             if hasattr(self.mne, "plt"):
                 _disconnect(self.mne.plt.sigXRangeChanged)
                 _disconnect(self.mne.plt.sigYRangeChanged)
@@ -2227,7 +2216,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 for action in self.mne.toolbar.actions():
                     allow_error = action.text() == ""
                     _disconnect(action.triggered, allow_error=allow_error)
-            # Save settings going into QSettings.
+            # Save settings going into QSettings
             for qsetting in qsettings_params:
                 value = getattr(self.mne, qsetting)
                 self._save_setting(qsetting, value)
@@ -2264,7 +2253,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             _browser_instances.remove(self)
         self._close(event)
         self.gotClosed.emit()
-        # Make sure it gets deleted after it was closed.
+        # Make sure it gets deleted after it was closed
         self.deleteLater()
         self._closed = True
 
@@ -2295,7 +2284,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
 
 def _get_n_figs():
-    # Wait for a short time to let the Qt-loop clean up
+    # Wait for a short time to let the Qt loop clean up
     QTest.qWait(100)
     return len(
         [window for window in QApplication.topLevelWindows() if window.isVisible()]
@@ -2307,8 +2296,7 @@ def _close_all():
         QApplication.closeAllWindows()
 
 
-# mouse testing functions adapted from pyqtgraph
-# (pyqtgraph.tests.ui_testing.py)
+# mouse testing functions adapted from pyqtgraph (pyqtgraph.tests.ui_testing.py)
 def _mousePress(widget, pos, button, modifier=None):
     if modifier is None:
         modifier = Qt.KeyboardModifier.NoModifier
@@ -2347,7 +2335,7 @@ def _mouseClick(widget, pos, button, modifier=None):
 def _mouseDrag(widget, positions, button, modifier=None):
     _mouseMove(widget, positions[0])
     _mousePress(widget, positions[0], button, modifier)
-    # Delay for 10 ms for drag to be recognized.
+    # Delay for 10 ms for drag to be recognized
     QTest.qWait(10)
     for pos in positions[1:]:
         _mouseMove(widget, pos, button, modifier)
@@ -2356,7 +2344,7 @@ def _mouseDrag(widget, positions, button, modifier=None):
 
 # modified from: https://github.com/pyvista/pyvistaqt
 def _setup_ipython(ipython=None):
-    # ipython magic
+    # IPython magic
     if scooby.in_ipython():
         from IPython import get_ipython
 
