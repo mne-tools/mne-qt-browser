@@ -5,6 +5,6 @@ try:
 except Exception:
     __version__ = "0.0.0"
 
-# All created brower-instances are listed here for a reference to avoid having
-# them garbage-collected prematurely.
+# Keep references to all created brower instances to prevent them from being
+# garbage-collected prematurely
 _browser_instances = list()
