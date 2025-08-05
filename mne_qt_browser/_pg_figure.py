@@ -1,23 +1,15 @@
+# License: BSD-3-Clause
+# Copyright the MNE Qt Browser contributors.
+
 """Base classes and functions for 2D browser backends."""
 
-# Author: Martin Schulz <dev@earthman-music.de>
-#
-# License: BSD-3-Clause
-
-import datetime
-import functools
 import gc
 import inspect
 import math
-import os
 import platform
 import sys
-import warnings
 import weakref
 from ast import literal_eval
-from collections import OrderedDict
-from copy import copy
-from functools import partial
 from os.path import getsize
 from pathlib import Path
 
@@ -25,10 +17,10 @@ import numpy as np
 
 try:
     from qtpy.QtCore import Qt
-except Exception as exc:
-    if exc.__class__.__name__ == "QtBindingsNotFoundError":
+except Exception as e:
+    if e.__class__.__name__ == "QtBindingsNotFoundError":
         raise ImportError(
-            "No Qt binding found, please install PyQt6, PyQt5, PySide6, or PySide2"
+            "No Qt binding found, please install PySide6 or PyQt6."
         ) from None
     else:
         raise
@@ -36,3385 +28,86 @@ except Exception as exc:
 import scooby
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.colors import to_rgba_array
-from mne import channel_indices_by_type
 from mne.annotations import _sync_onset
-from mne.io.pick import _DATA_CH_TYPES_ORDER_DEFAULT, _DATA_CH_TYPES_SPLIT
-from mne.utils import _check_option, _to_rgb, get_config, logger, sizeof_fmt, warn
-from mne.viz import plot_sensors
+from mne.utils import _check_option, get_config, logger, sizeof_fmt, warn
 from mne.viz._figure import BrowserBase
 from mne.viz.backends._utils import _init_mne_qtapp, _qt_raise_window
-from mne.viz.utils import _figure_agg, _merge_annotations, _simplify_float
+from mne.viz.utils import _merge_annotations, _simplify_float
 from pyqtgraph import (
-    AxisItem,
-    FillBetweenItem,
-    GraphicsView,
     InfiniteLine,
-    InfLineLabel,
-    LinearRegionItem,
-    PlotCurveItem,
-    PlotDataItem,
     PlotItem,
     Point,
-    TextItem,
-    ViewBox,
-    mkBrush,
-    mkColor,
     mkPen,
     setConfigOption,
 )
 from qtpy.QtCore import (
     QEvent,
-    QLineF,
-    QPoint,
-    QPointF,
-    QRectF,
     QSettings,
     QSignalBlocker,
     QThread,
     Signal,
 )
-from qtpy.QtGui import (
-    QColor,
-    QFont,
-    QGuiApplication,
-    QIcon,
-    QImage,
-    QMouseEvent,
-    QPainter,
-    QPainterPath,
-    QPixmap,
-    QTransform,
-)
+from qtpy.QtGui import QIcon, QMouseEvent
 from qtpy.QtTest import QTest
 from qtpy.QtWidgets import (
-    QAbstractSpinBox,
     QAction,
     QActionGroup,
     QApplication,
-    QCheckBox,
-    QColorDialog,
-    QComboBox,
-    QDialog,
-    QDockWidget,
-    QDoubleSpinBox,
-    QFormLayout,
-    QGraphicsLineItem,
-    QGraphicsScene,
     QGraphicsView,
     QGridLayout,
-    QGroupBox,
-    QHBoxLayout,
-    QInputDialog,
     QLabel,
-    QLineEdit,
     QMainWindow,
     QMenu,
     QMessageBox,
     QProgressBar,
-    QPushButton,
     QRadioButton,
-    QScrollArea,
-    QScrollBar,
-    QSizePolicy,
-    QSlider,
-    QSpacerItem,
-    QSpinBox,
-    QStyle,
-    QStyleOptionSlider,
-    QTextEdit,
     QToolButton,
-    QVBoxLayout,
     QWidget,
     QWidgetAction,
 )
 from scipy.stats import zscore
 
-from . import _browser_instances
-from ._colors import _lab_to_rgb, _rgb_to_lab
-from ._fixes import capture_exceptions
+from mne_qt_browser import _browser_instances
+from mne_qt_browser._colors import _get_color, _rgb_to_lab
+from mne_qt_browser._dialogs import (
+    HelpDialog,
+    ProjDialog,
+    SelectionDialog,
+    SettingsDialog,
+    _BaseDialog,
+)
+from mne_qt_browser._fixes import capture_exceptions
+from mne_qt_browser._graphic_items import (
+    AnnotRegion,
+    Crosshair,
+    DataTrace,
+    EventLine,
+    ScaleBar,
+    ScaleBarText,
+    VLine,
+)
+from mne_qt_browser._utils import (
+    DATA_CH_TYPES_ORDER,
+    _disconnect,
+    _get_channel_scaling,
+    _methpartial,
+    _safe_splash,
+    _screen_geometry,
+    _set_window_flags,
+    qsettings_params,
+)
+from mne_qt_browser._widgets import (
+    AnnotationDock,
+    BrowserView,
+    ChannelAxis,
+    ChannelScrollBar,
+    OverviewBar,
+    RawViewBox,
+    TimeAxis,
+    TimeScrollBar,
+)
 
 name = "pyqtgraph"
-
-# MNE's butterfly plots traditionally default to the channel ordering of
-# mag, grad, ..., which is inconsistent with the order in non-butterfly mode
-# and hence doesn't match the order in the overview bar either. So we swap
-# grads and mags here.
-DATA_CH_TYPES_ORDER = ("grad", "mag", *_DATA_CH_TYPES_ORDER_DEFAULT[2:])
-
-
-# Mostly chosen manually from
-# https://matplotlib.org/3.1.0/gallery/color/named_colors.html
-_dark_dict = {
-    # 'w' (bgcolor)
-    (255, 255, 255): (30, 30, 30),  # safari's centered info panel background
-    # 'k' (eeg, eog, emg, misc, stim, resp, chpi, exci, ias, syst, dipole, gof,
-    #      bio, ecog, fnirs_*, csd, whitened)
-    (0, 0, 0): (255, 255, 255),  # 'w'
-    # 'darkblue' (mag)
-    (0, 0, 139): (173, 216, 230),  # 'lightblue'
-    # 'b' (grad, hbr)
-    (0, 0, 255): (100, 149, 237),  # 'cornflowerblue'
-    # 'steelblue' (ref_meg)
-    (70, 130, 180): (176, 196, 222),  # 'lightsteelblue'
-    # 'm' (ecg)
-    (191, 0, 191): (238, 130, 238),  # 'violet'
-    # 'saddlebrown' (seeg)
-    (139, 69, 19): (244, 164, 96),  # 'sandybrown'
-    # 'seagreen' (dbs)
-    (46, 139, 87): (32, 178, 170),  # 'lightseagreen'
-    # '#AA3377' (hbo), closest to 'mediumvioletred'
-    (170, 51, 119): (255, 105, 180),  # 'hotpink'
-    # 'lightgray' (bad_color)
-    (211, 211, 211): (105, 105, 105),  # 'dimgray'
-    # 'cyan' (event_color)
-    (0, 255, 255): (0, 139, 139),  # 'darkcyan'
-}
-
-_vline_color = (0, 191, 0)
-
-_unit_per_inch = dict(mm=25.4, cm=2.54, inch=1.0)
-
-
-def _get_color(color_spec, invert=False):
-    """Wrap mkColor to accept all possible matplotlib color-specifiers."""
-    if isinstance(color_spec, np.ndarray):
-        color_spec = tuple(color_spec)
-    # We have to pass to QColor here to make a copy because we should be able
-    # to .setAlpha(...) etc. on it and this would otherwise affect the cache.
-    return QColor(_get_color_cached(color_spec=color_spec, invert=invert))
-
-
-@functools.lru_cache(maxsize=100)
-def _get_color_cached(*, color_spec, invert):
-    orig_spec = color_spec
-    try:
-        # Convert matplotlib color-names if possible
-        color_spec = _to_rgb(color_spec, alpha=True)
-    except ValueError:
-        pass
-
-    # Convert tuples of floats from 0-1 to 0-255 for pyqtgraph
-    if isinstance(color_spec, tuple) and all([i <= 1 for i in color_spec]):
-        color_spec = tuple([int(i * 255) for i in color_spec])
-
-    try:
-        color = mkColor(color_spec)
-    except ValueError:
-        raise ValueError(
-            f'"{color_spec}" is not a valid matplotlib color-specifier!'
-        ) from None
-    if invert:
-        # First see if the color is in our inversion dictionary
-        key = color.getRgb()
-        assert len(key) == 4
-        if key[:3] in _dark_dict:
-            color.setRgb(*(_dark_dict[key[:3]] + key[-1:]))
-        else:
-            logger.debug(f"Missed {key} from {orig_spec}")
-            rgba = np.array(color.getRgbF())
-            lab = _rgb_to_lab(rgba[:3])
-            lab[0] = 100.0 - lab[0]
-            rgba[:3] = _lab_to_rgb(lab)
-            color.setRgbF(*rgba)
-
-    return color
-
-
-def _get_channel_scaling(widget, ch_type):
-    """Get channel scaling."""
-    scaler = 1 if widget.mne.butterfly else 2
-    inv_norm = (
-        scaler
-        * widget.mne.scalings[ch_type]
-        * widget.mne.unit_scalings[ch_type]
-        / widget.mne.scale_factor
-    )
-    return inv_norm
-
-
-def _calc_data_unit_to_physical(widget, units="mm"):
-    """Calculate the physical size of a data unit."""
-    # Get the ViewBox and its height in pixels
-    vb = widget.mne.viewbox
-    height_px = vb.geometry().height()
-
-    # Get the view range in data units (here we write V for logical simplicity and
-    # dimensional analysis but it works for any underlying data unit)
-    view_range = vb.viewRange()
-    height_V = view_range[1][1] - view_range[1][0]
-
-    # Calculate the pixel-to-data ratio
-    if height_V == 0:
-        return 0
-
-    # Get the screen DPI
-    # px_per_in = QApplication.primaryScreen().logicalDotsPerInch()
-    px_per_in = widget.mne.dpi
-
-    # Convert to inches
-    height_in = height_px / px_per_in
-
-    # Convert pixels to inches
-    in_per_V = height_in / height_V
-
-    # Convert inches to millimeters (or something else, but using mm in the name for
-    # simplicity)
-    mm_per_in = _unit_per_inch[units]
-    mm_per_V = in_per_V * mm_per_in
-    return mm_per_V
-
-
-def _calc_chan_type_to_physical(widget, ch_type, units="mm"):
-    """Convert data to physical units."""
-    return _get_channel_scaling(widget, ch_type) / _calc_data_unit_to_physical(
-        widget, units=units
-    )
-
-
-def _convert_physical_units(value, from_unit=None, to_unit=None):
-    """Convert a value from one physical unit to another."""
-    if from_unit not in _unit_per_inch or to_unit not in _unit_per_inch:
-        raise ValueError("Invalid units. Please use 'mm', 'cm', or 'inch'.")
-
-    # Convert the value to inches first
-    value_in_inches = value / _unit_per_inch[from_unit]
-
-    # Convert the value from inches to the target unit
-    converted_value = value_in_inches * _unit_per_inch[to_unit]
-
-    return converted_value
-
-
-def propagate_to_children(method):  # noqa: D103
-    @functools.wraps(method)
-    def wrapper(*args, **kwargs):
-        propagate = kwargs.pop("propagate", True)
-        result = method(*args, **kwargs)
-        if args[0].mne.is_epochs and propagate:
-            # parent always goes first
-            if hasattr(args[0], "child_traces"):
-                for child_trace in args[0].child_traces:
-                    getattr(child_trace, method.__name__)(*args[1:], **kwargs)
-        return result
-
-    return wrapper
-
-
-def _safe_splash(meth):
-    @functools.wraps(meth)
-    def func(self, *args, **kwargs):
-        try:
-            meth(self, *args, **kwargs)
-        finally:
-            try:
-                self.mne.splash.close()
-            except Exception:
-                pass
-            finally:
-                try:
-                    del self.mne.splash
-                except Exception:
-                    pass
-
-    return func
-
-
-class DataTrace(PlotCurveItem):
-    """Graphics-Object for single data trace."""
-
-    def __init__(self, main, ch_idx, child_idx=None, parent_trace=None):
-        super().__init__()
-        self.weakmain = weakref.ref(main)
-        self.mne = main.mne
-        del main
-
-        # Set clickable with small area around trace to make clicking easier.
-        self.setClickable(True, 12)
-
-        # Set default z-value to 1 to be before other items in scene
-        self.setZValue(1)
-
-        # General attributes
-        # The ch_idx is the index of the channel represented by this trace
-        # in the channel-order from the unchanged instance (which also picks
-        # refer to).
-        self.ch_idx = None
-        # The range_idx is the index of the channel represented by this trace
-        # in the shown range.
-        self.range_idx = None
-        # The order_idx is the index of the channel represented by this trace
-        # in the channel-order (defined e.g. by group_by).
-        self.order_idx = None
-        # Name of the channel the trace represents.
-        self.ch_name = None
-        # Indicates if trace is bad.
-        self.isbad = None
-        # Channel-type of trace.
-        self.ch_type = None
-        # Color-specifier (all possible matplotlib color formats)
-        self.color = None
-
-        # Attributes for epochs-mode
-        # Index of child if child.
-        self.child_idx = child_idx
-        # Reference to parent if child.
-        self.parent_trace = parent_trace
-
-        # Only for parent traces
-        if self.parent_trace is None:
-            # Add to main trace list
-            self.mne.traces.append(self)
-            # References to children
-            self.child_traces = list()
-            # Colors of trace in viewrange
-            self.trace_colors = None
-
-        # set attributes
-        self.set_ch_idx(ch_idx)
-        self.update_color()
-        self.update_scale()
-        # Avoid calling self.update_data() twice on initialization
-        # (because of update_scale()).
-        if self.mne.clipping is None:
-            self.update_data()
-
-        # Add to main plot
-        self.mne.plt.addItem(self)
-
-    @propagate_to_children
-    def remove(self):  # noqa: D102
-        self.mne.plt.removeItem(self)
-        # Only for parent trace
-        if self.parent_trace is None:
-            self.mne.traces.remove(self)
-        self.deleteLater()
-
-    @propagate_to_children
-    def update_color(self):
-        """Update the color of the trace."""
-        # Epochs
-        if self.mne.is_epochs:
-            # Add child traces if shown trace needs to have multiple colors
-            # (PlotCurveItem only supports one color per object).
-            # There always as many color-specific traces added depending
-            # on the whole time range of the instance regardless of the
-            # currently visible time range (to avoid checking for new colors
-            # while scrolling horizontally).
-
-            # Only for parent trace
-            if hasattr(self, "child_traces"):
-                self.trace_colors = np.unique(
-                    self.mne.epoch_color_ref[self.ch_idx], axis=0
-                )
-                n_childs = len(self.child_traces)
-                trace_diff = len(self.trace_colors) - n_childs - 1
-                # Add child traces if necessary
-                if trace_diff > 0:
-                    for cix in range(n_childs, n_childs + trace_diff):
-                        child = DataTrace(
-                            self.weakmain(),
-                            self.ch_idx,
-                            child_idx=cix,
-                            parent_trace=self,
-                        )
-                        self.child_traces.append(child)
-                elif trace_diff < 0:
-                    for _ in range(abs(trace_diff)):
-                        rm_trace = self.child_traces.pop()
-                        rm_trace.remove()
-
-                # Set parent color
-                self.color = self.trace_colors[0]
-
-            # Only for child trace
-            else:
-                self.color = self.parent_trace.trace_colors[self.child_idx + 1]
-
-        # Raw/ICA
-        else:
-            if self.isbad:
-                self.setZValue(0)
-                self.color = self.mne.ch_color_bad
-            else:
-                self.setZValue(1)
-                self.color = self.mne.ch_color_ref[self.ch_name]
-
-        self.setPen(self.mne.mkPen(_get_color(self.color, self.mne.dark)))
-
-    @propagate_to_children
-    def update_range_idx(self):  # noqa: D401
-        """Update when view-range or ch_idx changes."""
-        self.range_idx = np.argwhere(self.mne.picks == self.ch_idx)[0][0]
-
-    @propagate_to_children
-    def update_ypos(self):  # noqa: D401
-        """Update when butterfly is toggled or ch_idx changes."""
-        if self.mne.butterfly and self.mne.fig_selection is not None:
-            self.ypos = self.mne.selection_ypos_dict[self.ch_idx]
-        elif self.mne.fig_selection is not None and self.mne.old_selection == "Custom":
-            self.ypos = self.range_idx + 1
-        elif self.mne.butterfly:
-            self.ypos = self.mne.butterfly_type_order.index(self.ch_type) + 1
-        else:
-            self.ypos = self.range_idx + self.mne.ch_start + 1
-
-    @propagate_to_children
-    def update_scale(self):  # noqa: D102
-        transform = QTransform()
-        transform.scale(1.0, self.mne.scale_factor)
-        self.setTransform(transform)
-
-        if self.mne.clipping is not None:
-            self.update_data(propagate=False)
-
-    @propagate_to_children
-    def set_ch_idx(self, ch_idx):
-        """Set the channel index and all deriving indices."""
-        # The ch_idx is the index of the channel represented by this trace
-        # in the channel-order from the unchanged instance (which also picks
-        # refer to).
-        self.ch_idx = ch_idx
-        # The range_idx is the index of the channel represented by this trace
-        # in the shown range.
-        self.update_range_idx(propagate=False)
-        # The order_idx is the index of the channel represented by this trace
-        # in the channel-order (defined e.g. by group_by).
-        self.order_idx = np.argwhere(self.mne.ch_order == self.ch_idx)[0][0]
-        self.ch_name = self.mne.inst.ch_names[ch_idx]
-        self.isbad = self.ch_name in self.mne.info["bads"]
-        self.ch_type = self.mne.ch_types[ch_idx]
-        self.update_ypos(propagate=False)
-
-    @propagate_to_children
-    def update_data(self):
-        """Update data (fetch data from self.mne according to self.ch_idx)."""
-        if self.mne.is_epochs or (
-            self.mne.clipping is not None and self.mne.clipping != "clamp"
-        ):
-            connect = "finite"
-            skip = False
-        else:
-            connect = "all"
-            skip = True
-
-        if self.mne.data_precomputed:
-            data = self.mne.data[self.order_idx]
-            data /= self.mne.scalings[self.ch_type]
-        else:
-            data = self.mne.data[self.range_idx]
-        times = self.mne.times
-
-        # Get decim-specific time if enabled
-        if self.mne.decim != 1:
-            times = times[:: self.mne.decim_data[self.range_idx]]
-            data = data[..., :: self.mne.decim_data[self.range_idx]]
-
-        # For multiple color traces with epochs
-        # replace values from other colors with NaN.
-        if self.mne.is_epochs:
-            data = np.copy(data)
-            check_color = self.mne.epoch_color_ref[self.ch_idx, self.mne.epoch_idx]
-            bool_ixs = np.invert(np.equal(self.color, check_color).all(axis=1))
-            starts = self.mne.boundary_times[self.mne.epoch_idx][bool_ixs]
-            stops = self.mne.boundary_times[self.mne.epoch_idx + 1][bool_ixs]
-
-            for start, stop in zip(starts, stops):
-                data[np.logical_and(start <= times, times <= stop)] = np.nan
-
-        assert times.shape[-1] == data.shape[-1]
-
-        self.setData(
-            times,
-            data,
-            connect=connect,
-            skipFiniteCheck=skip,
-            antialias=self.mne.antialiasing,
-        )
-
-        self.setPos(0, self.ypos)
-
-    def toggle_bad(self, x=None):
-        """Toggle bad status."""
-        # Toggle bad epoch
-        if self.mne.is_epochs and x is not None:
-            epoch_idx, color = self.weakmain()._toggle_bad_epoch(x)
-
-            # Update epoch color
-            if color != "none":
-                new_epo_color = np.repeat(
-                    to_rgba_array(color), len(self.mne.inst.ch_names), axis=0
-                )
-            elif self.mne.epoch_colors is None:
-                new_epo_color = np.concatenate(
-                    [to_rgba_array(c) for c in self.mne.ch_color_ref.values()]
-                )
-            else:
-                new_epo_color = np.concatenate(
-                    [to_rgba_array(c) for c in self.mne.epoch_colors[epoch_idx]]
-                )
-
-            # Update bad channel colors
-            bad_idxs = np.isin(self.mne.ch_names, self.mne.info["bads"])
-            new_epo_color[bad_idxs] = to_rgba_array(self.mne.ch_color_bad)
-
-            self.mne.epoch_color_ref[:, epoch_idx] = new_epo_color
-
-            # Update overview-bar
-            self.mne.overview_bar.update_bad_epochs()
-
-            # Update other traces inlcuding self
-            for trace in self.mne.traces:
-                trace.update_color()
-                # Update data is necessary because colored segments will vary
-                trace.update_data()
-
-        # Toggle bad channel
-        else:
-            bad_color, pick, marked_bad = self.weakmain()._toggle_bad_channel(
-                self.range_idx
-            )
-            self.weakmain()._apply_update_projectors()
-
-            # Update line color status
-            self.isbad = not self.isbad
-
-            # Update colors for epochs
-            if self.mne.is_epochs:
-                if marked_bad:
-                    new_ch_color = np.repeat(
-                        to_rgba_array(bad_color), len(self.mne.inst), axis=0
-                    )
-                elif self.mne.epoch_colors is None:
-                    ch_color = self.mne.ch_color_ref[self.ch_name]
-                    new_ch_color = np.repeat(
-                        to_rgba_array(ch_color), len(self.mne.inst), axis=0
-                    )
-                else:
-                    new_ch_color = np.concatenate(
-                        [to_rgba_array(c[pick]) for c in self.mne.epoch_colors]
-                    )
-
-                self.mne.epoch_color_ref[pick, :] = new_ch_color
-
-            # Update trace color
-            self.update_color()
-            if self.mne.is_epochs:
-                self.update_data()
-
-            # Update channel-axis
-            self.weakmain()._update_yaxis_labels()
-
-            # Update overview-bar
-            self.mne.overview_bar.update_bad_channels()
-
-            # Update sensor color (if in selection mode)
-            if self.mne.fig_selection is not None:
-                self.mne.fig_selection._update_bad_sensors(pick, marked_bad)
-
-    def mouseClickEvent(self, ev):
-        """Customize mouse click events."""
-        if (
-            not self.clickable
-            or ev.button() != Qt.MouseButton.LeftButton
-            or self.mne.annotation_mode
-        ):
-            # Explicitly ignore events in annotation-mode
-            ev.ignore()
-            return
-        if self.mouseShape().contains(ev.pos()):
-            ev.accept()
-            self.toggle_bad(ev.pos().x())
-
-    def get_xdata(self):
-        """Get xdata for testing."""
-        return self.xData
-
-    def get_ydata(self):
-        """Get ydata for testing."""
-        return self.yData + self.ypos
-
-
-class TimeAxis(AxisItem):
-    """The X-Axis displaying the time."""
-
-    def __init__(self, mne):
-        self.mne = mne
-        self._spacing = None
-        super().__init__(orientation="bottom")
-
-    def tickValues(self, minVal, maxVal, size):
-        """Customize creation of axis values from visible axis range."""
-        if self.mne.is_epochs:
-            value_idxs = np.searchsorted(self.mne.midpoints, [minVal, maxVal])
-            values = self.mne.midpoints[slice(*value_idxs)]
-            spacing = len(self.mne.inst.times) / self.mne.info["sfreq"]
-            tick_values = [(spacing, values)]
-            return tick_values
-        else:
-            # Save _spacing for later use
-            self._spacing = self.tickSpacing(minVal, maxVal, size)
-            return super().tickValues(minVal, maxVal, size)
-
-    def tickStrings(self, values, scale, spacing):
-        """Customize strings of axis values."""
-        if self.mne.is_epochs:
-            epoch_nums = self.mne.inst.selection
-            ts = epoch_nums[np.searchsorted(self.mne.midpoints, values)]
-            tick_strings = [str(v) for v in ts]
-
-        elif self.mne.time_format == "clock":
-            meas_date = self.mne.info["meas_date"]
-            first_time = datetime.timedelta(seconds=self.mne.inst.first_time)
-
-            digits = np.ceil(-np.log10(min(v[0] for v in self._spacing)) + 1).astype(
-                int
-            )
-            tick_strings = list()
-            for val in values:
-                val_time = datetime.timedelta(seconds=val) + first_time + meas_date
-                val_str = val_time.strftime("%H:%M:%S")
-                if int(val_time.microsecond):
-                    val_str += f"{round(val_time.microsecond * 1e-6, digits)}"[1:]
-                tick_strings.append(val_str)
-        else:
-            tick_strings = super().tickStrings(values, scale, spacing)
-
-        return tick_strings
-
-    def repaint(self):
-        """Repaint Time Axis."""
-        self.picture = None
-        self.update()
-
-    def get_labels(self):
-        """Get labels for testing."""
-        values = self.tickValues(*self.mne.viewbox.viewRange()[0], self.mne.xmax)
-        labels = list()
-        for spacing, vals in values:
-            labels += self.tickStrings(vals, 1, spacing)
-
-        return labels
-
-
-class ChannelAxis(AxisItem):
-    """The Y-Axis displaying the channel-names."""
-
-    def __init__(self, main):
-        self.weakmain = weakref.ref(main)
-        self.mne = main.mne
-        del main
-        self.ch_texts = OrderedDict()
-        super().__init__(orientation="left")
-        self.style["autoReduceTextSpace"] = False
-
-    def tickValues(self, minVal, maxVal, size):
-        """Customize creation of axis values from visible axis range."""
-        minVal, maxVal = sorted((minVal, maxVal))
-        values = list(range(round(minVal) + 1, round(maxVal)))
-        tick_values = [(1, values)]
-        return tick_values
-
-    def tickStrings(self, values, scale, spacing):
-        """Customize strings of axis values."""
-        # Get channel-names
-        if self.mne.butterfly and self.mne.fig_selection is not None:
-            tick_strings = list(self.weakmain()._make_butterfly_selections_dict())
-        elif self.mne.butterfly:
-            _, ixs, _ = np.intersect1d(
-                DATA_CH_TYPES_ORDER, self.mne.ch_types, return_indices=True
-            )
-            ixs.sort()
-            tick_strings = np.array(DATA_CH_TYPES_ORDER)[ixs]
-        else:
-            # Get channel-names and by substracting 1 from tick-values
-            # since the first channel starts at y=1.
-            tick_strings = self.mne.ch_names[self.mne.ch_order[[v - 1 for v in values]]]
-
-        return tick_strings
-
-    def drawPicture(self, p, axisSpec, tickSpecs, textSpecs):
-        """Customize drawing of axis items."""
-        super().drawPicture(p, axisSpec, tickSpecs, textSpecs)
-        for rect, flags, text in textSpecs:
-            if self.mne.butterfly and self.mne.fig_selection is not None:
-                p.setPen(_get_color("black", self.mne.dark))
-            elif self.mne.butterfly:
-                p.setPen(_get_color(self.mne.ch_color_dict[text], self.mne.dark))
-            elif text in self.mne.info["bads"]:
-                p.setPen(_get_color(self.mne.ch_color_bad, self.mne.dark))
-            else:
-                p.setPen(_get_color(self.mne.ch_color_ref[text], self.mne.dark))
-            self.ch_texts[text] = (
-                (rect.left(), rect.left() + rect.width()),
-                (rect.top(), rect.top() + rect.height()),
-            )
-            p.drawText(rect, int(flags), text)
-
-    def repaint(self):
-        """Repaint Channel Axis."""
-        self.picture = None
-        self.update()
-
-    def mouseClickEvent(self, event):
-        """Customize mouse click events."""
-        # Clean up channel-texts
-        if not self.mne.butterfly:
-            self.ch_texts = {
-                k: v
-                for k, v in self.ch_texts.items()
-                if k in [tr.ch_name for tr in self.mne.traces]
-            }
-            # Get channel-name from position of channel-description
-            ypos = event.scenePos().y()
-            y_values = list(self.ch_texts.values())
-            if len(y_values) == 0:
-                return
-            y_values = np.array(y_values, float)[:, 1, :]
-            y_diff = np.abs(y_values - ypos)
-            ch_idx = int(np.argmin(y_diff, axis=0)[0])
-            ch_name = list(self.ch_texts)[ch_idx]
-            trace = [tr for tr in self.mne.traces if tr.ch_name == ch_name][0]
-            if event.button() == Qt.LeftButton:
-                trace.toggle_bad()
-            elif event.button() == Qt.RightButton:
-                self.weakmain()._create_ch_context_fig(trace.range_idx)
-
-    def get_labels(self):
-        """Get labels for testing."""
-        values = self.tickValues(*self.mne.viewbox.viewRange()[1], None)
-        labels = self.tickStrings(values[0][1], None, None)
-
-        return labels
-
-
-class BaseScrollBar(QScrollBar):
-    """Base Class for scrolling directly to the clicked position."""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-
-    def mousePressEvent(self, event):
-        """Customize mouse click events.
-
-        Taken from: https://stackoverflow.com/questions/29710327/
-        how-to-override-qscrollbar-onclick-default-behaviour
-        """
-        if event.button() == Qt.LeftButton:
-            opt = QStyleOptionSlider()
-            pos = _mouse_event_position(event)
-            # QPointF->QPoint for hitTestComplexControl
-            pos = QPoint(int(round(pos.x())), int(round(pos.y())))
-            self.initStyleOption(opt)
-            control = self.style().hitTestComplexControl(
-                QStyle.CC_ScrollBar, opt, pos, self
-            )
-            if (
-                control == QStyle.SC_ScrollBarAddPage
-                or control == QStyle.SC_ScrollBarSubPage
-            ):
-                # scroll here
-                gr = self.style().subControlRect(
-                    QStyle.CC_ScrollBar, opt, QStyle.SC_ScrollBarGroove, self
-                )
-                sr = self.style().subControlRect(
-                    QStyle.CC_ScrollBar, opt, QStyle.SC_ScrollBarSlider, self
-                )
-                if self.orientation() == Qt.Horizontal:
-                    pos_ = pos.x()
-                    sliderLength = sr.width()
-                    sliderMin = gr.x()
-                    sliderMax = gr.right() - sliderLength + 1
-                    if self.layoutDirection() == Qt.RightToLeft:
-                        opt.upsideDown = not opt.upsideDown
-                else:
-                    pos_ = pos.y()
-                    sliderLength = sr.height()
-                    sliderMin = gr.y()
-                    sliderMax = gr.bottom() - sliderLength + 1
-                self.setValue(
-                    QStyle.sliderValueFromPosition(
-                        self.minimum(),
-                        self.maximum(),
-                        pos_ - sliderMin,
-                        sliderMax - sliderMin,
-                        opt.upsideDown,
-                    )
-                )
-                return
-
-        return super().mousePressEvent(event)
-
-
-class TimeScrollBar(BaseScrollBar):
-    """Scrolls through time."""
-
-    def __init__(self, mne):
-        super().__init__(Qt.Horizontal)
-        self.mne = mne
-        self.step_factor = 1
-        self.setMinimum(0)
-        self.setSingleStep(1)
-        self.update_duration()
-        self.setFocusPolicy(Qt.WheelFocus)
-        # Because valueChanged is needed (captures every input to scrollbar,
-        # not just sliderMoved), there has to be made a differentiation
-        # between internal and external changes.
-        self.external_change = False
-        self.valueChanged.connect(self._time_changed)
-
-    def _time_changed(self, value):
-        if not self.external_change:
-            if self.mne.is_epochs:
-                # Convert Epoch index to time
-                value = self.mne.boundary_times[int(value)]
-            else:
-                value /= self.step_factor
-            self.mne.plt.setXRange(value, value + self.mne.duration, padding=0)
-
-    def update_value(self, value):
-        """Update value of the ScrollBar."""
-        # Mark change as external to avoid setting
-        # XRange again in _time_changed.
-        self.external_change = True
-        if self.mne.is_epochs:
-            set_value = np.searchsorted(self.mne.midpoints, value)
-        else:
-            set_value = int(value * self.step_factor)
-        self.setValue(set_value)
-        self.external_change = False
-
-    def update_duration(self):
-        """Update bar size."""
-        if self.mne.is_epochs:
-            self.setPageStep(self.mne.n_epochs)
-            self.setMaximum(len(self.mne.inst) - self.mne.n_epochs)
-        else:
-            self.setPageStep(int(self.mne.duration))
-            self.step_factor = self.mne.scroll_sensitivity / self.mne.duration
-            self.setMaximum(int((self.mne.xmax - self.mne.duration) * self.step_factor))
-
-    def _update_scroll_sensitivity(self):
-        old_step_factor = self.step_factor
-        self.update_duration()
-        self.update_value(self.value() / old_step_factor)
-
-    def keyPressEvent(self, event):
-        """Customize key press events."""
-        # Let main handle the keypress
-        event.ignore()
-
-
-class ChannelScrollBar(BaseScrollBar):
-    """Scrolls through channels."""
-
-    def __init__(self, mne):
-        super().__init__(Qt.Vertical)
-        self.mne = mne
-
-        self.setMinimum(0)
-        self.setSingleStep(1)
-        self.update_nchan()
-        self.setFocusPolicy(Qt.WheelFocus)
-        # Because valueChanged is needed (captures every input to scrollbar,
-        # not just sliderMoved), there has to be made a differentiation
-        # between internal and external changes.
-        self.external_change = False
-        self.valueChanged.connect(self._channel_changed)
-
-    def _channel_changed(self, value):
-        if not self.external_change:
-            if self.mne.fig_selection:
-                label = list(self.mne.ch_selections)[value]
-                self.mne.fig_selection._chkbx_changed(None, label)
-            elif not self.mne.butterfly:
-                value = min(value, self.mne.ymax - self.mne.n_channels)
-                self.mne.plt.setYRange(
-                    value, value + self.mne.n_channels + 1, padding=0
-                )
-
-    def update_value(self, value):
-        """Update value of the ScrollBar."""
-        # Mark change as external to avoid setting YRange again in
-        # _channel_changed.
-        self.external_change = True
-        self.setValue(value)
-        self.external_change = False
-
-    def update_nchan(self):
-        """Update bar size."""
-        if getattr(self.mne, "group_by", None) in ["position", "selection"]:
-            self.setPageStep(1)
-            self.setMaximum(len(self.mne.ch_selections) - 1)
-        else:
-            self.setPageStep(self.mne.n_channels)
-            self.setMaximum(self.mne.ymax - self.mne.n_channels - 1)
-
-    def keyPressEvent(self, event):
-        """Customize key press events."""
-        # Let main handle the keypress
-        event.ignore()
-
-
-class OverviewBar(QGraphicsView):
-    """
-    Provides overview over channels and current visible range.
-
-    Has different modes:
-    - channels: Display channel-types
-    - zscore: Display channel-wise zscore across time
-    """
-
-    def __init__(self, main):
-        self._scene = QGraphicsScene()
-        super().__init__(self._scene)
-        assert self.scene() is self._scene
-        self.weakmain = weakref.ref(main)
-        self.mne = main.mne
-        del main
-        self.bg_img = None
-        self.bg_pxmp = None
-        self.bg_pxmp_item = None
-        # Set minimum Size to 1/10 of display size
-        min_h = int(_screen_geometry(self).height() / 10)
-        self.setMinimumSize(1, 1)
-        self.setFixedHeight(min_h)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-
-        self.set_background()
-
-        # Initialize Graphics-Items
-        # Bad channels
-        self.bad_line_dict = dict()
-        self.update_bad_channels()
-
-        # Events
-        self.event_line_dict = dict()
-        self.update_events()
-
-        if self.mne.is_epochs:
-            # Epochs Lines
-            self.epoch_line_dict = dict()
-            self.update_epoch_lines()
-            self.bad_epoch_rect_dict = dict()
-            self.update_bad_epochs()
-        else:
-            # Annotations
-            self.annotations_rect_dict = dict()
-            self.update_annotations()
-
-        # VLine
-        self.v_line = None
-        self.update_vline()
-
-        # View Range
-        self.viewrange_rect = None
-        self.update_viewrange()
-
-    def update_epoch_lines(self):
-        """Update representation of epoch lines."""
-        epoch_line_pen = self.mne.mkPen(color="k", width=1)
-        for t in self.mne.boundary_times[1:-1]:
-            top_left = self._mapFromData(t, 0)
-            bottom_right = self._mapFromData(t, len(self.mne.ch_order))
-            line = self.scene().addLine(QLineF(top_left, bottom_right), epoch_line_pen)
-            line.setZValue(1)
-            self.epoch_line_dict[t] = line
-
-    def update_bad_channels(self):
-        """Update representation of bad channels."""
-        bad_set = set(self.mne.info["bads"])
-        line_set = set(self.bad_line_dict)
-
-        add_chs = bad_set.difference(line_set)
-        rm_chs = line_set.difference(bad_set)
-
-        for line_idx, ch_idx in enumerate(self.mne.ch_order):
-            ch_name = self.mne.ch_names[ch_idx]
-            if ch_name in add_chs:
-                start = self._mapFromData(0, line_idx)
-                stop = self._mapFromData(self.mne.inst.times[-1], line_idx)
-                pen = _get_color(self.mne.ch_color_bad, self.mne.dark)
-                line = self.scene().addLine(QLineF(start, stop), pen)
-                line.setZValue(2)
-                self.bad_line_dict[ch_name] = line
-            elif ch_name in rm_chs:
-                self.scene().removeItem(self.bad_line_dict[ch_name])
-                self.bad_line_dict.pop(ch_name)
-
-    def update_bad_epochs(self):  # noqa: D102
-        bad_set = set(self.mne.bad_epochs)
-        rect_set = set(self.bad_epoch_rect_dict.keys())
-
-        add_epos = bad_set.difference(rect_set)
-        rm_epos = rect_set.difference(bad_set)
-
-        for epo_num in self.mne.inst.selection:
-            if epo_num in add_epos:
-                epo_idx = self.mne.inst.selection.tolist().index(epo_num)
-                start, stop = self.mne.boundary_times[epo_idx : epo_idx + 2]
-                top_left = self._mapFromData(start, 0)
-                bottom_right = self._mapFromData(stop, len(self.mne.ch_order))
-                pen = _get_color(self.mne.epoch_color_bad, self.mne.dark)
-                rect = self.scene().addRect(
-                    QRectF(top_left, bottom_right), pen=pen, brush=pen
-                )
-                rect.setZValue(3)
-                self.bad_epoch_rect_dict[epo_num] = rect
-            elif epo_num in rm_epos:
-                self.scene().removeItem(self.bad_epoch_rect_dict[epo_num])
-                self.bad_epoch_rect_dict.pop(epo_num)
-
-    def update_events(self):
-        """Update representation of events."""
-        if (
-            getattr(self.mne, "event_nums", None) is not None
-            and self.mne.events_visible
-        ):
-            for ev_t, ev_id in zip(self.mne.event_times, self.mne.event_nums):
-                color_name = self.mne.event_color_dict[ev_id]
-                color = _get_color(color_name, self.mne.dark)
-                color.setAlpha(100)
-                pen = self.mne.mkPen(color)
-                top_left = self._mapFromData(ev_t, 0)
-                bottom_right = self._mapFromData(ev_t, len(self.mne.ch_order))
-                line = self.scene().addLine(QLineF(top_left, bottom_right), pen)
-                line.setZValue(1)
-                self.event_line_dict[ev_t] = line
-        else:
-            for event_line in self.event_line_dict.values():
-                self.scene().removeItem(event_line)
-            self.event_line_dict.clear()
-
-    def update_annotations(self):
-        """Update representation of annotations."""
-        annotations = self.mne.inst.annotations
-        # Exclude non-visible annotations
-        annot_set = set(
-            [
-                annot["onset"]
-                for annot in annotations
-                if self.mne.visible_annotations[annot["description"]]
-            ]
-        )
-        rect_set = set(self.annotations_rect_dict)
-
-        add_onsets = annot_set.difference(rect_set)
-        rm_onsets = rect_set.difference(annot_set)
-
-        # Add missing onsets
-        for add_onset in add_onsets:
-            plot_onset = _sync_onset(self.mne.inst, add_onset)
-            annot_idx = np.argwhere(self.mne.inst.annotations.onset == add_onset)[0][0]
-            duration = annotations.duration[annot_idx]
-            description = annotations.description[annot_idx]
-            color_name = self.mne.annotation_segment_colors[description]
-            color = _get_color(color_name, self.mne.dark)
-            color.setAlpha(150)
-            pen = self.mne.mkPen(color)
-            brush = mkBrush(color)
-            top_left = self._mapFromData(plot_onset, 0)
-            bottom_right = self._mapFromData(
-                plot_onset + duration, len(self.mne.ch_order)
-            )
-            rect = self.scene().addRect(QRectF(top_left, bottom_right), pen, brush)
-            rect.setZValue(3)
-            self.annotations_rect_dict[add_onset] = {
-                "rect": rect,
-                "plot_onset": plot_onset,
-                "duration": duration,
-                "color": color_name,
-            }
-
-        # Remove onsets
-        for rm_onset in rm_onsets:
-            self.scene().removeItem(self.annotations_rect_dict[rm_onset]["rect"])
-            self.annotations_rect_dict.pop(rm_onset)
-
-        # Changes
-        for edit_onset in self.annotations_rect_dict:
-            plot_onset = _sync_onset(self.mne.inst, edit_onset)
-            annot_idx = np.where(annotations.onset == edit_onset)[0][0]
-            duration = annotations.duration[annot_idx]
-            rect_duration = self.annotations_rect_dict[edit_onset]["duration"]
-            rect = self.annotations_rect_dict[edit_onset]["rect"]
-            # Update changed duration
-            if duration != rect_duration:
-                self.annotations_rect_dict[edit_onset]["duration"] = duration
-                top_left = self._mapFromData(plot_onset, 0)
-                bottom_right = self._mapFromData(
-                    plot_onset + duration, len(self.mne.ch_order)
-                )
-                rect.setRect(QRectF(top_left, bottom_right))
-            # Update changed color
-            description = annotations.description[annot_idx]
-            color_name = self.mne.annotation_segment_colors[description]
-            rect_color = self.annotations_rect_dict[edit_onset]["color"]
-            if color_name != rect_color:
-                color = _get_color(color_name, self.mne.dark)
-                color.setAlpha(150)
-                pen = self.mne.mkPen(color)
-                brush = mkBrush(color)
-                rect.setPen(pen)
-                rect.setBrush(brush)
-
-    def update_vline(self):
-        """Update representation of vline."""
-        if self.mne.is_epochs:
-            # VLine representation not useful in epochs-mode
-            pass
-        # Add VLine-Representation
-        elif self.mne.vline is not None:
-            value = self.mne.vline.value()
-            top_left = self._mapFromData(value, 0)
-            bottom_right = self._mapFromData(value, len(self.mne.ch_order))
-            line = QLineF(top_left, bottom_right)
-            if self.v_line is None:
-                pen = self.mne.mkPen("g")
-                self.v_line = self.scene().addLine(line, pen)
-                self.v_line.setZValue(1)
-            else:
-                self.v_line.setLine(line)
-        # Remove VLine-Representation
-        elif self.v_line is not None:
-            self.scene().removeItem(self.v_line)
-            self.v_line = None
-
-    def update_viewrange(self):
-        """Update representation of viewrange."""
-        if self.mne.butterfly:
-            top_left = self._mapFromData(self.mne.t_start, 0)
-            bottom_right = self._mapFromData(
-                self.mne.t_start + self.mne.duration, self.mne.ymax
-            )
-        else:
-            top_left = self._mapFromData(self.mne.t_start, self.mne.ch_start)
-            bottom_right = self._mapFromData(
-                self.mne.t_start + self.mne.duration,
-                self.mne.ch_start + self.mne.n_channels,
-            )
-        rect = QRectF(top_left, bottom_right)
-        if self.viewrange_rect is None:
-            pen = self.mne.mkPen(color="g")
-            brush = mkBrush(color=(0, 0, 0, 100))
-            self.viewrange_rect = self.scene().addRect(rect, pen, brush)
-            self.viewrange_rect.setZValue(4)
-        else:
-            self.viewrange_rect.setRect(rect)
-
-    def _set_range_from_pos(self, pos):
-        x, y = self._mapToData(pos)
-
-        # Set X
-        # Check boundaries
-        if self.mne.is_epochs:
-            if x == "-offbounds":
-                epo_idx = 0
-            elif x == "+offbounds":
-                epo_idx = len(self.mne.inst) - self.mne.n_epochs
-            else:
-                epo_idx = max(x - self.mne.n_epochs // 2, 0)
-            x = self.mne.boundary_times[epo_idx]
-        elif x == "-offbounds":
-            x = 0
-        elif x == "+offbounds":
-            x = self.mne.xmax - self.mne.duration
-        else:
-            # Move click position to middle of view range
-            x -= self.mne.duration / 2
-        xmin = np.clip(x, 0, self.mne.xmax - self.mne.duration)
-        xmax = np.clip(xmin + self.mne.duration, self.mne.duration, self.mne.xmax)
-
-        self.mne.plt.setXRange(xmin, xmax, padding=0)
-
-        # Set Y
-        if y == "-offbounds":
-            y = 0
-        elif y == "+offbounds":
-            y = self.mne.ymax - (self.mne.n_channels + 1)
-        else:
-            # Move click position to middle of view range
-            y -= self.mne.n_channels / 2
-        ymin = np.clip(y, 0, self.mne.ymax - (self.mne.n_channels + 1))
-        ymax = np.clip(
-            ymin + self.mne.n_channels + 1, self.mne.n_channels, self.mne.ymax
-        )
-        # Check boundaries
-        if self.mne.fig_selection:
-            self.mne.fig_selection._scroll_to_idx(int(ymin))
-        else:
-            self.mne.plt.setYRange(ymin, ymax, padding=0)
-
-    def mousePressEvent(self, event):
-        """Customize mouse press events."""
-        self._set_range_from_pos(event.pos())
-
-    def mouseMoveEvent(self, event):
-        """Customize mouse move events."""
-        # This temporarily circumvents a bug, which only appears on windows
-        # and when pyqt>=5.14.2 is installed from conda-forge.
-        # It leads to receiving mouseMoveEvents all the time when the Mouse
-        # is moved through the OverviewBar, even when now MouseBUtton is
-        # pressed. Dragging the mouse on OverviewBar is then
-        # not possible anymore.
-        if not platform.system() == "Windows":
-            self._set_range_from_pos(event.pos())
-
-    def _fit_bg_img(self):
-        # Remove previous item from scene
-        if self.bg_pxmp_item is not None and self.bg_pxmp_item in self.scene().items():
-            self.scene().removeItem(self.bg_pxmp_item)
-        # Resize Pixmap
-        if self.bg_pxmp is not None:
-            cnt_rect = self.contentsRect()
-            self.bg_pxmp = self.bg_pxmp.scaled(
-                cnt_rect.width(), cnt_rect.height(), Qt.IgnoreAspectRatio
-            )
-            self.bg_pxmp_item = self.scene().addPixmap(self.bg_pxmp)
-
-    def resizeEvent(self, event):
-        """Customize resize event."""
-        super().resizeEvent(event)
-        cnt_rect = self.contentsRect()
-        self.setSceneRect(
-            QRectF(QPointF(0, 0), QPointF(cnt_rect.width(), cnt_rect.height()))
-        )
-        # Resize backgounrd
-        self._fit_bg_img()
-
-        # Resize Graphics Items (assuming height never changes)
-        # Resize bad_channels
-        for bad_ch_line in self.bad_line_dict.values():
-            current_line = bad_ch_line.line()
-            bad_ch_line.setLine(
-                QLineF(current_line.p1(), Point(cnt_rect.width(), current_line.y2()))
-            )
-
-        # Resize event-lines
-        for ev_t, event_line in self.event_line_dict.items():
-            top_left = self._mapFromData(ev_t, 0)
-            bottom_right = self._mapFromData(ev_t, len(self.mne.ch_order))
-            event_line.setLine(QLineF(top_left, bottom_right))
-
-        if self.mne.is_epochs:
-            # Resize epoch lines
-            for epo_t, epoch_line in self.epoch_line_dict.items():
-                top_left = self._mapFromData(epo_t, 0)
-                bottom_right = self._mapFromData(epo_t, len(self.mne.ch_order))
-                epoch_line.setLine(QLineF(top_left, bottom_right))
-            # Resize bad rects
-            for epo_idx, epoch_rect in self.bad_epoch_rect_dict.items():
-                start, stop = self.mne.boundary_times[epo_idx : epo_idx + 2]
-                top_left = self._mapFromData(start, 0)
-                bottom_right = self._mapFromData(stop, len(self.mne.ch_order))
-                epoch_rect.setRect(QRectF(top_left, bottom_right))
-        else:
-            # Resize annotation-rects
-            for annot_dict in self.annotations_rect_dict.values():
-                annot_rect = annot_dict["rect"]
-                plot_onset = annot_dict["plot_onset"]
-                duration = annot_dict["duration"]
-
-                top_left = self._mapFromData(plot_onset, 0)
-                bottom_right = self._mapFromData(
-                    plot_onset + duration, len(self.mne.ch_order)
-                )
-                annot_rect.setRect(QRectF(top_left, bottom_right))
-
-        # Update vline
-        if all([i is not None for i in [self.v_line, self.mne.vline]]):
-            value = self.mne.vline.value()
-            top_left = self._mapFromData(value, 0)
-            bottom_right = self._mapFromData(value, len(self.mne.ch_order))
-            self.v_line.setLine(QLineF(top_left, bottom_right))
-
-        # Update viewrange-rect
-        top_left = self._mapFromData(self.mne.t_start, self.mne.ch_start)
-        bottom_right = self._mapFromData(
-            self.mne.t_start + self.mne.duration,
-            self.mne.ch_start + self.mne.n_channels,
-        )
-        self.viewrange_rect.setRect(QRectF(top_left, bottom_right))
-
-    def set_background(self):
-        """Set the background-image for the selected overview-mode."""
-        # Add Overview-Pixmap
-        self.bg_pxmp = None
-        if self.mne.overview_mode == "empty":
-            pass
-        elif self.mne.overview_mode == "channels":
-            channel_rgba = np.empty((len(self.mne.ch_order), 2, 4))
-            for line_idx, ch_idx in enumerate(self.mne.ch_order):
-                ch_type = self.mne.ch_types[ch_idx]
-                color = _get_color(self.mne.ch_color_dict[ch_type], self.mne.dark)
-                channel_rgba[line_idx, :] = color.getRgb()
-
-            channel_rgba = np.require(channel_rgba, np.uint8, "C")
-            self.bg_img = QImage(
-                channel_rgba,
-                channel_rgba.shape[1],
-                channel_rgba.shape[0],
-                QImage.Format_RGBA8888,
-            )
-            self.bg_pxmp = QPixmap.fromImage(self.bg_img)
-
-        elif self.mne.overview_mode == "zscore" and self.mne.zscore_rgba is not None:
-            self.bg_img = QImage(
-                self.mne.zscore_rgba,
-                self.mne.zscore_rgba.shape[1],
-                self.mne.zscore_rgba.shape[0],
-                QImage.Format_RGBA8888,
-            )
-            self.bg_pxmp = QPixmap.fromImage(self.bg_img)
-
-        self._fit_bg_img()
-
-    def _mapFromData(self, x, y):
-        # Include padding from black frame
-        point_x = self.width() * x / self.mne.xmax
-        point_y = self.height() * y / len(self.mne.ch_order)
-
-        return Point(point_x, point_y)
-
-    def _mapToData(self, point):
-        # Include padding from black frame
-        xnorm = point.x() / self.width()
-        if xnorm < 0:
-            x = "-offbounds"
-        elif xnorm > 1:
-            x = "+offbounds"
-        else:
-            if self.mne.is_epochs:
-                # Return epoch index for epochs
-                x = int(len(self.mne.inst) * xnorm)
-            else:
-                time_idx = int((len(self.mne.inst.times) - 1) * xnorm)
-                x = self.mne.inst.times[time_idx]
-
-        ynorm = point.y() / self.height()
-        if ynorm < 0:
-            y = "-offbounds"
-        elif ynorm > 1:
-            y = "+offbounds"
-        else:
-            y = len(self.mne.ch_order) * ynorm
-
-        return x, y
-
-    def keyPressEvent(self, event):  # noqa: D102
-        self.weakmain().keyPressEvent(event)
-
-
-class RawViewBox(ViewBox):
-    """PyQtGraph-Wrapper for interaction with the View."""
-
-    def __init__(self, main):
-        super().__init__(invertY=True)
-        self.enableAutoRange(enable=False, x=False, y=False)
-        self.weakmain = weakref.ref(main)
-        self.mne = main.mne
-        del main
-        self._drag_start = None
-        self._drag_region = None
-
-    def mouseDragEvent(self, event, axis=None):
-        """Customize mouse drag events."""
-        event.accept()
-
-        if event.button() == Qt.LeftButton and self.mne.annotation_mode:
-            if self.mne.current_description:
-                description = self.mne.current_description
-                if event.isStart():
-                    self._drag_start = self.mapSceneToView(event.lastScenePos()).x()
-                    self._drag_start = 0 if self._drag_start < 0 else self._drag_start
-                    drag_stop = self.mapSceneToView(event.scenePos()).x()
-                    self._drag_region = AnnotRegion(
-                        self.mne,
-                        description=description,
-                        values=(self._drag_start, drag_stop),
-                        weakmain=self.weakmain,
-                    )
-                elif event.isFinish():
-                    drag_stop = self.mapSceneToView(event.scenePos()).x()
-                    drag_stop = 0 if drag_stop < 0 else drag_stop
-                    xmax = self.mne.xmax + 1 / self.mne.info["sfreq"]
-                    drag_stop = xmax if xmax < drag_stop else drag_stop
-                    self._drag_region.setRegion((self._drag_start, drag_stop))
-                    plot_onset = min(self._drag_start, drag_stop)
-                    plot_offset = max(self._drag_start, drag_stop)
-                    duration = abs(self._drag_start - drag_stop)
-
-                    # Add to annotations
-                    onset = _sync_onset(self.mne.inst, plot_onset, inverse=True)
-                    _merge_annotations(
-                        onset,
-                        onset + duration,
-                        self.mne.current_description,
-                        self.mne.inst.annotations,
-                    )
-
-                    # Add to regions/merge regions
-                    merge_values = [plot_onset, plot_offset]
-                    rm_regions = list()
-                    for region in self.mne.regions:
-                        if region.description != self.mne.current_description:
-                            continue
-                        values = region.getRegion()
-                        if any(plot_onset <= val <= plot_offset for val in values):
-                            merge_values += values
-                            rm_regions.append(region)
-                    if len(merge_values) > 2:
-                        self._drag_region.setRegion(
-                            (min(merge_values), max(merge_values))
-                        )
-                    for rm_region in rm_regions:
-                        self.weakmain()._remove_region(rm_region, from_annot=False)
-                    self.weakmain()._add_region(
-                        plot_onset,
-                        duration,
-                        self.mne.current_description,
-                        region=self._drag_region,
-                    )
-                    self._drag_region.select(True)
-                    self._drag_region.setZValue(2)
-
-                    # Update Overview-Bar
-                    self.mne.overview_bar.update_annotations()
-                else:
-                    x_to = self.mapSceneToView(event.scenePos()).x()
-                    with QSignalBlocker(self._drag_region):
-                        self._drag_region.setRegion((self._drag_start, x_to))
-
-            elif event.isFinish():
-                self.weakmain().message_box(
-                    text="No description!",
-                    info_text="No description is given, add one!",
-                    buttons=QMessageBox.Ok,
-                    icon=QMessageBox.Warning,
-                )
-
-    def mouseClickEvent(self, event):
-        """Customize mouse click events."""
-        # If we want the context-menu back, uncomment following line
-        # super().mouseClickEvent(event)
-        if not self.mne.annotation_mode:
-            if event.button() == Qt.LeftButton:
-                self.weakmain()._add_vline(self.mapSceneToView(event.scenePos()).x())
-            elif event.button() == Qt.RightButton:
-                self.weakmain()._remove_vline()
-
-    def wheelEvent(self, ev, axis=None):
-        """Customize mouse wheel/trackpad-scroll events."""
-        ev.accept()
-        scroll = -1 * ev.delta() / 120
-        if ev.orientation() == Qt.Horizontal:
-            self.weakmain().hscroll(scroll * 10)
-        elif ev.orientation() == Qt.Vertical:
-            self.weakmain().vscroll(scroll)
-
-    def keyPressEvent(self, event):  # noqa: D102
-        self.weakmain().keyPressEvent(event)
-
-
-class VLineLabel(InfLineLabel):
-    """Label of the vline displaying the time."""
-
-    def __init__(self, vline):
-        super().__init__(
-            vline,
-            text="{value:.3f} s",
-            position=0.98,
-            fill=_vline_color,
-            color="k",
-            movable=True,
-        )
-        self.cursorOffset = None
-
-    def mouseDragEvent(self, ev):
-        """Customize mouse drag events."""
-        if self.movable and ev.button() == Qt.LeftButton:
-            if ev.isStart():
-                self.line.moving = True
-                self.cursorOffset = self.line.pos() - self.mapToView(ev.buttonDownPos())
-            ev.accept()
-
-            if not self.line.moving:
-                return
-
-            self.line.setPos(self.cursorOffset + self.mapToView(ev.pos()))
-            self.line.sigDragged.emit(self)
-            if ev.isFinish():
-                self.line.moving = False
-                self.line.sigPositionChangeFinished.emit(self.line)
-
-    def valueChanged(self):
-        """Customize what happens on value change."""
-        if not self.isVisible():
-            return
-        value = self.line.value()
-        if self.line.mne.is_epochs:
-            # Show epoch-time
-            t_vals_abs = np.linspace(
-                0, self.line.mne.epoch_dur, len(self.line.mne.inst.times)
-            )
-            search_val = value % self.line.mne.epoch_dur
-            t_idx = np.searchsorted(t_vals_abs, search_val)
-            value = self.line.mne.inst.times[t_idx]
-        self.setText(self.format.format(value=value))
-        self.updatePosition()
-
-    def hoverEvent(self, ev):
-        _methpartial(self.line.hoverEvent)(ev)
-
-
-class VLine(InfiniteLine):
-    """Marker to be placed inside the Trace-Plot."""
-
-    def __init__(self, mne, pos, bounds):
-        super().__init__(
-            pos,
-            pen={"color": _vline_color, "width": 2},
-            hoverPen="y",
-            movable=True,
-            bounds=bounds,
-        )
-        self.mne = mne
-        self.label = VLineLabel(self)
-
-    def setMouseHover(self, hover):
-        """Customize the mouse hovering event."""
-        super().setMouseHover(hover)
-        # Also change color of label
-        self.label.fill = self.currentPen.color()
-        self.label.border = self.currentPen
-        self.label.update()
-
-
-def _q_font(point_size, bold=False):
-    font = QFont()
-    font.setPointSize(point_size)
-    font.setBold(bold)
-    return font
-
-
-class EventLine(InfiniteLine):
-    """Displays Events inside Trace-Plot."""
-
-    def __init__(self, mne, pos, label, color):
-        super().__init__(
-            pos,
-            pen=color,
-            movable=False,
-            label=str(label),
-            labelOpts={
-                "position": 0.98,
-                "color": color,
-                "anchors": [(0, 0.5), (0, 0.5)],
-            },
-        )
-        self.mne = mne
-        self.label.setFont(_q_font(10, bold=True))
-        self.setZValue(0)
-
-        self.mne.plt.addItem(self)
-
-
-class Crosshair(InfiniteLine):
-    """Continously updating marker inside the Trace-Plot."""
-
-    def __init__(self, mne):
-        super().__init__(angle=90, movable=False, pen="g")
-        self.mne = mne
-        self.y = 1
-
-    def set_data(self, x, y):
-        """Set x and y data for crosshair point."""
-        self.setPos(x)
-        self.y = y
-
-    def paint(self, p, *args):  # noqa: D102
-        super().paint(p, *args)
-
-        p.setPen(self.mne.mkPen("r", width=4))
-        p.drawPoint(Point(self.y, 0))
-
-
-class BaseScaleBar:  # noqa: D101
-    def __init__(self, mne, ch_type):
-        self.mne = mne
-        self.ch_type = ch_type
-        self.ypos = None
-
-    def _set_position(self, x, y):
-        pass
-
-    def _is_visible(self):
-        return self.ch_type in self.mne.ch_types[self.mne.picks]
-
-    def _get_ypos(self):
-        if self.mne.butterfly:
-            self.ypos = self.mne.butterfly_type_order.index(self.ch_type) + 1
-        else:
-            ch_type_idxs = np.where(self.mne.ch_types[self.mne.picks] == self.ch_type)[
-                0
-            ]
-
-            for idx in ch_type_idxs:
-                ch_name = self.mne.ch_names[self.mne.picks[idx]]
-                if (
-                    ch_name not in self.mne.info["bads"]
-                    and ch_name not in self.mne.whitened_ch_names
-                ):
-                    self.ypos = self.mne.ch_start + idx + 1
-                    break
-            # Consider all indices bad
-            if self.ypos is None:
-                self.ypos = self.mne.ch_start + ch_type_idxs[0] + 1
-
-    def update_x_position(self):
-        """Update x-position of Scalebar."""
-        if self._is_visible():
-            if self.ypos is None:
-                self._get_ypos()
-            self._set_position(self.mne.t_start, self.ypos)
-
-    def update_y_position(self):
-        """Update y-position of Scalebar."""
-        if self._is_visible():
-            self.setVisible(True)
-            self._get_ypos()
-            self._set_position(self.mne.t_start, self.ypos)
-        else:
-            self.setVisible(False)
-
-
-class ScaleBarText(BaseScaleBar, TextItem):  # noqa: D101
-    def __init__(self, mne, ch_type):
-        BaseScaleBar.__init__(self, mne, ch_type)
-        TextItem.__init__(self, color="#AA3377")
-
-        self.setFont(_q_font(10))
-        self.setZValue(2)  # To draw over RawTraceItems
-
-        self.update_value()
-        self.update_y_position()
-
-    def update_value(self):
-        """Update value of ScaleBarText."""
-        inv_norm = _get_channel_scaling(self, self.ch_type)
-        self.setText(f"{_simplify_float(inv_norm)} {self.mne.units[self.ch_type]}")
-
-    def _set_position(self, x, y):
-        self.setPos(x, y)
-
-
-class ScaleBar(BaseScaleBar, QGraphicsLineItem):  # noqa: D101
-    def __init__(self, mne, ch_type):
-        BaseScaleBar.__init__(self, mne, ch_type)
-        QGraphicsLineItem.__init__(self)
-
-        self.setZValue(1)
-        pen = self.mne.mkPen(color="#AA3377", width=5)
-        pen.setCapStyle(Qt.FlatCap)
-        self.setPen(pen)
-        self.update_y_position()
-
-    def _set_position(self, x, y):
-        self.setLine(QLineF(x, y - 0.5, x, y + 0.5))
-
-    def get_ydata(self):
-        """Get y-data for tests."""
-        line = self.line()
-        return line.y1(), line.y2()
-
-
-class _BaseDialog(QDialog):
-    def __init__(
-        self,
-        main,
-        widget=None,
-        modal=False,
-        name=None,
-        title=None,
-        flags=Qt.Window | Qt.Tool,
-    ):
-        super().__init__(main, flags)
-        _set_window_flags(self)
-        self.weakmain = weakref.ref(main)
-        self.widget = widget
-        self.mne = main.mne
-        del main
-        self.name = name
-        self.modal = modal
-
-        self.setAttribute(Qt.WA_DeleteOnClose, True)
-
-        self.mne.child_figs.append(self)
-
-        if self.name is not None:
-            setattr(self.mne, self.name, self)
-
-        if title is not None:
-            self.setWindowTitle(title)
-
-        if self.widget is not None:
-            layout = QVBoxLayout()
-            layout.addWidget(self.widget)
-            self.setLayout(layout)
-
-    def show(self, center=True):
-        if self.modal:
-            self.open()
-        else:
-            super().show()
-
-        if center:
-            # center dialog
-            qr = self.frameGeometry()
-            cp = _screen_geometry(self).center()
-            qr.moveCenter(cp)
-            self.move(qr.topLeft())
-
-    def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Escape:
-            self.close()
-        else:
-            self.parent().keyPressEvent(event)
-
-    def closeEvent(self, event):
-        if hasattr(self, "name") and hasattr(self, "mne"):
-            if self.name is not None and hasattr(self.mne, self.name):
-                setattr(self.mne, self.name, None)
-            if self in self.mne.child_figs:
-                self.mne.child_figs.remove(self)
-        event.accept()
-
-
-class SettingsDialog(_BaseDialog):
-    """Shows additional settings."""
-
-    def __init__(self, main, title="Settings", **kwargs):
-        super().__init__(main, title=title, **kwargs)
-
-        layout = QFormLayout()
-
-        # Antialiasing
-        self.antialiasing_box = QCheckBox()
-        self.antialiasing_box.setToolTip("Enable/Disable antialiasing.\n")
-        self.antialiasing_box.setChecked(self.mne.antialiasing)
-        self.antialiasing_box.stateChanged.connect(
-            _methpartial(self._toggle_antialiasing)
-        )
-        layout.addRow("antialiasing", self.antialiasing_box)
-
-        # Downsampling
-        self.downsampling_box = QSpinBox()
-        self.downsampling_box.setToolTip(
-            "Set an integer as the downsampling"
-            ' factor or "Auto" to get the factor'
-            " from the visible range.\n"
-            " Setting the factor 1 means no "
-            "downsampling.\n"
-            " Default is 1."
-        )
-        self.downsampling_box.setMinimum(0)
-        self.downsampling_box.setSpecialValueText("Auto")
-        self.downsampling_box.setValue(
-            0 if self.mne.downsampling == "auto" else self.mne.downsampling
-        )
-        self.downsampling_box.valueChanged.connect(
-            _methpartial(self._value_changed, value_name="downsampling")
-        )
-        layout.addRow("downsampling", self.downsampling_box)
-
-        # Downsampling method
-        self.ds_method_cmbx = QComboBox()
-        self.ds_method_cmbx.setToolTip(
-            "<h2>Downsampling Method</h2>"
-            "<ul>"
-            "<li>subsample:<br>"
-            "Only take every n-th sample.</li>"
-            "<li>mean:<br>"
-            "Take the mean of n samples.</li>"
-            "<li>peak:<br>"
-            "Draws a saw wave from the minimum to the maximum from a "
-            "collection of n samples.</li>"
-            "</ul>"
-            "<i>(Those methods are adapted from "
-            "pyqtgraph)</i><br>"
-            'Default is "peak".'
-        )
-        self.ds_method_cmbx.addItems(["subsample", "mean", "peak"])
-        self.ds_method_cmbx.setCurrentText(self.mne.ds_method)
-        self.ds_method_cmbx.currentTextChanged.connect(
-            _methpartial(self._value_changed, value_name="ds_method")
-        )
-        layout.addRow("ds_method", self.ds_method_cmbx)
-
-        # Scrolling sensitivity
-        self.scroll_sensitivity_slider = QSlider(Qt.Horizontal)
-        self.scroll_sensitivity_slider.setMinimum(10)
-        self.scroll_sensitivity_slider.setMaximum(1000)
-        self.scroll_sensitivity_slider.setToolTip(
-            "Set the sensitivity of the scrolling in horizontal direction. "
-            "Adjust this value if the scrolling for example with an horizontal "
-            "mouse wheel is too fast or too slow. Default is 100."
-        )
-        self.scroll_sensitivity_slider.setValue(self.mne.scroll_sensitivity)
-        self.scroll_sensitivity_slider.valueChanged.connect(
-            _methpartial(self._value_changed, value_name="scroll_sensitivity")
-        )
-        # Set default
-        layout.addRow("horizontal scroll sensitivity", self.scroll_sensitivity_slider)
-
-        layout.addItem(QSpacerItem(10, 10, QSizePolicy.Minimum, QSizePolicy.Expanding))
-
-        # Get all unique channel types
-        ordered_types = self.mne.ch_types[self.mne.ch_order]
-        unique_type_idxs = np.unique(ordered_types, return_index=True)[1]
-        ch_types_ordered = [
-            ordered_types[idx]
-            for idx in sorted(unique_type_idxs)
-            if ordered_types[idx] in self.mne.unit_scalings
-        ]
-
-        # Grid layout for channel spinboxes and settings
-        ch_grid_layout = QGridLayout()
-
-        # Create dropdown to choose units
-        self.physical_units_cmbx = QComboBox()
-        self.physical_units_cmbx.addItems(["/ mm", "/ cm", "/ inch"])
-        self.physical_units_cmbx.currentTextChanged.connect(
-            _methpartial(
-                self._update_spinbox_values, ch_type="all", source="unit_change"
-            )
-        )
-        current_units = self.physical_units_cmbx.currentText().split()[-1]
-
-        # Add subgroup box to show channel type scalings
-        ch_scroll_box = QGroupBox("Channel Configuration")
-        ch_scroll_box.setStyleSheet("QGroupBox { font-size: 12pt; }")
-        self.ch_scaling_spinboxes = {}
-        self.ch_sensitivity_spinboxes = {}
-        self.ch_label_widgets = {}
-
-        ch_grid_layout.addWidget(QLabel("Channel Type"), 0, 0)
-        ch_grid_layout.addWidget(QLabel("Scaling"), 0, 1)
-        ch_grid_layout.addWidget(QLabel("Sensitivity"), 0, 2)
-        grid_row = 1
-        for ch_type in ch_types_ordered:
-            self.ch_label_widgets[ch_type] = QLabel(
-                f"{ch_type} ({self.mne.units[ch_type]})"
-            )
-
-            # Make scaling spinbox first
-            ch_scale_spinbox = QDoubleSpinBox()
-            ch_scale_spinbox.setMinimumWidth(100)
-            ch_scale_spinbox.setRange(0, float("inf"))
-            ch_scale_spinbox.setDecimals(1)
-            ch_scale_spinbox.setStepType(QAbstractSpinBox.AdaptiveDecimalStepType)
-            ch_scale_spinbox.setValue(_get_channel_scaling(self, ch_type))
-            ch_scale_spinbox.valueChanged.connect(
-                _methpartial(
-                    self._update_spinbox_values, ch_type=ch_type, source="scaling"
-                )
-            )
-            self.ch_scaling_spinboxes[ch_type] = ch_scale_spinbox
-
-            # Now make sensitivity spinbox
-            ch_sens_spinbox = QDoubleSpinBox()
-            ch_sens_spinbox.setMinimumWidth(100)
-            ch_sens_spinbox.setRange(0, float("inf"))
-            ch_sens_spinbox.setDecimals(1)
-            ch_sens_spinbox.setStepType(QAbstractSpinBox.AdaptiveDecimalStepType)
-            ch_sens_spinbox.setReadOnly(False)
-            ch_sens_spinbox.setDisabled(False)
-            ch_sens_spinbox.setValue(
-                _calc_chan_type_to_physical(self, ch_type, units=current_units)
-            )
-            ch_sens_spinbox.valueChanged.connect(
-                _methpartial(
-                    self._update_spinbox_values, ch_type=ch_type, source="sensitivity"
-                )
-            )
-            self.ch_sensitivity_spinboxes[ch_type] = ch_sens_spinbox
-
-            # Add these to the layout
-            ch_grid_layout.addWidget(self.ch_label_widgets[ch_type], grid_row, 0)
-            ch_grid_layout.addWidget(ch_scale_spinbox, grid_row, 1)
-            ch_grid_layout.addWidget(ch_sens_spinbox, grid_row, 2)
-            grid_row += 1
-
-        ch_grid_layout.addWidget(self.physical_units_cmbx, grid_row, 2)
-        ch_scroll_box.setLayout(ch_grid_layout)
-        layout.addRow(ch_scroll_box)
-
-        layout.addItem(QSpacerItem(10, 10, QSizePolicy.Minimum, QSizePolicy.Expanding))
-
-        # Add box for monitor settings
-        monitor_layout = QGridLayout()
-        monitor_box = QGroupBox("Monitor Size")
-        monitor_box.setStyleSheet("QGroupBox { font-size: 12pt; }")
-
-        # Monitor height spinbox
-        self.mon_height_spinbox = QDoubleSpinBox()
-        self.mon_height_spinbox.setMinimumWidth(100)
-        self.mon_height_spinbox.setRange(0, float("inf"))
-        self.mon_height_spinbox.setDecimals(2)
-        self.mon_height_spinbox.lineEdit().returnPressed.connect(
-            _methpartial(self._update_monitor, dim="height")
-        )
-        monitor_layout.addWidget(QLabel("Monitor Height"), 0, 0)
-        monitor_layout.addWidget(self.mon_height_spinbox, 0, 1)
-
-        # Monitor width spinbox
-        self.mon_width_spinbox = QDoubleSpinBox()
-        self.mon_width_spinbox.setMinimumWidth(100)
-        self.mon_width_spinbox.setRange(0, float("inf"))
-        self.mon_width_spinbox.setDecimals(2)
-        self.mon_width_spinbox.lineEdit().returnPressed.connect(
-            _methpartial(self._update_monitor, dim="width")
-        )
-        monitor_layout.addWidget(QLabel("Monitor Width"), 1, 0)
-        monitor_layout.addWidget(self.mon_width_spinbox, 1, 1)
-
-        # DPI Spinbox
-        self.dpi_spinbox = QDoubleSpinBox()
-        self.dpi_spinbox.setMinimumWidth(100)
-        self.dpi_spinbox.setRange(0, float("inf"))
-        self.dpi_spinbox.setDecimals(2)
-        self.dpi_spinbox.setReadOnly(True)
-        self.dpi_spinbox.lineEdit().returnPressed.connect(
-            _methpartial(self._update_monitor, dim="dpi")
-        )
-        monitor_layout.addWidget(QLabel("Monitor DPI"), 2, 0)
-        monitor_layout.addWidget(self.dpi_spinbox, 2, 1)
-
-        # Units combobox
-        self.mon_units_cmbx = QComboBox()
-        self.mon_units_cmbx.addItems(["mm", "cm", "inch"])
-        self.current_monitor_units = self.mon_units_cmbx.currentText().split()[-1]
-        self.mon_units_cmbx.currentTextChanged.connect(
-            _methpartial(self._update_monitor, dim="unit_change")
-        )
-        monitor_layout.addWidget(QLabel("Monitor Units"), 3, 0)
-        monitor_layout.addWidget(self.mon_units_cmbx, 3, 1)
-
-        # Push buttons
-        self.mon_reset_bttn = QPushButton("Reset")
-        self.mon_reset_bttn.clicked.connect(self._reset_monitor_spinboxes)
-        monitor_layout.addWidget(self.mon_reset_bttn, 4, 0, 1, 2)
-
-        self._reset_monitor_spinboxes()
-        monitor_box.setLayout(monitor_layout)
-        layout.addRow(monitor_box)
-
-        self.setLayout(layout)
-        self.show()
-
-    def closeEvent(self, event):  # noqa: D102
-        _disconnect(self.ds_method_cmbx.currentTextChanged)
-        _disconnect(self.scroll_sensitivity_slider.valueChanged)
-        super().closeEvent(event)
-
-    def _value_changed(self, new_value, value_name):
-        if value_name == "downsampling" and new_value == 0:
-            new_value = "auto"
-
-        setattr(self.mne, value_name, new_value)
-
-        if value_name == "scroll_sensitivity":
-            self.mne.ax_hscroll._update_scroll_sensitivity()
-        else:
-            self.weakmain()._redraw()
-
-    def _toggle_antialiasing(self, _):
-        self.weakmain()._toggle_antialiasing()
-
-    def _update_monitor(self, *args, dim="height"):
-        dpr = QApplication.primaryScreen().devicePixelRatio()
-        px_height = QApplication.primaryScreen().size().height()
-        px_width = QApplication.primaryScreen().size().width()
-        if dim == "height":
-            new_ht_val = self.mon_height_spinbox.value()
-
-            # Get new dpi
-            mon_units = self.current_monitor_units
-            mon_height_inch = _convert_physical_units(
-                new_ht_val, from_unit=mon_units, to_unit="inch"
-            )
-            dpi = px_height / mon_height_inch  # / dpr
-
-            # Find new width of monitor
-            with QSignalBlocker(self.mon_width_spinbox):
-                mon_width = self.mne.aspect_ratio * new_ht_val
-                self.mon_width_spinbox.setValue(mon_width)
-
-            self.mne.dpi = dpi
-            self.dpi_spinbox.setValue(self.mne.dpi)
-
-            self._update_spinbox_values(ch_type="all", source="unit_change")
-
-        elif dim == "width":
-            new_wd_value = self.mon_width_spinbox.value()
-
-            # Get new dpi
-            mon_units = self.current_monitor_units
-            mon_width_inch = _convert_physical_units(
-                new_wd_value, from_unit=mon_units, to_unit="inch"
-            )
-            dpi = px_width / mon_width_inch  # / dpr
-
-            # Find new height of monitor
-            with QSignalBlocker(self.mon_height_spinbox):
-                mon_height = new_wd_value / self.mne.aspect_ratio
-                self.mon_height_spinbox.setValue(mon_height)
-
-            self.mne.dpi = dpi
-            self.dpi_spinbox.setValue(self.mne.dpi)
-
-            self._update_spinbox_values(ch_type="all", source="unit_change")
-
-        elif dim == "unit_change":
-            old_units = self.current_monitor_units
-            new_units = self.mon_units_cmbx.currentText()
-
-            mon_height_units = _convert_physical_units(
-                self.mon_height_spinbox.value(), from_unit=old_units, to_unit=new_units
-            )
-
-            mon_width_units = _convert_physical_units(
-                self.mon_width_spinbox.value(), from_unit=old_units, to_unit=new_units
-            )
-
-            with QSignalBlocker(self.mon_width_spinbox):
-                self.mon_width_spinbox.setValue(mon_width_units)
-
-            with QSignalBlocker(self.mon_height_spinbox):
-                self.mon_height_spinbox.setValue(mon_height_units)
-
-            self.current_monitor_units = new_units
-
-        elif dim == "dpi":
-            new_value = self.dpi_spinbox.value()
-            self.mne.dpi = new_value
-            mon_units = self.current_monitor_units
-
-            with QSignalBlocker(self.mon_height_spinbox):
-                mon_height_inch = (px_height / dpr) / new_value
-                self.mon_height_spinbox.setValue(
-                    _convert_physical_units(
-                        mon_height_inch, from_unit="inch", to_unit=mon_units
-                    )
-                )
-
-            with QSignalBlocker(self.mon_width_spinbox):
-                mon_width_inch = (px_width / dpr) / new_value
-                self.mon_width_spinbox.setValue(
-                    _convert_physical_units(
-                        mon_width_inch, from_unit="inch", to_unit=mon_units
-                    )
-                )
-
-            self._update_spinbox_values(ch_type="all", source="unit_change")
-
-        else:
-            raise ValueError(f"Unknown dimension: {dim}")
-
-    def _reset_monitor_spinboxes(self):
-        """Reset monitor spinboxes to expected values."""
-        mon_units = self.mon_units_cmbx.currentText()
-
-        # Get the screen size
-        height_mm = QApplication.primaryScreen().physicalSize().height()
-        width_mm = QApplication.primaryScreen().physicalSize().width()
-
-        height_mon_units = _convert_physical_units(
-            height_mm, from_unit="mm", to_unit=mon_units
-        )
-        width_mon_units = _convert_physical_units(
-            width_mm, from_unit="mm", to_unit=mon_units
-        )
-
-        self.mne.dpi = QApplication.primaryScreen().physicalDotsPerInch()
-
-        # Set the spinbox values as such
-        self.mon_height_spinbox.setValue(height_mon_units)
-        self.mon_width_spinbox.setValue(width_mon_units)
-        self.dpi_spinbox.setValue(self.mne.dpi)
-
-        # Update sensitivity spinboxes
-        self._update_spinbox_values(ch_type="all", source="unit_change")
-
-    def _update_spinbox_values(self, *args, **kwargs):
-        """Update spinbox values."""
-        ch_type = kwargs["ch_type"]
-        source = kwargs["source"]
-        current_units = self.physical_units_cmbx.currentText().split()[-1]
-
-        # A new value is passed in
-        if len(args) > 0:
-            new_value = args[0]
-
-            # If source is scaling then update scaling and block signal
-            # to avoid recursion
-            if source == "scaling":
-                if new_value == 0:
-                    self.mne.scalings[ch_type] = 1e-12
-                else:
-                    self.mne.scalings[ch_type] = 1
-                    self.mne.scalings[ch_type] = new_value / _get_channel_scaling(
-                        self, ch_type
-                    )
-
-                with QSignalBlocker(self.ch_sensitivity_spinboxes[ch_type]):
-                    self.ch_sensitivity_spinboxes[ch_type].setValue(
-                        _calc_chan_type_to_physical(self, ch_type, units=current_units)
-                    )
-
-                self.mne.scalebar_texts[ch_type].update_value()
-
-            elif source == "sensitivity":
-                # If new_value is 0 then scaling is stuck on 0.
-                # Calculate what the new scalings value will have to be
-                if new_value == 0:
-                    self.mne.scalings[ch_type] = 1e-12
-                else:
-                    scaler = 1 if self.mne.butterfly else 2
-                    self.mne.scalings[ch_type] = (
-                        new_value
-                        * self.mne.scale_factor
-                        * _calc_data_unit_to_physical(self, units=current_units)
-                        / (scaler * self.mne.unit_scalings[ch_type])
-                    )
-
-                with QSignalBlocker(self.ch_scaling_spinboxes[ch_type]):
-                    self.ch_scaling_spinboxes[ch_type].setValue(
-                        _get_channel_scaling(self, ch_type)
-                    )
-
-                self.mne.scalebar_texts[ch_type].update_value()
-
-            elif source == "unit_change":
-                new_unit = new_value.split()[-1]
-                ch_types = self.ch_scaling_spinboxes.keys()
-                for ch_type in ch_types:
-                    with QSignalBlocker(self.ch_sensitivity_spinboxes[ch_type]):
-                        self.ch_sensitivity_spinboxes[ch_type].setValue(
-                            _calc_chan_type_to_physical(self, ch_type, units=new_unit)
-                        )
-
-            else:
-                raise ValueError(
-                    f"Unknown source: {source}. "
-                    f"Must be scaling or sensitivity. if specifying a new value"
-                )
-
-            self.mne.scalebar_texts[ch_type].update_value()
-            self.weakmain()._redraw()
-            # self.weakmain().scale_all(step=1, update_spinboxes=False)
-
-        else:
-            # Update all spinboxes
-            ch_types = self.ch_scaling_spinboxes.keys()
-            for ch_type in ch_types:
-                with QSignalBlocker(self.ch_scaling_spinboxes[ch_type]):
-                    self.ch_scaling_spinboxes[ch_type].setValue(
-                        _get_channel_scaling(self, ch_type)
-                    )
-                with QSignalBlocker(self.ch_sensitivity_spinboxes[ch_type]):
-                    self.ch_sensitivity_spinboxes[ch_type].setValue(
-                        _calc_chan_type_to_physical(self, ch_type, units=current_units)
-                    )
-
-
-class HelpDialog(_BaseDialog):
-    """Shows all keyboard-shortcuts."""
-
-    def __init__(self, main, **kwargs):
-        super().__init__(main, title="Help", **kwargs)
-
-        # Show all keyboard-shortcuts in a Scroll-Area
-        layout = QVBoxLayout()
-        keyboard_label = QLabel("Keyboard Shortcuts")
-        keyboard_label.setFont(_q_font(16, bold=True))
-        layout.addWidget(keyboard_label)
-
-        scroll_area = QScrollArea()
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll_area.setSizePolicy(
-            QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding
-        )
-        scroll_widget = QWidget()
-        form_layout = QFormLayout()
-        for key in main.mne.keyboard_shortcuts:
-            key_dict = main.mne.keyboard_shortcuts[key]
-            if "description" in key_dict:
-                if "alias" in key_dict:
-                    key = key_dict["alias"]
-                for idx, key_des in enumerate(key_dict["description"]):
-                    key_name = key
-                    if "modifier" in key_dict:
-                        mod = key_dict["modifier"][idx]
-                        if mod is not None:
-                            key_name = mod + " + " + key_name
-                    form_layout.addRow(key_name, QLabel(key_des))
-        scroll_widget.setLayout(form_layout)
-        scroll_area.setWidget(scroll_widget)
-        layout.addWidget(scroll_area)
-
-        # Additional help for mouse interaction
-        inst = self.mne.instance_type
-        is_raw = inst == "raw"
-        is_epo = inst == "epochs"
-        is_ica = inst == "ica"
-        ch_cmp = "component" if is_ica else "channel"
-        ch_epo = "epoch" if is_epo else "channel"
-        ica_bad = "Mark/unmark component for exclusion"
-        lclick_data = ica_bad if is_ica else f"Mark/unmark bad {ch_epo}"
-        lclick_name = ica_bad if is_ica else "Mark/unmark bad channel"
-        ldrag = "add annotation (in annotation mode)" if is_raw else None
-        rclick_name = dict(
-            ica="Show diagnostics for component",
-            epochs="Show imageplot for channel",
-            raw="Show channel location",
-        )[inst]
-        mouse_help = [
-            (f"Left-click {ch_cmp} name", lclick_name),
-            (f"Left-click {ch_cmp} data", lclick_data),
-            ("Left-click-and-drag on plot", ldrag),
-            ("Left-click on plot background", "Place vertical guide"),
-            ("Right-click on plot background", "Clear vertical guide"),
-            ("Right-click on channel name", rclick_name),
-        ]
-
-        mouse_label = QLabel("Mouse Interaction")
-        mouse_label.setFont(_q_font(16, bold=True))
-        layout.addWidget(mouse_label)
-        mouse_widget = QWidget()
-        mouse_layout = QFormLayout()
-        for interaction, description in mouse_help:
-            if description is not None:
-                mouse_layout.addRow(f"{interaction}:", QLabel(description))
-        mouse_widget.setLayout(mouse_layout)
-        layout.addWidget(mouse_widget)
-
-        self.setLayout(layout)
-        self.show()
-
-        # Set minimum width to avoid horizontal scrolling
-        scroll_area.setMinimumWidth(
-            scroll_widget.minimumSizeHint().width()
-            + scroll_area.verticalScrollBar().width()
-        )
-        self.update()
-
-
-class ProjDialog(_BaseDialog):
-    """A dialog to toggle projections."""
-
-    def __init__(self, main, *, name):
-        self.external_change = True
-        # Create projection-layout
-        super().__init__(main.window(), name=name, title="Projectors")
-
-        layout = QVBoxLayout()
-        labels = [p["desc"] for p in self.mne.projs]
-        for ix, active in enumerate(self.mne.projs_active):
-            if active:
-                labels[ix] += " (already applied)"
-
-        # make title
-        layout.addWidget(
-            QLabel(
-                "Mark projectors applied on the plot.\n(Applied projectors are dimmed)."
-            )
-        )
-
-        # Add checkboxes
-        self.checkboxes = list()
-        for idx, label in enumerate(labels):
-            chkbx = QCheckBox(label)
-            chkbx.setChecked(bool(self.mne.projs_on[idx]))
-            chkbx.clicked.connect(_methpartial(self._proj_changed, idx=idx))
-            if self.mne.projs_active[idx]:
-                chkbx.setEnabled(False)
-            self.checkboxes.append(chkbx)
-            layout.addWidget(chkbx)
-
-        self.toggle_all_bt = QPushButton("Toggle All")
-        self.toggle_all_bt.clicked.connect(self.toggle_all)
-        layout.addWidget(self.toggle_all_bt)
-        self.setLayout(layout)
-        self.show()
-
-    def _proj_changed(self, state=None, idx=None):
-        # Only change if proj wasn't already applied.
-        if not self.mne.projs_active[idx]:
-            self.mne.projs_on[idx] = not self.mne.projs_on[idx]
-            self.weakmain()._apply_update_projectors()
-
-    def toggle_all(self):
-        """Toggle all projectors."""
-        self.weakmain()._apply_update_projectors(toggle_all=True)
-
-        # Update all checkboxes
-        for idx, chkbx in enumerate(self.checkboxes):
-            chkbx.setChecked(bool(self.mne.projs_on[idx]))
-
-
-class _ChannelFig(FigureCanvasQTAgg):
-    def __init__(self, figure, mne):
-        self.figure = figure
-        self.mne = mne
-        super().__init__(figure)
-        _set_window_flags(self)
-        self.setFocusPolicy(Qt.FocusPolicy(Qt.StrongFocus | Qt.WheelFocus))
-        self.setFocus()
-        self._lasso_path = None
-        # Only update when mouse is pressed
-        self.setMouseTracking(False)
-
-    def paintEvent(self, event):
-        super().paintEvent(event)
-        # Lasso-Drawing doesn't seem to work with mpl, thus it is replicated
-        # in Qt.
-        if self._lasso_path is not None:
-            painter = QPainter(self)
-            painter.setPen(self.mne.mkPen("red", width=2))
-            painter.drawPath(self._lasso_path)
-            painter.end()
-
-    def mouseMoveEvent(self, event):
-        super().mouseMoveEvent(event)
-
-        if self._lasso_path is None:
-            self._lasso_path = QPainterPath()
-            self._lasso_path.moveTo(event.pos())
-        else:
-            self._lasso_path.lineTo(event.pos())
-
-        self.update()
-
-    def mouseReleaseEvent(self, event):
-        super().mouseReleaseEvent(event)
-        self._lasso_path = None
-        self.update()
-
-    def keyPressEvent(self, event):
-        event.ignore()
-
-
-class SelectionDialog(_BaseDialog):  # noqa: D101
-    def __init__(self, main):
-        # Create widget
-        super().__init__(main, name="fig_selection", title="Channel selection")
-        geo = _screen_geometry(self)
-        # Position selection dialog at right border of active screen
-        xpos = geo.x() + geo.width() - 400
-        self.setGeometry(xpos, 100, 400, 800)
-
-        layout = QVBoxLayout()
-
-        # Add channel plot
-        fig = _figure_agg(figsize=(6, 6), dpi=96)
-        ax = fig.add_axes([0, 0, 1, 1])
-        self.channel_fig = plot_sensors(
-            self.mne.info,
-            kind="select",
-            ch_type="all",
-            title="",
-            ch_groups=self.mne.group_by,
-            axes=ax,
-            show=False,
-        )[0]
-        self.channel_fig.lasso.callbacks.append(self._set_custom_selection)
-        self.channel_widget = _ChannelFig(self.channel_fig, self.mne)
-        layout.addWidget(self.channel_widget)
-
-        selections_dict = self.mne.ch_selections
-        selections_dict.update(Custom=np.array([], dtype=int))  # for lasso
-
-        self.chkbxs = OrderedDict()
-        for label in selections_dict:
-            chkbx = QRadioButton(label)
-            chkbx.clicked.connect(_methpartial(self._chkbx_changed, label=label))
-            self.chkbxs[label] = chkbx
-            layout.addWidget(chkbx)
-
-        self.mne.old_selection = list(selections_dict)[0]
-        self.chkbxs[self.mne.old_selection].setChecked(True)
-
-        self._update_highlighted_sensors()
-
-        # add instructions at bottom
-        instructions = (
-            "To use a custom selection, first click-drag on the sensor plot "
-            'to "lasso" the sensors you want to select, or hold Ctrl while '
-            "clicking individual sensors. Holding Ctrl while click-dragging "
-            "allows a lasso selection adding to (rather than replacing) the "
-            "existing selection."
-        )
-        help_widget = QTextEdit(instructions)
-        help_widget.setReadOnly(True)
-        layout.addWidget(help_widget)
-
-        self.setLayout(layout)
-        self.show(center=False)
-
-    def _chkbx_changed(self, checked=True, label=None):
-        # _chkbx_changed is called either directly (with checked=None) or
-        # through _methpartial with a Qt signal. The signal includes the bool
-        # argument 'checked'.
-        # Old versions of MNE-python tests will call this function directly
-        # without the checked argument _chkbx_changed(label), thus it has to be
-        # wrap in case only one argument is provided to retain compatibility
-        # of the tests between new/old versions of mne-qt-browser and
-        # mne-python.
-        if label is None:
-            label = checked
-        # Disable butterfly if checkbox is clicked
-        if self.mne.butterfly:
-            self.weakmain()._set_butterfly(False)
-        if label == "Custom" and not len(self.mne.ch_selections["Custom"]):
-            label = self.mne.old_selection
-        # Select the checkbox no matter if clicked on when active or not
-        self.chkbxs[label].setChecked(True)
-        # Update selections
-        self.mne.old_selection = label
-        self.mne.picks = np.asarray(self.mne.ch_selections[label])
-        self.mne.n_channels = len(self.mne.picks)
-        # Update highlighted sensors
-        self._update_highlighted_sensors()
-        # if "Vertex" is defined, some channels appear twice, so if
-        # "Vertex" is selected, ch_start should be the *first* match;
-        # otherwise it should be the *last* match (since "Vertex" is
-        # always the first selection group, if it exists).
-        if label == "Custom":
-            self.mne.ch_start = 0
-        else:
-            all_values = list()
-            for key, chs in self.mne.ch_selections.items():
-                if np.array_equal(chs, self.mne.picks):
-                    self.mne.ch_start = len(all_values)
-                    break
-                else:
-                    all_values = np.concatenate([all_values, chs])
-
-        # Apply changes on view
-        self.mne.plt.setYRange(
-            self.mne.ch_start, self.mne.ch_start + self.mne.n_channels + 1, padding=0
-        )
-
-        # Update scrollbar
-        label_idx = list(self.mne.ch_selections).index(label)
-        self.mne.ax_vscroll.update_value(label_idx)
-
-        # Update all y-positions, because channels can appear in multiple
-        # selections on different y-positions
-        for trace in self.mne.traces:
-            trace.update_ypos()
-            trace.update_data()
-
-    def _set_custom_selection(self):
-        chs = self.channel_fig.lasso.selection
-        inds = np.isin(self.mne.ch_names, chs)
-        self.mne.ch_selections["Custom"] = inds.nonzero()[0]
-        if any(inds):
-            self._chkbx_changed(None, "Custom")
-
-    def _update_highlighted_sensors(self):
-        inds = np.isin(
-            self.mne.fig_selection.channel_fig.lasso.ch_names,
-            self.mne.ch_names[self.mne.picks],
-        ).nonzero()[0]
-        self.channel_fig.lasso.select_many(inds)
-        self.channel_widget.draw()
-
-    def _update_bad_sensors(self, pick, mark_bad):
-        sensor_picks = list()
-        ch_indices = channel_indices_by_type(self.mne.info)
-        for this_type in _DATA_CH_TYPES_SPLIT:
-            if this_type in self.mne.ch_types:
-                sensor_picks.extend(ch_indices[this_type])
-        sensor_idx = np.isin(sensor_picks, pick).nonzero()[0]
-        # change the sensor color
-        fig = self.channel_fig
-        fig.lasso.ec[sensor_idx, 0] = float(mark_bad)  # change R of RGBA array
-        fig.lasso.collection.set_edgecolors(fig.lasso.ec)
-        fig.canvas.draw_idle()
-        self.channel_widget.draw()
-
-    def _style_butterfly(self):
-        for key, chkbx in self.chkbxs.items():
-            if self.mne.butterfly:
-                chkbx.setChecked(False)
-            else:
-                if key == self.mne.old_selection:
-                    chkbx.setChecked(True)
-        self._update_highlighted_sensors()
-
-    def _scroll_selection(self, step):
-        name_idx = list(self.mne.ch_selections).index(self.mne.old_selection)
-        new_idx = np.clip(name_idx + step, 0, len(self.mne.ch_selections) - 1)
-        new_label = list(self.mne.ch_selections)[new_idx]
-        self._chkbx_changed(None, new_label)
-
-    def _scroll_to_idx(self, idx):
-        all_values = list()
-        label = list(self.mne.ch_selections)[0]
-        for key, values in self.mne.ch_selections.items():
-            all_values = np.concatenate([all_values, values])
-            if idx < len(all_values):
-                label = key
-                break
-        self._chkbx_changed(None, label)
-
-    def closeEvent(self, event):  # noqa: D102
-        super().closeEvent(event)
-        if hasattr(self.channel_fig.lasso, "callbacks"):
-            self.channel_fig.lasso.callbacks.clear()
-        for chkbx in self.chkbxs.values():
-            _disconnect(chkbx.clicked, allow_error=True)
-        main = self.weakmain()
-        if main is not None:
-            main.close()
-
-
-class SingleChannelAnnot(FillBetweenItem):
-    def __init__(self, mne, weakmain, annot, ch_name):
-        self.weakmain = weakmain
-        self.mne = mne
-        self.annot = annot
-        self.ch_name = ch_name
-
-        # We have a choice here: some channel-specific annotations will have
-        # channels that are not plotted (e.g., with raw.plot(..., order=[0, 1])).
-        # Here we choose to add them as invisible plot items so that if you for example
-        # remove all *visible* channels from the annot it won't suddenly become an
-        # all-channel annotation. It will instead disappear from the plot, but still
-        # live in raw.annotations. We could emit a warning, but it would probably
-        # become annoying. At some point we could add a warning
-        # *when you delete the last visible channel* to let people know that the
-        # annot still exists but can no longer be modified, or something similar.
-        # It would be good to have this be driven by an actual use case / experience.
-        idx = np.where(self.mne.ch_names[self.mne.ch_order] == self.ch_name)[0]
-        if len(idx) == 1:  # should be 1 or 0 (if channel not plotted at all)
-            self.ypos = idx + np.array([0.5, 1.5])
-        else:
-            self.ypos = np.full(2, np.nan)
-
-        self.upper = PlotDataItem()
-        self.lower = PlotDataItem()
-
-        # init
-        super().__init__(self.lower, self.upper)
-
-        self.update_plot_curves()
-
-        color_string = self.mne.annotation_segment_colors[self.annot.description]
-        self.update_color(color_string)
-
-        self.mne.plt.addItem(self, ignoreBounds=True)
-
-        self.annot.removeSingleChannelAnnots.connect(self.remove)
-        self.annot.sigRegionChangeFinished.connect(self.update_plot_curves)
-        self.annot.sigRegionChanged.connect(self.update_plot_curves)
-        self.annot.sigToggleVisibility.connect(self.update_visible)
-        self.annot.sigUpdateColor.connect(self.update_color)
-
-    def update_plot_curves(self):
-        """Update the lower and upper bounds of the region."""
-        # When using PlotCurveItem
-        # annot_range = np.array(self.annot.getRegion())
-        # self.lower.setData(x=annot_range, y=self.ypos[[0, 0]])
-        # self.upper.setData(x=annot_range, y=self.ypos[[1, 1]])
-
-        # When using PlotDataItem
-        x_min, x_max = self.annot.getRegion()
-        y_min, y_max = self.ypos
-        self.upper.setData(x=(x_min, x_max), y=(y_max, y_max))
-        self.lower.setData(x=(x_min, x_max), y=(y_min, y_min))
-
-    def update_visible(self, visible):
-        """Update visibility to match the annot."""
-        self.setVisible(visible)
-
-    def update_color(self, color_string=None):
-        brush = _get_color(color_string, self.mne.dark)
-        brush.setAlpha(60)
-        self.setBrush(brush)
-
-    def remove(self):
-        """Remove this from plot."""
-        vb = self.mne.viewbox
-        vb.removeItem(self)
-
-
-class AnnotRegion(LinearRegionItem):
-    """Graphics-Object for Annotations."""
-
-    regionChangeFinished = Signal(object)
-    gotSelected = Signal(object)
-    removeRequested = Signal(object)
-    removeSingleChannelAnnots = Signal(object)
-    sigToggleVisibility = Signal(bool)
-    sigUpdateColor = Signal(object)  # can be str or tuple
-
-    def __init__(self, mne, description, values, weakmain, ch_names=None):
-        super().__init__(
-            values=values,
-            orientation="vertical",
-            movable=True,
-            swapMode="sort",
-            bounds=(0, mne.xmax + 1 / mne.info["sfreq"]),
-        )
-        # Set default z-value to 0 to be behind other items in scene
-        self.setZValue(0)
-
-        self.sigRegionChangeFinished.connect(self._region_changed)
-        self.weakmain = weakmain
-        self.mne = mne
-        self.description = description
-        self.old_onset = values[0]
-        self.selected = False
-
-        self.label_item = TextItem(text=description, anchor=(0.5, 0.5))
-        self.label_item.setFont(_q_font(10, bold=True))
-        self.sigRegionChanged.connect(self.update_label_pos)
-
-        self.update_color(all_channels=(not ch_names))
-
-        self.single_channel_annots = {}
-        if ch_names is not None and len(ch_names):
-            for ch in ch_names:
-                self._add_single_channel_annot(ch)
-
-        self.mne.plt.addItem(self, ignoreBounds=True)
-        self.mne.plt.addItem(self.label_item, ignoreBounds=True)
-
-    def _region_changed(self):
-        # Check for overlapping regions
-        overlap_has_sca = []
-        overlapping_regions = list()
-        for region in self.mne.regions:
-            if region.description != self.description or id(self) == id(region):
-                continue
-            values = region.getRegion()
-            if (
-                any(self.getRegion()[0] <= val <= self.getRegion()[1] for val in values)
-                or (values[0] <= self.getRegion()[0] <= values[1])
-                and (values[0] <= self.getRegion()[1] <= values[1])
-            ):
-                overlapping_regions.append(region)
-                overlap_has_sca.append(len(region.single_channel_annots) > 0)
-
-        # If this region or an overlapping region have
-        # channel specific annotations then terminate
-        if (len(self.single_channel_annots) > 0 or any(overlap_has_sca)) and len(
-            overlapping_regions
-        ) > 0:
-            dur = self.getRegion()[1] - self.getRegion()[0]
-            self.setRegion((self.old_onset, self.old_onset + dur))
-            warn("Can not combine channel-based annotations with any other annotation.")
-            return
-
-        # figure out new boundaries
-        regions_ = np.array(
-            [region.getRegion() for region in overlapping_regions] + [self.getRegion()]
-        )
-
-        self.regionChangeFinished.emit(self)
-
-        onset = np.min(regions_[:, 0])
-        offset = np.max(regions_[:, 1])
-
-        self.old_onset = onset
-
-        logger.debug(f"New {self.description} region: {onset:.2f} - {offset:.2f}")
-        # remove overlapping regions
-        for region in overlapping_regions:
-            self.weakmain()._remove_region(region, from_annot=False)
-        # re-set while blocking the signal to avoid re-running this function
-        with QSignalBlocker(self):
-            self.setRegion((onset, offset))
-
-        self.update_label_pos()
-
-    def _add_single_channel_annot(self, ch_name):
-        self.single_channel_annots[ch_name] = SingleChannelAnnot(
-            self.mne, self.weakmain, self, ch_name
-        )
-
-    def _remove_single_channel_annot(self, ch_name):
-        self.single_channel_annots[ch_name].remove()
-        self.single_channel_annots.pop(ch_name)
-
-    def _toggle_single_channel_annot(self, ch_name, update_color=True):
-        """Add or remove single channel annotations."""
-        # Exit if mne-python not updated to support shift-click
-        if not hasattr(self.weakmain(), "_toggle_single_channel_annotation"):
-            warn(
-                "MNE must be updated to version 1.8 or above to "
-                "support add/remove channels from annotation."
-            )
-            return
-
-        region_idx = self.weakmain()._get_onset_idx(self.getRegion()[0])
-        self.weakmain()._toggle_single_channel_annotation(ch_name, region_idx)
-        if ch_name not in self.single_channel_annots.keys():
-            self._add_single_channel_annot(ch_name)
-        else:
-            self._remove_single_channel_annot(ch_name)
-
-        if update_color:
-            self.update_color(
-                all_channels=(not list(self.single_channel_annots.keys()))
-            )
-
-    def update_color(self, all_channels=True):
-        """Update color of annotation-region.
-
-        Parameters
-        ----------
-        all_channels : bool
-            all_channels should be False for channel specific annotations.
-            These annotations will be more transparent with a dashed outline.
-        """
-        color_string = self.mne.annotation_segment_colors[self.description]
-        self.base_color = _get_color(color_string, self.mne.dark)
-        self.hover_color = _get_color(color_string, self.mne.dark)
-        self.text_color = _get_color(color_string, self.mne.dark)
-        self.base_color.setAlpha(75 if all_channels else 15)
-        self.hover_color.setAlpha(150)
-        self.text_color.setAlpha(255)
-        kwargs = dict(color=self.hover_color, width=2)
-        if not all_channels:
-            color = _get_color(color_string, self.mne.dark)
-            color.setAlpha(75)
-            kwargs.update(
-                style=Qt.CustomDashLine,
-                cap=Qt.FlatCap,
-                dash=[8, 8],
-                color=color,
-            )
-        self.line_pen = self.mne.mkPen(**kwargs)
-        self.hover_pen = self.mne.mkPen(color=self.text_color, width=2)
-        self.setBrush(self.base_color)
-        self.setHoverBrush(self.hover_color)
-        self.label_item.setColor(self.text_color)
-        for line in self.lines:
-            line.setPen(self.line_pen)
-            line.setHoverPen(self.hover_pen)
-        self.update()
-        self.sigUpdateColor.emit(color_string)
-
-    def update_description(self, description):
-        """Update description of annoation-region."""
-        self.description = description
-        self.label_item.setText(description)
-        self.label_item.update()
-
-    def update_visible(self, visible):
-        """Update if annotation-region is visible."""
-        self.setVisible(visible)
-        self.label_item.setVisible(visible)
-        self.sigToggleVisibility.emit(visible)
-
-    def remove(self):
-        """Remove annotation-region."""
-        self.removeSingleChannelAnnots.emit(self)
-        self.removeRequested.emit(self)
-        vb = self.mne.viewbox
-        if vb and self.label_item in vb.addedItems:
-            vb.removeItem(self.label_item)
-
-    def select(self, selected):
-        """Update select-state of annotation-region."""
-        self.selected = selected
-        if selected:
-            self.label_item.setColor("w")
-            self.label_item.fill = mkBrush(self.hover_color)
-            self.gotSelected.emit(self)
-        else:
-            self.label_item.setColor(self.text_color)
-            self.label_item.fill = mkBrush(None)
-        logger.debug(
-            f"{'Selected' if self.selected else 'Deselected'} annotation: "
-            f"{self.description}"
-        )
-        self.label_item.update()
-
-    def mouseClickEvent(self, event):
-        """Customize mouse click events."""
-        if self.mne.annotation_mode and (
-            event.button() == Qt.LeftButton and event.modifiers() & Qt.ShiftModifier
-        ):
-            scene_pos = self.mapToScene(event.pos())
-
-            for t in self.mne.traces:
-                trace_path = t.shape()
-                trace_point = t.mapFromScene(scene_pos)
-                if trace_path.contains(trace_point):
-                    self._toggle_single_channel_annot(t.ch_name)
-                    event.accept()
-                    break
-
-        elif self.mne.annotation_mode:
-            if event.button() == Qt.LeftButton and self.movable:
-                logger.debug(f"Mouse event in annotation mode for {event.pos()}...")
-                self.select(True)
-                event.accept()
-            elif event.button() == Qt.RightButton and self.movable:
-                self.remove()
-                # the annotation removed should be the one on top of all others, which
-                # should correspond to the one of the type currently selected and with
-                # the highest zValue
-                event.accept()
-        else:
-            event.ignore()
-
-    def mouseDragEvent(self, ev):
-        """Customize mouse drag events."""
-        if (
-            not self.mne.annotation_mode
-            or not self.movable
-            or not ev.button() == Qt.LeftButton
-        ):
-            return
-        ev.accept()
-
-        if ev.isStart():
-            bdp = ev.buttonDownPos()
-            self.cursorOffsets = [line.pos() - bdp for line in self.lines]
-            self.startPositions = [line.pos() for line in self.lines]
-            self.moving = True
-
-        if not self.moving:
-            return
-
-        new_pos = [pos + ev.pos() for pos in self.cursorOffsets]
-        # make sure the new_pos is not exiting the boundaries set for each line which
-        # corresponds to (0, raw.times[-1])
-        # we have to take into account regions draw from right to left and from left to
-        # right separately because we are changing the position of the individual lines
-        # used to create the region
-        idx = 0 if new_pos[0].x() <= new_pos[1].x() else 1
-        if new_pos[idx].x() < self.lines[idx].bounds()[0]:
-            shift = self.lines[idx].bounds()[0] - new_pos[idx].x()
-            for pos in new_pos:
-                pos.setX(pos.x() + shift)
-        if self.lines[(idx + 1) % 2].bounds()[1] < new_pos[(idx + 1) % 2].x():
-            shift = new_pos[(idx + 1) % 2].x() - self.lines[(idx + 1) % 2].bounds()[1]
-            for pos in new_pos:
-                pos.setX(pos.x() - shift)
-
-        with QSignalBlocker(self.lines[0]):
-            for pos, line in zip(new_pos, self.lines):
-                line.setPos(pos)
-        self.prepareGeometryChange()
-
-        if ev.isFinish():
-            self.moving = False
-            self.sigRegionChangeFinished.emit(self)
-        else:
-            self.sigRegionChanged.emit(self)
-
-    def update_label_pos(self):
-        """Update position of description-label from annotation-region."""
-        rgn = self.getRegion()
-        vb = self.mne.viewbox
-        if vb:
-            ymax = vb.viewRange()[1][1]
-            self.label_item.setPos(sum(rgn) / 2, ymax - 0.3)
-
-
-class _AnnotEditDialog(_BaseDialog):
-    def __init__(self, annot_dock):
-        super().__init__(annot_dock.weakmain(), title="Edit Annotations")
-        self.ad = annot_dock
-
-        self.current_mode = None
-
-        layout = QVBoxLayout()
-        self.descr_label = QLabel()
-        if self.mne.selected_region:
-            self.mode_cmbx = QComboBox()
-            self.mode_cmbx.addItems(["all", "selected"])
-            self.mode_cmbx.currentTextChanged.connect(self._mode_changed)
-            layout.addWidget(QLabel("Edit Scope:"))
-            layout.addWidget(self.mode_cmbx)
-        # Set group as default
-        self._mode_changed("all")
-
-        layout.addWidget(self.descr_label)
-        self.input_w = QLineEdit()
-        layout.addWidget(self.input_w)
-        bt_layout = QHBoxLayout()
-        ok_bt = QPushButton("Ok")
-        ok_bt.clicked.connect(self._edit)
-        bt_layout.addWidget(ok_bt)
-        cancel_bt = QPushButton("Cancel")
-        cancel_bt.clicked.connect(self.close)
-        bt_layout.addWidget(cancel_bt)
-        layout.addLayout(bt_layout)
-        self.setLayout(layout)
-        self.show()
-
-    def _mode_changed(self, mode):
-        self.current_mode = mode
-        if mode == "all":
-            curr_des = self.ad.description_cmbx.currentText()
-        else:
-            curr_des = self.mne.selected_region.description
-        self.descr_label.setText(f'Change "{curr_des}" to:')
-
-    def _edit(self):
-        new_des = self.input_w.text()
-        if new_des:
-            if self.current_mode == "all" or self.mne.selected_region is None:
-                self.ad._edit_description_all(new_des)
-            else:
-                self.ad._edit_description_selected(new_des)
-            self.close()
-
-
-def _select_all(chkbxs):
-    for chkbx in chkbxs:
-        chkbx.setChecked(True)
-
-
-def _clear_all(chkbxs):
-    for chkbx in chkbxs:
-        chkbx.setChecked(False)
-
-
-class AnnotationDock(QDockWidget):
-    """Dock-Window for Management of annotations."""
-
-    def __init__(self, main):
-        super().__init__("Annotations")
-        self.weakmain = weakref.ref(main)
-        self.mne = main.mne
-        del main
-        self._init_ui()
-
-        self.setFeatures(
-            QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable
-        )
-
-    def _init_ui(self):
-        widget = QWidget()
-        layout = QHBoxLayout()
-        layout.setAlignment(Qt.AlignLeft)
-
-        self.description_cmbx = QComboBox()
-        self.description_cmbx.setSizeAdjustPolicy(QComboBox.AdjustToContents)
-        self.description_cmbx.currentIndexChanged.connect(self._description_changed)
-        self._update_description_cmbx()
-        layout.addWidget(self.description_cmbx)
-
-        add_bt = QPushButton("Add Description")
-        add_bt.clicked.connect(self._add_description_dlg)
-        layout.addWidget(add_bt)
-
-        rm_bt = QPushButton("Remove Description")
-        rm_bt.clicked.connect(self._remove_description_dlg)
-        layout.addWidget(rm_bt)
-
-        edit_bt = QPushButton("Edit Description")
-        edit_bt.clicked.connect(self._edit_description_dlg)
-        layout.addWidget(edit_bt)
-
-        # Uncomment when custom colors for annotations are implemented in
-        # MNE-Python.
-        # color_bt = QPushButton('Edit Color')
-        # color_bt.clicked.connect(self._set_color)
-        # layout.addWidget(color_bt)
-
-        select_bt = QPushButton("Select Visible")
-        select_bt.clicked.connect(self._select_annotations)
-        layout.addWidget(select_bt)
-
-        # Determine reasonable time decimals from sampling frequency.
-        time_decimals = int(np.ceil(np.log10(self.mne.info["sfreq"])))
-
-        layout.addWidget(QLabel("Start:"))
-        self.start_bx = QDoubleSpinBox()
-        self.start_bx.setDecimals(time_decimals)
-        self.start_bx.setMinimum(0)
-        self.start_bx.setMaximum(self.mne.xmax)
-        self.start_bx.setSingleStep(0.05)
-        self.start_bx.valueChanged.connect(self._start_changed)
-        layout.addWidget(self.start_bx)
-
-        layout.addWidget(QLabel("Stop:"))
-        self.stop_bx = QDoubleSpinBox()
-        self.stop_bx.setDecimals(time_decimals)
-        self.stop_bx.setMinimum(0)
-        self.stop_bx.setMaximum(self.mne.xmax + 1 / self.mne.info["sfreq"])
-        self.stop_bx.setSingleStep(0.05)
-        self.stop_bx.valueChanged.connect(self._stop_changed)
-        layout.addWidget(self.stop_bx)
-
-        help_bt = QPushButton(QIcon.fromTheme("help"), "Help")
-        help_bt.clicked.connect(self._show_help)
-        layout.addWidget(help_bt)
-
-        widget.setLayout(layout)
-        self.setWidget(widget)
-
-    def _add_description_to_cmbx(self, description):
-        color_pixmap = QPixmap(25, 25)
-        color = _get_color(
-            self.mne.annotation_segment_colors[description], self.mne.dark
-        )
-        color.setAlpha(75)
-        color_pixmap.fill(color)
-        color_icon = QIcon(color_pixmap)
-        self.description_cmbx.addItem(color_icon, description)
-
-    def _add_description(self, new_description):
-        self.mne.new_annotation_labels.append(new_description)
-        self.mne.visible_annotations[new_description] = True
-        self.weakmain()._setup_annotation_colors()
-        self._add_description_to_cmbx(new_description)
-        self.mne.current_description = new_description
-        self.description_cmbx.setCurrentText(new_description)
-
-    def _add_description_dlg(self):
-        new_description, ok = QInputDialog.getText(
-            self, "Set new description!", "New description: "
-        )
-        if (
-            ok
-            and new_description
-            and new_description not in self.mne.new_annotation_labels
-        ):
-            self._add_description(new_description)
-
-    def _edit_description_all(self, new_des):
-        """Update descriptions of all annotations with the same description."""
-        old_des = self.description_cmbx.currentText()
-        edit_regions = [r for r in self.mne.regions if r.description == old_des]
-        # Update regions & annotations
-        for ed_region in edit_regions:
-            idx = self.weakmain()._get_onset_idx(ed_region.getRegion()[0])
-            self.mne.inst.annotations.description[idx] = new_des
-            ed_region.update_description(new_des)
-        # Update containers with annotation-attributes
-        self.mne.new_annotation_labels.remove(old_des)
-        self.mne.new_annotation_labels = self.weakmain()._get_annotation_labels()
-        self.mne.visible_annotations[new_des] = self.mne.visible_annotations.pop(
-            old_des
-        )
-        self.mne.annotation_segment_colors[new_des] = (
-            self.mne.annotation_segment_colors.pop(old_des)
-        )
-
-        # Update related widgets
-        self.weakmain()._setup_annotation_colors()
-        self._update_regions_colors()
-        self._update_description_cmbx()
-        self.mne.current_description = new_des
-        self.mne.overview_bar.update_annotations()
-
-    def _edit_description_selected(self, new_des):
-        """Update description only of selected region."""
-        old_des = self.mne.selected_region.description
-        idx = self.weakmain()._get_onset_idx(self.mne.selected_region.getRegion()[0])
-        # Update regions & annotations
-        self.mne.inst.annotations.description[idx] = new_des
-        self.mne.selected_region.update_description(new_des)
-        # Update containers with annotation-attributes
-        if new_des not in self.mne.new_annotation_labels:
-            self.mne.new_annotation_labels.append(new_des)
-        self.mne.visible_annotations[new_des] = copy(
-            self.mne.visible_annotations[old_des]
-        )
-        if old_des not in self.mne.inst.annotations.description:
-            self.mne.new_annotation_labels.remove(old_des)
-            self.mne.visible_annotations.pop(old_des)
-            self.mne.annotation_segment_colors[new_des] = (
-                self.mne.annotation_segment_colors.pop(old_des)
-            )
-
-        # Update related widgets
-        self.weakmain()._setup_annotation_colors()
-        self._update_regions_colors()
-        self._update_description_cmbx()
-        self.mne.overview_bar.update_annotations()
-
-    def _edit_description_dlg(self):
-        if len(self.mne.inst.annotations.description) > 0:
-            _AnnotEditDialog(self)
-        else:
-            self.weakmain().message_box(
-                text="No Annotations!",
-                info_text="There are no annotations yet to edit!",
-                icon=QMessageBox.Information,
-            )
-
-    def _remove_description(self, rm_description):
-        if rm_description != "":
-            # Remove regions
-            for rm_region in [
-                r for r in self.mne.regions if r.description == rm_description
-            ]:
-                rm_region.remove()
-
-            # Remove from descriptions
-            self.mne.new_annotation_labels.remove(rm_description)
-            self._update_description_cmbx()
-
-            # Remove from visible annotations
-            self.mne.visible_annotations.pop(rm_description)
-
-            # Remove from color-mapping
-            if rm_description in self.mne.annotation_segment_colors:
-                self.mne.annotation_segment_colors.pop(rm_description)
-
-            # Set first description in Combo-Box to current description
-            if self.description_cmbx.count() > 0:
-                self.description_cmbx.setCurrentIndex(0)
-                self.mne.current_description = self.description_cmbx.currentText()
-
-    def _remove_description_dlg(self):
-        rm_description = self.description_cmbx.currentText()
-        existing_annot = list(self.mne.inst.annotations.description).count(
-            rm_description
-        )
-        if existing_annot > 0:
-            text = f"Remove annotations with {rm_description}?"
-            info_text = (
-                f"There exist {existing_annot} annotations with "
-                f'"{rm_description}".\n'
-                f"Do you really want to remove them?"
-            )
-            buttons = QMessageBox.Yes | QMessageBox.No
-            ans = self.weakmain().message_box(
-                text=text,
-                info_text=info_text,
-                buttons=buttons,
-                default_button=QMessageBox.Yes,
-                icon=QMessageBox.Question,
-            )
-        else:
-            ans = QMessageBox.Yes
-
-        if ans == QMessageBox.Yes:
-            self._remove_description(rm_description)
-
-    def _set_visible_region(self, state, *, description):
-        self.mne.visible_annotations[description] = bool(state)
-
-    def _select_annotations(self):
-        logger.debug("Annotation selected")
-        select_dlg = QDialog(self)
-        chkbxs = list()
-        layout = QVBoxLayout()
-        layout.addWidget(QLabel("Select visible labels:"))
-
-        # Add descriptions to scroll-area to be scalable.
-        scroll_area = QScrollArea()
-        scroll_widget = QWidget()
-        scroll_layout = QVBoxLayout()
-
-        for des in self.mne.visible_annotations:
-            chkbx = QCheckBox(des)
-            chkbx.setChecked(self.mne.visible_annotations[des])
-            chkbx.stateChanged.connect(
-                _methpartial(self._set_visible_region, description=des)
-            )
-            chkbxs.append(chkbx)
-            scroll_layout.addWidget(chkbx)
-
-        scroll_widget.setLayout(scroll_layout)
-        scroll_area.setWidget(scroll_widget)
-        layout.addWidget(scroll_area)
-
-        bt_layout = QGridLayout()
-
-        all_bt = QPushButton("All")
-        all_bt.clicked.connect(partial(_select_all, chkbxs=chkbxs))
-        bt_layout.addWidget(all_bt, 0, 0)
-
-        clear_bt = QPushButton("Clear")
-        clear_bt.clicked.connect(partial(_clear_all, chkbxs=chkbxs))
-        bt_layout.addWidget(clear_bt, 0, 1)
-
-        ok_bt = QPushButton("Ok")
-        ok_bt.clicked.connect(select_dlg.close)
-        bt_layout.addWidget(ok_bt, 1, 0, 1, 2)
-
-        layout.addLayout(bt_layout)
-
-        select_dlg.setLayout(layout)
-        select_dlg.exec()
-        all_bt.clicked.disconnect()
-        clear_bt.clicked.disconnect()
-
-        self.weakmain()._update_regions_visible()
-
-    def _description_changed(self, descr_idx):
-        new_descr = self.description_cmbx.itemText(descr_idx)
-        self.mne.current_description = new_descr
-        # increase zValue of currently selected annotation and decrease all the others
-        for region in self.mne.regions:
-            if region.description == self.mne.current_description:
-                region.setZValue(2)
-            else:
-                region.setZValue(1)
-
-    def _start_changed(self):
-        start = self.start_bx.value()
-        sel_region = self.mne.selected_region
-        stop = sel_region.getRegion()[1]
-        if start <= stop:
-            self.mne.selected_region.setRegion((start, stop))
-            # Make channel specific fillBetweens stay in sync with annot region
-            # if len(sel_region.single_channel_annots.keys()) > 0:
-            #    sel_region.single_channel_annots(start, stop)
-        else:
-            self.weakmain().message_box(
-                text="Invalid value!",
-                info_text="Start can't be bigger than Stop!",
-                icon=QMessageBox.Critical,
-                modal=False,
-            )
-            self.start_bx.setValue(sel_region.getRegion()[0])
-
-    def _stop_changed(self):
-        stop = self.stop_bx.value()
-        sel_region = self.mne.selected_region
-        start = sel_region.getRegion()[0]
-        if start <= stop:
-            sel_region.setRegion((start, stop))
-        else:
-            self.weakmain().message_box(
-                text="Invalid value!",
-                info_text="Stop can't be smaller than Start!",
-                icon=QMessageBox.Critical,
-            )
-            self.stop_bx.setValue(sel_region.getRegion()[1])
-
-    def _set_color(self):
-        curr_descr = self.description_cmbx.currentText()
-        if curr_descr in self.mne.annotation_segment_colors:
-            curr_col = self.mne.annotation_segment_colors[curr_descr]
-        else:
-            curr_col = None
-        color = QColorDialog.getColor(
-            _get_color(curr_col, self.mne.dark), self, f"Choose color for {curr_descr}!"
-        )
-        if color.isValid():
-            # Invert it (we only want to display inverted colors, all stored
-            # colors should be for light mode)
-            color = _get_color(color.getRgb(), self.mne.dark)
-            self.mne.annotation_segment_colors[curr_descr] = color
-            self._update_regions_colors()
-            self._update_description_cmbx()
-            self.mne.overview_bar.update_annotations()
-
-    def update_values(self, region):
-        """Update spinbox-values from region."""
-        rgn = region.getRegion()
-        self.start_bx.setEnabled(True)
-        self.stop_bx.setEnabled(True)
-        with QSignalBlocker(self.start_bx):
-            self.start_bx.setValue(rgn[0])
-        with QSignalBlocker(self.stop_bx):
-            self.stop_bx.setValue(rgn[1])
-
-    def _update_description_cmbx(self):
-        self.description_cmbx.clear()
-        descriptions = self.weakmain()._get_annotation_labels()
-        for description in descriptions:
-            self._add_description_to_cmbx(description)
-        self.description_cmbx.setCurrentText(self.mne.current_description)
-
-    def _update_regions_colors(self):
-        for region in self.mne.regions:
-            region.update_color()
-
-    def reset(self):
-        """Reset to default state."""
-        if self.description_cmbx.count() > 0:
-            self.description_cmbx.setCurrentIndex(0)
-            self.mne.current_description = self.description_cmbx.currentText()
-        with QSignalBlocker(self.start_bx):
-            self.start_bx.setValue(0)
-        with QSignalBlocker(self.stop_bx):
-            self.stop_bx.setValue(1 / self.mne.info["sfreq"])
-
-    def _show_help(self):
-        info_text = (
-            "<h1>Help</h1>"
-            "<h2>Annotations</h2>"
-            "<h3>Add Annotations</h3>"
-            "Drag inside the data-view to create annotations with "
-            "the description currently selected (leftmost item of "
-            "the toolbar).If there is no description yet, add one "
-            'with the button "Add description".'
-            "<h3>Remove Annotations</h3>"
-            "You can remove single annotations by right-clicking on "
-            "them."
-            "<h3>Edit Annotations</h3>"
-            "You can edit annotations by dragging them or their "
-            "boundaries. Or you can use the dials in the toolbar to "
-            "adjust the boundaries for the current selected "
-            "annotation."
-            "<h2>Descriptions</h2>"
-            "<h3>Add Description</h3>"
-            "Add a new description with "
-            'the button "Add description".'
-            "<h3>Edit Description</h3>"
-            "You can edit the description of one single annotation "
-            "or all annotations of the currently selected kind with "
-            'the button "Edit description".'
-            "<h3>Remove Description</h3>"
-            "You can remove all annotations of the currently "
-            'selected kind with the button "Remove description".'
-        )
-        self.weakmain().message_box(
-            text="Annotations-Help", info_text=info_text, icon=QMessageBox.Information
-        )
-
-
-class BrowserView(GraphicsView):
-    """Customized View as part of GraphicsView-Framework."""
-
-    def __init__(self, plot, **kwargs):
-        super().__init__(**kwargs)
-        self.setCentralItem(plot)
-        self.viewport().setAttribute(Qt.WA_AcceptTouchEvents, True)
-
-        self.viewport().grabGesture(Qt.PinchGesture)
-        self.viewport().grabGesture(Qt.SwipeGesture)
-
-    # def viewportEvent(self, event):
-    #     """Customize viewportEvent for touch-gestures (WIP)."""
-    #     if event.type() in [QEvent.TouchBegin, QEvent.TouchUpdate,
-    #                         QEvent.TouchEnd]:
-    #         if event.touchPoints() == 2:
-    #             pass
-    #     elif event.type() == QEvent.Gesture:
-    #         print('Gesture')
-    #     return super().viewportEvent(event)
-
-    def mouseMoveEvent(self, ev):
-        """Customize MouseMoveEvent."""
-        # Don't set GraphicsView.mouseEnabled to True,
-        # we only want part of the functionality pyqtgraph offers here.
-        super().mouseMoveEvent(ev)
-        self.sigSceneMouseMoved.emit(_mouse_event_position(ev))
-
-
-def _mouse_event_position(ev):
-    try:  # Qt6
-        return ev.position()
-    except AttributeError:
-        return ev.pos()
 
 
 class LoadThread(QThread):
@@ -3521,71 +214,10 @@ class LoadThread(QThread):
 class _PGMetaClass(type(QMainWindow), type(BrowserBase)):
     """Class is necessary to prevent a metaclass conflict.
 
-    The conflict arises due to the different types of QMainWindow and
-    BrowserBase.
+    The conflict arises due to the different types of QMainWindow and BrowserBase.
     """
 
     pass
-
-
-# Those are the settings which are stored on each device
-# depending on its operating system with QSettings.
-
-qsettings_params = {
-    # Antialiasing (works with/without OpenGL, integer because QSettings
-    # can't handle booleans)
-    "antialiasing": False,
-    # Steps per view (relative to time)
-    "scroll_sensitivity": 100,
-    # Downsampling-Factor (or 'auto', see SettingsDialog for details)
-    "downsampling": 1,
-    # Downsampling-Method (set SettingsDialog for details)
-    "ds_method": "peak",
-    # Overview mode
-    "overview_mode": "channels",
-    # Overview visibility
-    "overview_visible": True,
-}
-
-
-def _screen_geometry(widget):
-    try:
-        # Qt 5.14+
-        return widget.screen().geometry()
-    except AttributeError:
-        # Top center of the widget
-        screen = QGuiApplication.screenAt(
-            widget.mapToGlobal(QPoint(widget.width() // 2, 0))
-        )
-        if screen is None:
-            screen = QGuiApplication.primaryScreen()
-        geometry = screen.geometry()
-
-        return geometry
-
-
-def _methpartial(meth, **kwargs):
-    """Use WeakMethod to create a partial method."""
-    meth = weakref.WeakMethod(meth)
-
-    def call(*args_, **kwargs_):
-        meth_ = meth()
-        if meth_ is not None:
-            return meth_(*args_, **kwargs, **kwargs_)
-
-    return call
-
-
-def _disconnect(sig, *, allow_error=False):
-    try:
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore", "Failed to disconnect", category=RuntimeWarning
-            )
-            sig.disconnect()
-    except (TypeError, RuntimeError):  # if there are no connections, ignore it
-        if not allow_error:
-            raise
 
 
 class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
@@ -3601,8 +233,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         BrowserBase.__init__(self, **kwargs)
         QMainWindow.__init__(self)
 
-        # Add to list to keep a reference and avoid premature
-        # garbage-collection.
+        # Add to list to keep a reference and avoid premature garbage collection
         _browser_instances.append(self)
 
         # Set the browser style
@@ -3635,19 +266,19 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # control raising with _qt_raise_window
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
 
-        # Initialize attributes which are only used by pyqtgraph, not by
-        # matplotlib and add them to MNEBrowseParams.
+        # Initialize attributes which are only used by pyqtgraph, not by matplotlib and
+        # add them to MNEBrowseParams
 
         # Exactly one MessageBox for messages to facilitate testing/debugging
         self.msg_box = QMessageBox(self)
-        # MessageBox modality needs to be adapted for tests
-        # (otherwise test execution blocks)
+        # MessageBox modality needs to be adapted for tests (otherwise test execution
+        # blocks)
         self.test_mode = False
-        # A Settings-Dialog
+        # Settings dialog
         self.mne.fig_settings = None
         # Stores decimated data
         self.mne.decim_data = None
-        # Stores ypos for selection-mode
+        # Stores ypos for selection mode
         self.mne.selection_ypos_dict = dict()
         # Parameters for precomputing
         self.mne.enable_precompute = False
@@ -3656,15 +287,15 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.zscore_rgba = None
         # Container for traces
         self.mne.traces = list()
-        # Scale-Factor
+        # Scale factor
         self.mne.scale_factor = 1
         # DPI
         screen = QApplication.primaryScreen()
         self.mne.dpi = screen.physicalDotsPerInch()
 
-        # Aspect Ratio
+        # Aspect ratio
         self.mne.aspect_ratio = screen.geometry().width() / screen.geometry().height()
-        # Stores channel-types for butterfly-mode
+        # Stores channel types for butterfly mode
         self.mne.butterfly_type_order = [
             tp for tp in DATA_CH_TYPES_ORDER if tp in self.mne.ch_types
         ]
@@ -3694,7 +325,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                         qvalue = default
             setattr(self.mne, qparam, qvalue)
 
-        # Initialize channel-colors for faster indexing later
+        # Initialize channel colors for faster indexing later
         self.mne.ch_color_ref = dict()
         for idx, ch_name in enumerate(self.mne.ch_names):
             ch_type = self.mne.ch_types[idx]
@@ -3725,7 +356,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             bad_idxs = np.isin(self.mne.ch_names, self.mne.info["bads"])
             self.mne.epoch_color_ref[bad_idxs, :] = to_rgba_array(self.mne.ch_color_bad)
 
-        # Add Load-Progressbar for loading in a thread
+        # Add progress bar for loading in a thread
         self.mne.load_prog_label = QLabel("Loading...")
         self.statusBar().addWidget(self.mne.load_prog_label)
         self.mne.load_prog_label.hide()
@@ -3742,7 +373,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         widget = QWidget()
         layout = QGridLayout()
 
-        # Initialize Axis-Items
+        # Initialize axis items
         self.mne.time_axis = TimeAxis(self.mne)
         if self.mne.is_epochs:
             self.mne.time_axis.setLabel(text="Epoch Index", units=None)
@@ -3755,7 +386,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Start precomputing if enabled
         self._init_precompute()
 
-        # Parameters for overviewbar
+        # Parameters for overview bar
         self.mne.overview_mode = getattr(self.mne, "overview_mode", "channels")
         overview_items = dict(
             empty="Empty",
@@ -3779,25 +410,25 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Initialize data (needed in DataTrace.update_data).
         self._update_data()
 
-        # Initialize Trace-Plot
+        # Initialize trace plot
         self.mne.plt = PlotItem(
             viewBox=self.mne.viewbox,
             axisItems={"bottom": self.mne.time_axis, "left": self.mne.channel_axis},
         )
-        # Hide AutoRange-Button
+        # Hide AutoRange button
         self.mne.plt.hideButtons()
-        # Configure XY-Range
+        # Configure XY range
         if self.mne.is_epochs:
             self.mne.xmax = (
                 len(self.mne.inst.times) * len(self.mne.inst) / self.mne.info["sfreq"]
             )
         else:
             self.mne.xmax = self.mne.inst.times[-1]
-        # Add one empty line as padding at top (y=0).
-        # Negative Y-Axis to display channels from top.
+        # Add one empty line as padding at top (y=0)
+        # Negative y-axis to display channels from top
         self.mne.ymax = len(self.mne.ch_order) + 1
         self.mne.plt.setLimits(xMin=0, xMax=self.mne.xmax, yMin=0, yMax=self.mne.ymax)
-        # Connect Signals from PlotItem
+        # Connect signals from PlotItem
         self.mne.plt.sigXRangeChanged.connect(self._xrange_changed)
         self.mne.plt.sigYRangeChanged.connect(self._yrange_changed)
 
@@ -3805,7 +436,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         for ch_idx in self.mne.picks:
             DataTrace(self, ch_idx)
 
-        # Initialize Epochs Grid
+        # Initialize epochs grid
         if self.mne.is_epochs:
             grid_pen = self.mne.mkPen(color="k", width=2, style=Qt.DashLine)
             for x_grid in self.mne.boundary_times[1:-1]:
@@ -3823,14 +454,14 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         else:
             self.mne.events_visible = False
 
-        # Add Scale-Bars
+        # Add scale bars
         self._add_scalebars()
 
         # Check for OpenGL
         # If a user doesn't specify whether or not to use it:
         # 1. If on macOS, enable it by default to avoid segfault
-        # 2. Otherwise, disable it (performance differences seem minimal, and
-        #    PyOpenGL is an optional requirement)
+        # 2. Otherwise, disable it (performance differences seem minimal, and PyOpenGL
+        #    is an optional requirement)
         opengl_key = "MNE_BROWSER_USE_OPENGL"
         if self.mne.use_opengl is None:  # default: opt-in
             # OpenGL needs to be enabled on macOS
@@ -3843,10 +474,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             try:
                 import OpenGL
             except (ModuleNotFoundError, ImportError) as exc:
-                # On macOS, if use_opengl is True we raise an error because
-                # it can lead to segfaults. If a user really knows what they
-                # are doing, they can pass use_opengl=False (or set
-                # MNE_BROWSER_USE_OPENGL=false)
+                # On macOS, if use_opengl is True we raise an error because it can lead
+                # to segfaults. If a user really knows what they are doing, they can
+                # pass use_opengl=False (or set MNE_BROWSER_USE_OPENGL=false)
                 if platform.system() == "Darwin":
                     raise RuntimeError(
                         "Plotting on macOS without OpenGL may be unstable! "
@@ -3876,7 +506,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.view.setBackground(_get_color(bgcolor, self.mne.dark))
         layout.addWidget(self.mne.view, 0, 0)
 
-        # Initialize Scroll-Bars
+        # Initialize scrollbars
         self.mne.ax_hscroll = TimeScrollBar(self.mne)
         layout.addWidget(self.mne.ax_hscroll, 1, 0, 1, 2)
 
@@ -3893,7 +523,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.crosshair = None
         self.mne.view.sigSceneMouseMoved.connect(self._mouse_moved)
 
-        # Initialize Annotation-Widgets
+        # Initialize annotation widgets
         self.mne.annotation_mode = False
         if not self.mne.is_epochs:
             self._init_annot_mode()
@@ -3905,15 +535,15 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         widget.setLayout(layout)
         self.setCentralWidget(widget)
 
-        # Initialize Selection-Dialog
+        # Initialize selection dialog
         if getattr(self.mne, "group_by", None) in ["position", "selection"]:
             self._create_selection_fig()
 
-        # Initialize Projectors-Dialog if show_options=True
+        # Initialize projectors dialog if show_options=True
         if getattr(self.mne, "show_options", False):
             self._toggle_proj_fig()
 
-        # Initialize Toolbar
+        # Initialize toolbar
         self.mne.toolbar = self.addToolBar("Tools")
         # tool_button_style = Qt.ToolButtonTextBesideIcon
         tool_button_style = Qt.ToolButtonIconOnly
@@ -4040,7 +670,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         ahelp.triggered.connect(self._toggle_help_fig)
         self.mne.toolbar.addAction(ahelp)
 
-        # Set Start-Range (after all necessary elements are initialized)
+        # Set start range (after all necessary elements are initialized)
         self.mne.plt.setXRange(
             self.mne.t_start, self.mne.t_start + self.mne.duration, padding=0
         )
@@ -4049,12 +679,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         else:
             self.mne.plt.setYRange(0, self.mne.n_channels + 1, padding=0)
 
-        # Set Size
+        # Set size
         width = int(self.mne.figsize[0] * self.logicalDpiX())
         height = int(self.mne.figsize[1] * self.logicalDpiY())
         self.resize(width, height)
 
-        # Initialize Keyboard-Shortcuts
+        # Initialize keyboard shortcuts
         is_mac = platform.system() == "Darwin"
         dur_keys = ("fn + ←", "fn + →") if is_mac else ("Home", "End")
         ch_keys = ("fn + ↑", "fn + ↓") if is_mac else ("Page up", "Page down")
@@ -4265,10 +895,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.channel_axis.repaint()
 
     def _add_scalebars(self):
-        """Add scalebars for all channel-types.
+        """Add scalebars for all channel types.
 
-        (scene handles showing them in when in view
-        range)
+        The scene handles showing them in when in view range.
         """
         self.mne.scalebars.clear()
         # To keep order (np.unique sorts)
@@ -4349,11 +978,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if self.mne.clipping is not None:
             self._update_data()
 
-        # Scale Traces (by scaling the Item, not the data)
+        # Scale traces (by scaling the item, not the data)
         for line in self.mne.traces:
             line.update_scale()
 
-        # Update Scalebars
+        # Update scalebars
         self._update_scalebar_values()
 
         # Update spinboxes in settings dialog
@@ -4544,7 +1173,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.overview_bar.update_vline()
 
     def _mouse_moved(self, pos):
-        """Show Crosshair if enabled at mouse move."""
+        """Show crosshair if enabled at mouse move."""
         if self.mne.crosshair_enabled:
             if self.mne.plt.sceneBoundingRect().contains(pos):
                 mousePoint = self.mne.viewbox.mapSceneToView(pos)
@@ -4629,13 +1258,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         self._redraw(update_data=True)
 
-        # Update Time-Bar
+        # Update time bar
         self.mne.ax_hscroll.update_value(xrange[0])
 
-        # Update Overview-Bar
+        # Update overview bar
         self.mne.overview_bar.update_viewrange()
 
-        # Update Scalebars
+        # Update scalebars
         self._update_scalebar_x_positions()
 
         # Update annotations
@@ -4650,14 +1279,14 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 )
                 self.mne.n_channels = round(yrange[1] - yrange[0] - 1)
                 self._update_picks()
-                # Update Channel-Bar
+                # Update channel bar
                 self.mne.ax_vscroll.update_value(self.mne.ch_start)
             self._update_data()
 
-        # Update Overview-Bar
+        # Update overview bar
         self.mne.overview_bar.update_viewrange()
 
-        # Update Scalebars
+        # Update scalebars
         self._update_scalebar_y_positions()
 
         off_traces = [tr for tr in self.mne.traces if tr.ch_idx not in self.mne.picks]
@@ -4669,26 +1298,26 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         for trace in [tr for tr in self.mne.traces if tr not in off_traces]:
             trace.update_range_idx()
 
-        # Update number of traces.
+        # Update number of traces
         trace_diff = len(self.mne.picks) - len(self.mne.traces)
 
-        # Remove unnecessary traces.
+        # Remove unnecessary traces
         if trace_diff < 0:
-            # Only remove from traces not in picks.
+            # Only remove from traces not in picks
             remove_traces = off_traces[: abs(trace_diff)]
             for trace in remove_traces:
                 trace.remove()
                 off_traces.remove(trace)
 
-        # Add new traces if necessary.
+        # Add new traces if necessary
         if trace_diff > 0:
-            # Make copy to avoid skipping iteration.
+            # Make copy to avoid skipping iteration
             idxs_copy = add_idxs.copy()
             for aidx in idxs_copy[:trace_diff]:
                 DataTrace(self, aidx)
                 add_idxs.remove(aidx)
 
-        # Update data of traces outside of yrange (reuse remaining trace-items)
+        # Update data of traces outside of yrange (reuse remaining trace items)
         for trace, ch_idx in zip(off_traces, add_idxs):
             trace.set_ch_idx(ch_idx)
             trace.update_color()
@@ -4699,13 +1328,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     def _apply_downsampling(self):
         """
-        Get ds-factor and apply ds with one of multiple methods.
+        Get downsampling factor and apply with one of multiple methods.
 
-        The methods are taken from PlotDataItem in pyqtgraph
-        and adjusted to multi-channel data.
+        The methods are taken from PlotDataItem in PyQtGraph and adjusted to
+        multi-channel data.
         """
-        # Get Downsampling-Factor
-        # Auto-Downsampling from pyqtgraph
+        # Get downsampling factor
+        # Auto-Downsampling from PyQtGraph
         if self.mne.downsampling == "auto":
             ds = 1
             if all([hasattr(self.mne, a) for a in ["viewbox", "times"]]):
@@ -4723,12 +1352,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                         x1 = view_range.right() / dx
                         width = vb.width()
                         if width != 0.0:
-                            # Auto-Downsampling with 5 samples per pixel
+                            # Auto-downsampling with 5 samples per pixel
                             ds = int(max(1, (x1 - x0) / (width * 5)))
         else:
             ds = self.mne.downsampling
 
-        # Apply Downsampling
+        # Apply downsampling
         if ds not in [None, 1]:
             times = self.mne.times
             data = self.mne.data
@@ -4812,9 +1441,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             import psutil
         except ImportError:
             logger.info(
-                "Free RAM space could not be determined because"
-                '"psutil" is not installed. '
-                "Setting precompute to False."
+                "Free RAM could not be determined because "
+                '"psutil" is not installed. Setting precompute to False.'
             )
             return False
         else:
@@ -4823,20 +1451,19 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             else:
                 files = self.mne.inst.filenames
             if files[0] is not None:
-                # Get disk-space of raw-file(s)
+                # Get disk space of raw file(s)
                 disk_space = 0
                 for fn in files:
                     disk_space += getsize(fn)
 
-                # Determine expected RAM space based on orig_format
+                # Determine expected RAM based on orig_format
                 fmt_multipliers = {"double": 1, "single": 2, "int": 2, "short": 4}
 
-                # Epochs and ICA don't have this attribute, assume single
-                # on disk
+                # Epochs and ICA don't have this attribute, assume single on disk
                 fmt = getattr(self.mne.inst, "orig_format", "single")
-                # Apply size change to 64-bit float in memory
-                # (* 2 because when loading data will be loaded into a copy
-                # of self.mne.inst._data to apply processing.
+                # Apply size change to 64-bit float in memory (* 2 because when loading
+                # data will be loaded into a copy of self.mne.inst._data to apply
+                # processing.
                 expected_ram = disk_space * fmt_multipliers[fmt] * 2
             else:
                 expected_ram = sys.getsizeof(self.mne.inst._data)
@@ -4869,14 +1496,14 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def _process_data(self, *args, **kwargs):
         data = super()._process_data(*args, **kwargs)
 
-        # Invert Data to be displayed from top on inverted Y-Axis
+        # Invert data to be displayed from top on inverted y-axis
         data *= -1
 
         return data
 
     def _update_data(self):
         if self.mne.data_precomputed:
-            # get start/stop-samples
+            # get start/stop samples
             start, stop = self._get_start_stop()
             self.mne.times = self.mne.global_times[start:stop]
             self.mne.data = self.mne.global_data[:, start:stop]
@@ -4887,8 +1514,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                     self.mne.data, axis=1, keepdims=True
                 )
         else:
-            # While data is not precomputed get data only from shown range and
-            # process only those.
+            # While data is not precomputed get data only from shown range and process
+            # only those
             super()._update_data()
 
         # Initialize decim
@@ -4905,7 +1532,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 abs(self.mne.data * self.mne.scale_factor) > self.mne.clipping
             ] = np.nan
 
-        # Apply Downsampling (if enabled)
+        # Apply downsampling (if enabled)
         self._apply_downsampling()
 
     def _get_zscore(self, data):
@@ -4998,12 +1625,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             idx = self._get_onset_idx(region.getRegion()[0])
             self.mne.inst.annotations.delete(idx)
 
-        # Update Overview-Bar
+        # Update overview bar
         self.mne.overview_bar.update_annotations()
 
     def _region_selected(self, region):
         old_region = self.mne.selected_region
-        # Remove selected-status from old region
+        # Remove selected status from old region
         if old_region and old_region != region:
             old_region.select(False)
         self.mne.selected_region = region
@@ -5018,7 +1645,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         rgn = region.getRegion()
         region.select(True)
         idx = self._get_onset_idx(region.old_onset)
-        # update Spinboxes of Annot-Dock
+        # update spinboxes of annot dock
         self.mne.fig_annotation.update_values(region)
         # edit inst.annotations
         onset = _sync_onset(self.mne.inst, rgn[0], inverse=True)
@@ -5030,12 +1657,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             region.description,
             self.mne.inst.annotations,
         )
-        # update overview-bar
+        # update overview bar
         self.mne.overview_bar.update_annotations()
 
     def _draw_annotations(self):
-        # All regions are constantly added to the Scene and handled by Qt
-        # which is faster than handling adding/removing in Python.
+        # All regions are constantly added to the scene and handled by Qt, which is
+        # faster than handling adding/removing in Python
         pass
 
     def _init_annot_mode(self):
@@ -5049,7 +1676,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self.mne.regions = list()
         self.mne.selected_region = None
 
-        # Initialize Annotation-Dock
+        # Initialize annotation dock
         existing_dock = getattr(self.mne, "fig_annotation", None)
         if existing_dock is None:
             self.mne.fig_annotation = AnnotationDock(self)
@@ -5074,13 +1701,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def _change_annot_mode(self):
         if not self.mne.annotation_mode:
-            # Reset Widgets in Annotation-Figure
+            # Reset widgets in annotation figure
             self.mne.fig_annotation.reset()
 
-        # Show Annotation-Dock if activated.
+        # Show annotation dock if activated
         self.mne.fig_annotation.setVisible(self.mne.annotation_mode)
 
-        # Make Regions movable if activated and move into foreground
+        # Make regions movable if activated and move into foreground
         for region in self.mne.regions:
             region.setMovable(self.mne.annotation_mode)
             if self.mne.annotation_mode:
@@ -5090,7 +1717,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             else:
                 region.setZValue(0)
 
-        # Add/Remove selection-rectangle.
+        # Add/Remove selection-rectangle
         if self.mne.selected_region:
             self.mne.selected_region.select(self.mne.annotation_mode)
 
@@ -5133,7 +1760,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             new_state[applied] = True
             self.mne.projs_on = new_state
         self._update_projector()
-        # If data was precomputed it needs to be precomputed again.
+        # If data was precomputed it needs to be precomputed again
         self._rerun_precompute()
         self._redraw()
 
@@ -5153,7 +1780,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def _toggle_whitening(self):
         if self.mne.noise_cov is not None:
             super()._toggle_whitening()
-            # If data was precomputed it needs to be precomputed again.
+            # If data was precomputed it needs to be precomputed again
             self._rerun_precompute()
             self._redraw()
 
@@ -5201,7 +1828,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             )
 
         if self.mne.fig_selection is not None:
-            # Update Selection-Dialog
+            # Update selection dialog
             self.mne.fig_selection._style_butterfly()
 
         # Set vertical scrollbar visible
@@ -5209,10 +1836,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             not butterfly or self.mne.fig_selection is not None
         )
 
-        # update overview-bar
+        # update overview bar
         self.mne.overview_bar.update_viewrange()
 
-        # update ypos and color for butterfly-mode
+        # update ypos and color for butterfly mode
         for trace in self.mne.traces:
             trace.update_color()
             trace.update_ypos()
@@ -5349,7 +1976,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         if icon is not None:
             self.msg_box.setIcon(icon)
 
-        # Allow interacting with message_box in test-mode.
+        # Allow interacting with message_box in test mode.
         # Set modal=False only if no return value is expected.
         self.msg_box.setModal(False if self.test_mode else modal)
         if self.test_mode or not modal:
@@ -5359,8 +1986,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
     def keyPressEvent(self, event):
         """Customize key press events."""
-        # On MacOs additionally KeypadModifier is set when arrow-keys
-        # are pressed.
+        # On macOS additionally KeypadModifier is set when arrow keys are pressed
         mods = event.modifiers()
         try:
             mods = int(mods)  # PyQt < 5.13
@@ -5422,7 +2048,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         else:
             modifier = Qt.NoModifier
 
-        # Use pytest-qt's exception-hook
+        # Use pytest-qt's exception hook
         with capture_exceptions() as exceptions:
             QTest.keyPress(fig, self.mne.keyboard_shortcuts[key]["qt_key"], modifier)
 
@@ -5444,10 +2070,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         modifier=None,
     ):
         add_points = add_points or list()
-        # Wait until Window is fully shown.
+        # Wait until window is fully shown
         QTest.qWaitForWindowExposed(self)
-        # Scene-Dimensions still seem to change to final state when waiting
-        # for a short time.
+        # Scene dimensions still seem to change to final state when waiting for a short
+        # time
         QTest.qWait(10)
 
         # Qt: right-button=2, matplotlib: right-button=3
@@ -5457,14 +2083,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             button = Qt.RightButton
 
         # For Qt, fig or ax both would be the widget to test interaction on.
-        # If View
         fig = ax or fig or self.mne.view
 
         if xform == "ax":
-            # For Qt, the equivalent of matplotlibs transAxes
-            # would be a transformation to View Coordinates.
-            # But for the View top-left is (0, 0) and bottom-right is
-            # (view-width, view-height).
+            # For Qt, the equivalent of Matplotlib's transAxes would be a transformation
+            # to view coordinates. But for the View, top-left is (0, 0) and bottom-right
+            # is (view-width, view-height).
             view_width = fig.width()
             view_height = fig.height()
             x = view_width * point[0]
@@ -5476,10 +2100,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 add_points[idx] = Point(x2, y2)
 
         elif xform == "data":
-            # For Qt, the equivalent of matplotlibs transData
-            # would be a transformation to
-            # the coordinate system of the ViewBox.
-            # This only works on the View (self.mne.view)
+            # For Qt, the equivalent of Matplotlib's transData would be a transformation
+            # to the coordinate system of the ViewBox. This only works on the View
+            # (self.mne.view).
             fig = self.mne.view
             point = self.mne.viewbox.mapViewToScene(Point(*point))
             for idx, apoint in enumerate(add_points):
@@ -5496,13 +2119,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 else:
                     add_points[idx] = Point(apoint)
 
-        # Use pytest-qt's exception-hook
+        # Use pytest-qt's exception hook
         with capture_exceptions() as exceptions:
             widget = fig.viewport() if isinstance(fig, QGraphicsView) else fig
             if kind == "press":
-                # always click because most interactivity comes form
-                # mouseClickEvent from pyqtgraph (just press doesn't suffice
-                # here).
+                # always click because most interactivity comes from mouseClickEvent
+                # from pyqtgraph (just press doesn't suffice here).
                 _mouseClick(widget=widget, pos=point, button=button, modifier=modifier)
             elif kind == "release":
                 _mouseRelease(
@@ -5524,16 +2146,16 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 f"event loop (look above for traceback)."
             )
 
-        # Waiting some time for events to be processed.
+        # Wait some time for events to be processed
         QTest.qWait(50)
 
     def _fake_scroll(self, x, y, step, fig=None):
-        # QTest doesn't support simulating scrolling-wheel
+        # QTest doesn't support simulating scroll wheel
         self.vscroll(step)
 
     def _click_ch_name(self, ch_index, button):
         self.mne.channel_axis.repaint()
-        # Wait because channel-axis may need time
+        # Wait because channel axis may need time
         # (came up with test_epochs::test_plot_epochs_clicks)
         QTest.qWait(100)
         if not self.mne.butterfly:
@@ -5559,7 +2181,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         return tuple(t.toPlainText() for t in self.mne.scalebar_texts.values())
 
     def show(self):  # noqa: D102
-        # Set raise_window like matplotlib if possible
+        # Set raise_window like Matplotlib if possible
         super().show()
         _qt_raise_window(self)
 
@@ -5575,7 +2197,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             fig.close()
 
     def _check_close(self):
-        """Close annotations-mode before closing the browser."""
+        """Close annotations mode before closing the browser."""
         if self.mne.annotation_mode:
             self._toggle_annotation_fig()
         else:
@@ -5585,8 +2207,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         """Customize close event."""
         event.accept()
         if hasattr(self, "mne"):
-            # Explicit disconnects to avoid reference cycles that gc can't
-            # properly resolve ()
+            # Explicit disconnects to avoid reference cycles that GC can't properly
+            # resolve
             if hasattr(self.mne, "plt"):
                 _disconnect(self.mne.plt.sigXRangeChanged)
                 _disconnect(self.mne.plt.sigYRangeChanged)
@@ -5594,7 +2216,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 for action in self.mne.toolbar.actions():
                     allow_error = action.text() == ""
                     _disconnect(action.triggered, allow_error=allow_error)
-            # Save settings going into QSettings.
+            # Save settings going into QSettings
             for qsetting in qsettings_params:
                 value = getattr(self.mne, qsetting)
                 self._save_setting(qsetting, value)
@@ -5631,7 +2253,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             _browser_instances.remove(self)
         self._close(event)
         self.gotClosed.emit()
-        # Make sure it gets deleted after it was closed.
+        # Make sure it gets deleted after it was closed
         self.deleteLater()
         self._closed = True
 
@@ -5662,7 +2284,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
 
 def _get_n_figs():
-    # Wait for a short time to let the Qt-loop clean up
+    # Wait for a short time to let the Qt loop clean up
     QTest.qWait(100)
     return len(
         [window for window in QApplication.topLevelWindows() if window.isVisible()]
@@ -5674,8 +2296,7 @@ def _close_all():
         QApplication.closeAllWindows()
 
 
-# mouse testing functions adapted from pyqtgraph
-# (pyqtgraph.tests.ui_testing.py)
+# mouse testing functions adapted from pyqtgraph (pyqtgraph.tests.ui_testing.py)
 def _mousePress(widget, pos, button, modifier=None):
     if modifier is None:
         modifier = Qt.KeyboardModifier.NoModifier
@@ -5714,7 +2335,7 @@ def _mouseClick(widget, pos, button, modifier=None):
 def _mouseDrag(widget, positions, button, modifier=None):
     _mouseMove(widget, positions[0])
     _mousePress(widget, positions[0], button, modifier)
-    # Delay for 10 ms for drag to be recognized.
+    # Delay for 10 ms for drag to be recognized
     QTest.qWait(10)
     for pos in positions[1:]:
         _mouseMove(widget, pos, button, modifier)
@@ -5723,7 +2344,7 @@ def _mouseDrag(widget, positions, button, modifier=None):
 
 # modified from: https://github.com/pyvista/pyvistaqt
 def _setup_ipython(ipython=None):
-    # ipython magic
+    # IPython magic
     if scooby.in_ipython():
         from IPython import get_ipython
 
@@ -5747,8 +2368,3 @@ def _init_browser(**kwargs):
     browser = MNEQtBrowser(**kwargs)
 
     return browser
-
-
-def _set_window_flags(widget):
-    if os.getenv("_MNE_BROWSER_BACK", "").lower() == "true":
-        widget.setWindowFlags(widget.windowFlags() | Qt.WindowStaysOnBottomHint)
