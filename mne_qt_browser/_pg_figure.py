@@ -11,7 +11,6 @@ import sys
 import weakref
 from ast import literal_eval
 from copy import copy
-from functools import partial
 from os.path import getsize
 from pathlib import Path
 
@@ -121,16 +120,6 @@ from mne_qt_browser._widgets import (
 )
 
 name = "pyqtgraph"
-
-
-def _select_all(chkbxs):
-    for chkbx in chkbxs:
-        chkbx.setChecked(True)
-
-
-def _clear_all(chkbxs):
-    for chkbx in chkbxs:
-        chkbx.setChecked(False)
 
 
 class AnnotationDock(QDockWidget):
@@ -379,11 +368,11 @@ class AnnotationDock(QDockWidget):
         bt_layout = QGridLayout()
 
         all_bt = QPushButton("All")
-        all_bt.clicked.connect(partial(_select_all, chkbxs=chkbxs))
+        all_bt.clicked.connect(lambda: [chkbx.setChecked(True) for chkbx in chkbxs])
         bt_layout.addWidget(all_bt, 0, 0)
 
         clear_bt = QPushButton("Clear")
-        clear_bt.clicked.connect(partial(_clear_all, chkbxs=chkbxs))
+        clear_bt.clicked.connect(lambda: [chkbx.setChecked(False) for chkbx in chkbxs])
         bt_layout.addWidget(clear_bt, 0, 1)
 
         ok_bt = QPushButton("Ok")
