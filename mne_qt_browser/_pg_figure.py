@@ -1,8 +1,7 @@
-"""Base classes and functions for 2D browser backends."""
-
-# Author: Martin Schulz <dev@earthman-music.de>
-#
 # License: BSD-3-Clause
+# Copyright the MNE Qt Browser contributors.
+
+"""Base classes and functions for 2D browser backends."""
 
 import gc
 import inspect

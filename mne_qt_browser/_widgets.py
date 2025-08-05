@@ -1,3 +1,6 @@
+# License: BSD-3-Clause
+# Copyright the MNE Qt Browser contributors.
+
 import datetime
 import platform
 import weakref

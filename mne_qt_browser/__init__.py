@@ -1,3 +1,6 @@
+# License: BSD-3-Clause
+# Copyright the MNE Qt Browser contributors.
+
 try:
     from importlib.metadata import version
 

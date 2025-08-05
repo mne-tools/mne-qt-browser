@@ -1,7 +1,7 @@
 """Color utility functions."""
 
 # License: BSD-3-Clause
-# Copyright the MNE-Qt_browser contributors.
+# Copyright the MNE Qt Browser contributors.
 
 import functools
 

@@ -1,8 +1,7 @@
-"""Backports for older installations."""
-
-# Author: Martin Schulz <dev@earthman-music.de>
-#
 # License: BSD-3-Clause
+# Copyright the MNE Qt Browser contributors.
+
+"""Backports for older installations."""
 
 from contextlib import contextmanager
 
