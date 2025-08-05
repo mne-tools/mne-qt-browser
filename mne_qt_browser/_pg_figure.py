@@ -19,8 +19,8 @@ import numpy as np
 
 try:
     from qtpy.QtCore import Qt
-except Exception as exc:
-    if exc.__class__.__name__ == "QtBindingsNotFoundError":
+except Exception as e:
+    if e.__class__.__name__ == "QtBindingsNotFoundError":
         raise ImportError(
             "No Qt binding found, please install PySide6 or PyQt6."
         ) from None
@@ -121,7 +121,6 @@ from mne_qt_browser._widgets import (
 )
 
 name = "pyqtgraph"
-
 
 def _select_all(chkbxs):
     for chkbx in chkbxs:
