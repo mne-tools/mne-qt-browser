@@ -107,8 +107,6 @@ from mne_qt_browser._widgets import (
     TimeScrollBar,
 )
 
-name = "pyqtgraph"
-
 
 class LoadThread(QThread):
     """A worker object for precomputing in a separate QThread."""
