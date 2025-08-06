@@ -196,16 +196,15 @@ class SettingsDialog(_BaseDialog):
         self.ds_method_cmbx.setToolTip(
             "<h2>Downsampling Method</h2>"
             "<ul>"
-            "<li>subsample:<br>"
+            "<li>Subsample:<br>"
             "Only take every n-th sample.</li>"
-            "<li>mean:<br>"
+            "<li>Mean:<br>"
             "Take the mean of n samples.</li>"
-            "<li>peak:<br>"
+            "<li>Peak:<br>"
             "Draws a saw wave from the minimum to the maximum from a "
             "collection of n samples.</li>"
             "</ul>"
-            "<i>(Those methods are adapted from "
-            "pyqtgraph)</i><br>"
+            "<i>(Those methods are adapted from PyQtGraph)</i><br>"
             'Default is "peak".'
         )
         self.ds_method_cmbx.addItems(["subsample", "mean", "peak"])

@@ -620,14 +620,14 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             "Display no background.</li>"
             "<li>Channels:<br>"
             "Display each channel with its channel type color.</li>"
-            "<li>Z-score:<br>"
+            "<li>z-score:<br>"
             "Display the z-score for the data from each channel across time. "
             "Red indicates high z-scores, blue indicates low z-scores, "
             "and the boundaries of the color gradient are defined by the "
             "minimum and maximum z-scores."
+            "</ul>"
             'This only works if precompute is set to "True", or if it is '
             'enabled with "auto" and enough free RAM is available.</li>'
-            "</ul>"
         )
         button.setText("Overview Bar")
         button.setIcon(self._qicon("overview_bar"))
