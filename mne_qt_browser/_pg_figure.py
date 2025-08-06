@@ -107,6 +107,8 @@ from mne_qt_browser._widgets import (
     TimeScrollBar,
 )
 
+name = "pyqtgraph"  # Backend name, used by MNE-Python
+
 
 class LoadThread(QThread):
     """A worker object for precomputing in a separate QThread."""
