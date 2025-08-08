@@ -1,7 +1,5 @@
-# Authors: Eric Larson <larson.eric.d@gmail.com>
-#          Martin Schulz <dev@earthman-music.de>
-#
 # License: BSD-3-Clause
+# Copyright the MNE Qt Browser contributors.
 
 import sys
 from copy import copy
