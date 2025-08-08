@@ -94,10 +94,10 @@ jobs:
       - run: mne sys_info
       - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/report ../mne-python/mne/viz
         name: Run MNE-Tests
-      - run: pytest --error-for-skips mne_qt_browser/tests/test_pg_specific.py --cov-report=xml --cov-append
+      - run: pytest --error-for-skips tests/test_pg_specific.py --cov-report=xml --cov-append
         name: Run pyqtgraph-specific tests
       # These are slow on macOS, so skip them
-      - run: pytest mne_qt_browser/tests/test_speed.py --cov-report=xml --cov-append
+      - run: pytest tests/test_speed.py --cov-report=xml --cov-append
         name: Run benchmarks
         if: runner.os != 'macOS'
       - uses: codecov/codecov-action@v5
@@ -183,11 +183,11 @@ jobs:
           mne sys_info -pd | grep "^.*qtpy.*${QT_LIB}=.*$"
       - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/report ../mne-python/mne/viz
         name: Run MNE-Tests
-      - run: pytest --error-for-skips mne_qt_browser/tests/test_pg_specific.py --cov-report=xml --cov-append
+      - run: pytest --error-for-skips tests/test_pg_specific.py --cov-report=xml --cov-append
         name: Run pyqtgraph-specific tests
       # For some reason this dies on Linux PySide2. We can live without this
       # case given our primary target moving forward is Qt6+
-      - run: pytest mne_qt_browser/tests/test_speed.py --cov-report=xml --cov-append
+      - run: pytest tests/test_speed.py --cov-report=xml --cov-append
         name: Run benchmarks
         if: runner.os != 'Linux' || matrix.qt != 'PyQt5'
       - uses: codecov/codecov-action@v5
