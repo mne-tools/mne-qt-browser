@@ -61,7 +61,7 @@ raw-options = { version_scheme = "release-branch-semver" }
 
 [tool.pytest.ini_options]
 addopts = "-ra --cov-report= --tb=short --junit-xml=junit-results.xml --capture=sys --durations=10"
-testpaths = ["mne_qt_browser"]
+testpaths = ["tests"]
 junit_family = "xunit2"
 filterwarnings = [
   "error",

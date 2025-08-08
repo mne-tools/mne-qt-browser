@@ -20,9 +20,9 @@ def pytest_configure(config):
     error::
     # PySide6
     ignore:Enum value .* is marked as deprecated:DeprecationWarning
-    ignore:Function.*is marked as deprecated, please check the documentation.*:DeprecationWarning
+    ignore:Function.*is marked as deprecated, please check the .*:DeprecationWarning
     ignore:Failed to disconnect.*:RuntimeWarning
-    """  # noqa: E501
+    """
     for warning_line in warning_lines.split("\n"):
         warning_line = warning_line.strip()
         if warning_line and not warning_line.startswith("#"):
