@@ -140,19 +140,6 @@ def add_test_browser_methods(fig):
     return fig
 
 
-def _get_n_figs():
-    # Wait for a short time to let the Qt loop clean up
-    QTest.qWait(100)
-    return len(
-        [window for window in QApplication.topLevelWindows() if window.isVisible()]
-    )
-
-
-def _close_all():
-    if len(QApplication.topLevelWindows()) > 0:
-        QApplication.closeAllWindows()
-
-
 # mouse testing functions adapted from pyqtgraph (pyqtgraph.tests.ui_testing.py)
 def _mousePress(widget, pos, button, modifier=None):
     if modifier is None:
