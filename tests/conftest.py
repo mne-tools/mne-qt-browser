@@ -2,9 +2,11 @@
 # Copyright the MNE Qt Browser contributors.
 
 import os
+from pathlib import Path
 
+import mne
 import pytest
-from mne.conftest import garbage_collect, pg_backend, raw_orig  # noqa: F401
+from mne.conftest import garbage_collect, pg_backend  # noqa: F401
 
 _store = {"Raw": {}, "Epochs_unicolor": {}, "Epochs_multicolor": {}}
 
@@ -33,6 +35,14 @@ def pytest_configure(config):
 def store():
     """Yield our storage object."""
     yield _store
+
+
+@pytest.fixture(scope="session")
+def raw_orig():
+    """Raw instance loaded from local test_raw.fif."""
+    raw_path = Path(__file__).parent / "test_raw.fif"
+    raw = mne.io.read_raw_fif(raw_path, preload=True, verbose="ERROR")
+    return raw
 
 
 def pytest_terminal_summary(terminalreporter, exitstatus, config):
