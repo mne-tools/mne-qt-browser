@@ -595,7 +595,7 @@ def test_pg_toolbar_channels_plus_minus(raw_orig, pg_backend):
     if fig.mne.butterfly is True:
         fig._fake_keypress("b")  # toggle butterfly off
 
-    while ymax - ymin > 2:  # while more than 1 channel visible
+    for _ in range(19):  # reduce number of channels from 20 to 1
         fig._fake_click_on_toolbar_action(FEWER_CHANNELS, wait_after=40)
         ymin, ymax = fig.mne.viewbox.viewRange()[1]
     assert ymax - ymin == 2  # exactly 1 channel visible
