@@ -582,6 +582,7 @@ def test_pg_toolbar_channels_plus_minus(raw_orig, pg_backend):
     QTest.qWaitForWindowExposed(fig)
     assert pg_backend._get_n_figs() == 1
 
+    # changing the number of channels should have no effect in butterfly mode
     if fig.mne.butterfly is not True:
         fig._fake_keypress("b")  # toggle butterfly mode
     fig._fake_click_on_toolbar_action(FEWER_CHANNELS, wait_after=100)
@@ -594,30 +595,28 @@ def test_pg_toolbar_channels_plus_minus(raw_orig, pg_backend):
     if fig.mne.butterfly is True:
         fig._fake_keypress("b")  # toggle butterfly off
 
-    for _ in range(10):
-        if ymax - ymin <= 2:
-            break
+    for _ in range(19):  # reduce number of channels from 20 to 1
         fig._fake_click_on_toolbar_action(FEWER_CHANNELS, wait_after=40)
         ymin, ymax = fig.mne.viewbox.viewRange()[1]
-    assert ymax - ymin == 2
-    fig._fake_click_on_toolbar_action(FEWER_CHANNELS, wait_after=40)
+    assert ymax - ymin == 2  # exactly 1 channel visible
+    fig._fake_click_on_toolbar_action(FEWER_CHANNELS, wait_after=40)  # no effect
     ymin, ymax = fig.mne.viewbox.viewRange()[1]
     assert ymax - ymin == 2
 
-    step = 10
+    # show one more channel at a time
     fig._fake_click_on_toolbar_action(MORE_CHANNELS, wait_after=100)
-    ymin_new, ymax_new = fig.mne.viewbox.viewRange()[1]
-    assert ymax_new == ymax + step
+    _, ymax_new = fig.mne.viewbox.viewRange()[1]
+    assert ymax_new == ymax + 1
 
     ymin, ymax = fig.mne.viewbox.viewRange()[1]
     fig._fake_click_on_toolbar_action(MORE_CHANNELS, wait_after=100)
-    ymin_new, ymax_new = fig.mne.viewbox.viewRange()[1]
-    assert ymax_new == ymax + step
+    _, ymax_new = fig.mne.viewbox.viewRange()[1]
+    assert ymax_new == ymax + 1
 
     ymin, ymax = fig.mne.viewbox.viewRange()[1]
     fig._fake_click_on_toolbar_action(MORE_CHANNELS, wait_after=100)
-    ymin_new, ymax_new = fig.mne.viewbox.viewRange()[1]
-    assert ymax_new == ymax + step
+    _, ymax_new = fig.mne.viewbox.viewRange()[1]
+    assert ymax_new == ymax + 1
 
     assert pg_backend._get_n_figs() == 1  # still alive
 
