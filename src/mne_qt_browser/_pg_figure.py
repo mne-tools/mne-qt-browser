@@ -569,14 +569,14 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             text="Show fewer channels",
             parent=self,
         )
-        adecr_nchan.triggered.connect(_methpartial(self.change_nchan, step=-10))
+        adecr_nchan.triggered.connect(_methpartial(self.change_nchan, step=-1))
         self.mne.toolbar.addAction(adecr_nchan)
         aincr_nchan = QAction(
             icon=self._qicon("more_channels"),
             text="Show more channels",
             parent=self,
         )
-        aincr_nchan.triggered.connect(_methpartial(self.change_nchan, step=10))
+        aincr_nchan.triggered.connect(_methpartial(self.change_nchan, step=1))
         self.mne.toolbar.addAction(aincr_nchan)
         self.mne.toolbar.addSeparator()
 
