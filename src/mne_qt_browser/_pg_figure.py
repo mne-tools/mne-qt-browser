@@ -29,7 +29,7 @@ import scooby
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.colors import to_rgba_array
 from mne.annotations import _sync_onset
-from mne.utils import _check_option, get_config, logger, sizeof_fmt, warn
+from mne.utils import _check_option, check_version, get_config, logger, sizeof_fmt, warn
 from mne.viz._figure import BrowserBase
 from mne.viz.backends._utils import _init_mne_qtapp, _qt_raise_window
 from mne.viz.utils import _merge_annotations, _simplify_float
@@ -40,6 +40,7 @@ from pyqtgraph import (
     mkPen,
     setConfigOption,
 )
+from qtpy import API_NAME
 from qtpy.QtCore import (
     QEvent,
     QSettings,
@@ -2358,7 +2359,14 @@ def _setup_ipython(ipython=None):
 
 def _init_browser(**kwargs):
     _setup_ipython()
-    setConfigOption("enableExperimental", True)
+    # Don't enable experimental on PySide6 6.10+ and pyqtgraph<0.13.7 as it segfaults
+    if check_version("pyqtgraph", "0.13.7") or (
+        API_NAME == "PySide6" and check_version("PySide6", "6.10.0")
+    ):
+        pass
+    else:
+        # Needed for fast code paths
+        setConfigOption("enableExperimental", True)
     app_kwargs = dict()
     if kwargs.get("splash", False):
         app_kwargs["splash"] = "Initializing mne-qt-browser..."
