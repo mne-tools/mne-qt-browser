@@ -473,7 +473,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
         if self.mne.use_opengl:
             try:
-                import OpenGL
+            import OpenGL
             except (ModuleNotFoundError, ImportError) as exc:
                 # On macOS, if use_opengl is True we raise an error because it can lead
                 # to segfaults. If a user really knows what they are doing, they can
