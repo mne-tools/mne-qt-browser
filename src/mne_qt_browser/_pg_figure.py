@@ -482,14 +482,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # detect a problematic config
         if (
             platform.system() == "Darwin"
-            and parse(QT_VERSION) == parse("6.10.0")
+            and parse(QT_VERSION) >= parse("6.10.0")
             and self.mne.use_opengl
             and not check_version("pyqtgraph", "0.13.8")
         ):  # pragma: no cover
             warn(
                 "On macOS, Qt 6.10.0, pyqtgraph < 0.13.8, with use_opengl=True results "
-                f"in very slow performance. Consider downgrading {API_NAME} (or "
-                f"upgrading it once 6.10.1 or later is released), "
+                f"in very slow performance. Consider downgrading {API_NAME}, "
                 "setting use_opengl=False (which can hurt performance), or "
                 "upgrading pyqtgraph once 0.13.8 is released"
             )
