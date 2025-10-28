@@ -490,7 +490,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 "On macOS, Qt 6.10.0, pyqtgraph < 0.13.8, with use_opengl=True results "
                 f"in very slow performance. Consider downgrading {API_NAME} (or "
                 f"upgrading it once 6.10.1 or later is released), "
-                "setting use_opengl=False, or "
+                "setting use_opengl=False (which can hurt performance), or "
                 "upgrading pyqtgraph once 0.13.8 is released"
             )
         # Initialize BrowserView (inherits QGraphicsView)
