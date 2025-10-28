@@ -33,6 +33,7 @@ from mne.utils import _check_option, check_version, get_config, logger, sizeof_f
 from mne.viz._figure import BrowserBase
 from mne.viz.backends._utils import _init_mne_qtapp, _qt_raise_window
 from mne.viz.utils import _merge_annotations, _simplify_float
+from packaging.version import parse
 from pyqtgraph import (
     InfiniteLine,
     PlotItem,
@@ -40,7 +41,7 @@ from pyqtgraph import (
     mkPen,
     setConfigOption,
 )
-from qtpy import API_NAME
+from qtpy import API_NAME, QT_VERSION
 from qtpy.QtCore import (
     QEvent,
     QSettings,
@@ -459,38 +460,17 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self._add_scalebars()
 
         # Check for OpenGL
-        # If a user doesn't specify whether or not to use it:
-        # 1. If on macOS, enable it by default to avoid segfault
-        # 2. Otherwise, disable it (performance differences seem minimal, and PyOpenGL
-        #    is an optional requirement)
+        # If a user doesn't specify whether or not to use it, disable it (performance
+        # differences seem minimal, and PyOpenGL is an optional requirement)
         opengl_key = "MNE_BROWSER_USE_OPENGL"
         if self.mne.use_opengl is None:  # default: opt-in
-            # OpenGL needs to be enabled on macOS
-            # (https://github.com/mne-tools/mne-qt-browser/issues/53)
-            default = "true" if platform.system() == "Darwin" else ""
-            config_val = get_config(opengl_key, default).lower()
+            config_val = get_config(opengl_key, "").lower()
             self.mne.use_opengl = config_val == "true"
 
         if self.mne.use_opengl:
             try:
                 import OpenGL
-            except (ModuleNotFoundError, ImportError) as exc:
-                # On macOS, if use_opengl is True we raise an error because it can lead
-                # to segfaults. If a user really knows what they are doing, they can
-                # pass use_opengl=False (or set MNE_BROWSER_USE_OPENGL=false)
-                if platform.system() == "Darwin":
-                    raise RuntimeError(
-                        "Plotting on macOS without OpenGL may be unstable! "
-                        "We recommend installing PyOpenGL, but it could not "
-                        f"be imported, got:\n{exc}\n\n"
-                        "If you want to try plotting without OpenGL, "
-                        "you can pass use_opengl=False (use at your own "
-                        "risk!). If you know non-OpenGL plotting is stable "
-                        "on your system, you can also set the config value "
-                        f"{opengl_key}=false to permanently change "
-                        "the default behavior on your system."
-                    ) from None
-                # otherwise, emit a warning
+            except (ModuleNotFoundError, ImportError):
                 warn(
                     "PyOpenGL was not found and OpenGL cannot be used. "
                     "Consider installing pyopengl with pip or conda or set "
@@ -499,6 +479,19 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 self.mne.use_opengl = False
             else:
                 logger.info(f"Using pyopengl with version {OpenGL.__version__}")
+        # detect a problematic config
+        if (
+            platform.system() == "Darwin"
+            and parse(QT_VERSION) >= parse("6.10.0")
+            and self.mne.use_opengl
+            and not check_version("pyqtgraph", "0.13.8")
+        ):  # pragma: no cover
+            warn(
+                "On macOS, Qt 6.10.0, pyqtgraph < 0.13.8, with use_opengl=True results "
+                f"in very slow performance. Consider downgrading {API_NAME}, "
+                "setting use_opengl=False (which can hurt performance), or "
+                "upgrading pyqtgraph once 0.13.8 is released"
+            )
         # Initialize BrowserView (inherits QGraphicsView)
         self.mne.view = BrowserView(
             self.mne.plt, useOpenGL=self.mne.use_opengl, background="w"
