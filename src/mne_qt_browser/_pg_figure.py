@@ -485,7 +485,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             and parse(QT_VERSION) == parse("6.10.0")
             and self.mne.use_opengl
             and not check_version("pyqtgraph", "0.13.8")
-        ):
+        ):  # pragma: no cover
             warn(
                 "On macOS, Qt 6.10.0, pyqtgraph < 0.13.8, with use_opengl=True results "
                 f"in very slow performance. Consider downgrading {API_NAME} (or "
