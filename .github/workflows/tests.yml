@@ -153,7 +153,7 @@ jobs:
           # Avoid a problematic versions of PySide6
           # https://wiki.qt.io/Qt_for_Python_Development_Notes#1._Juni_2023
           if [[ "$QT_LIB" == "PySide6" ]]; then
-            if [[ "$GITHUB_RUNNER_OS" == "macOS" ]]; then
+            if [[ "$RUNNER_OS" == "macOS" ]]; then
               QT_LIB_INSTALL="PySide6!=6.5.1,!=6.7.0,!=6.7.1,!=6.8.0,!=6.8.0.1,!=6.9.1,!=6.10.0"
             else
               QT_LIB_INSTALL="PySide6!=6.5.1,!=6.7.0,!=6.7.1,!=6.8.0,!=6.8.0.1,!=6.9.1"
@@ -166,6 +166,7 @@ jobs:
           else
             PIP_OPTION="[tests]"
           fi
+          set -x
           python -m pip install -ve .${PIP_OPTION} ${QT_LIB_INSTALL}
       - run: bash ./tools/get_testing_version.sh
         working-directory: ../mne-python
