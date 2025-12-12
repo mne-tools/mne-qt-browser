@@ -708,7 +708,9 @@ class ProjDialog(_BaseDialog):
         self.toggle_all_bt.clicked.connect(self.toggle_all)
         layout.addWidget(self.toggle_all_bt)
         self.setLayout(layout)
+        self.toggle_all_bt.setFocus()
         self.show()
+        self.activateWindow()  # bring to top so can interact immediately
 
     def _proj_changed(self, state=None, idx=None):
         # Only change if proj wasn't already applied
