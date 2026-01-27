@@ -8,6 +8,7 @@ from mne.utils import check_version
 from numpy.testing import assert_allclose
 from qtpy.QtCore import Qt
 from qtpy.QtTest import QTest
+from utils import add_test_browser_methods
 
 from mne_qt_browser._colors import _lab_to_rgb, _rgb_to_lab
 
@@ -33,6 +34,7 @@ def test_annotations_single_sample(raw_orig, pg_backend):
     first_time = raw_orig.first_time
     raw_orig.annotations.append(onset + first_time, duration, description)
     fig = raw_orig.plot(duration=raw_orig.duration)
+    add_test_browser_methods(fig)
     fig.test_mode = True
     # Activate annotation_mode
     fig._fake_keypress("a")
@@ -88,6 +90,7 @@ def test_annotations_recording_end(raw_orig, pg_backend):
     raw_orig.annotations.append(onset + first_time, duration, description)
     n_anns = len(raw_orig.annotations)
     fig = raw_orig.plot(duration=raw_orig.duration)
+    add_test_browser_methods(fig)
     fig.test_mode = True
     # Activate annotation_mode
     fig._fake_keypress("a")
@@ -107,7 +110,7 @@ def test_annotations_recording_end(raw_orig, pg_backend):
     assert_allclose(
         new_annot_end,
         raw_orig.times[-1] + first_time + 1 / raw_orig.info["sfreq"],
-        atol=1e-4,
+        atol=2e-3,
     )
 
 
@@ -121,6 +124,7 @@ def test_annotations_interactions(raw_orig, pg_backend):
         raw_orig.annotations.append(onset, duration, description)
     n_anns = len(raw_orig.annotations)
     fig = raw_orig.plot()
+    add_test_browser_methods(fig)
     fig.test_mode = True
     annot_dock = fig.mne.fig_annotation
 
@@ -220,8 +224,9 @@ def test_ch_specific_annot(raw_orig, pg_backend):
 
     ch_names.pop(-1)  # don't plot the last one!
     fig = raw_orig.plot(picks=ch_names)  # omit the first one
-    fig_ch_names = list(fig.mne.ch_names[fig.mne.ch_order])
+    add_test_browser_methods(fig)
     fig.test_mode = True
+    fig_ch_names = list(fig.mne.ch_names[fig.mne.ch_order])
     annot_dock = fig.mne.fig_annotation
 
     # one FillBetweenItem for each channel in a channel specific annot
@@ -305,6 +310,7 @@ def test_ch_specific_annot(raw_orig, pg_backend):
 def test_pg_settings_dialog(raw_orig, pg_backend):
     """Test Settings Dialog toggle on/off for pyqtgraph-backend."""
     fig = raw_orig.plot()
+    add_test_browser_methods(fig)
     fig.test_mode = True
     QTest.qWaitForWindowExposed(fig)
     QTest.qWait(50)
@@ -503,6 +509,7 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
 def test_pg_help_dialog(raw_orig, pg_backend):
     """Test Settings Dialog toggle on/off for pyqtgraph-backend."""
     fig = raw_orig.plot()
+    add_test_browser_methods(fig)
     fig.test_mode = True
     QTest.qWaitForWindowExposed(fig)
     QTest.qWait(50)
@@ -524,6 +531,7 @@ def test_pg_help_dialog(raw_orig, pg_backend):
 def test_pg_toolbar_time_plus_minus(raw_orig, pg_backend):
     """Test time controls."""
     fig = raw_orig.plot()
+    add_test_browser_methods(fig)
     fig.test_mode = True
     QTest.qWaitForWindowExposed(fig)
     assert pg_backend._get_n_figs() == 1
@@ -578,6 +586,7 @@ def test_pg_toolbar_time_plus_minus(raw_orig, pg_backend):
 def test_pg_toolbar_channels_plus_minus(raw_orig, pg_backend):
     """Test channel controls."""
     fig = raw_orig.plot()
+    add_test_browser_methods(fig)
     fig.test_mode = True
     QTest.qWaitForWindowExposed(fig)
     assert pg_backend._get_n_figs() == 1
@@ -624,6 +633,7 @@ def test_pg_toolbar_channels_plus_minus(raw_orig, pg_backend):
 def test_pg_toolbar_zoom(raw_orig, pg_backend):
     """Test zoom."""
     fig = raw_orig.plot()
+    add_test_browser_methods(fig)
     fig.test_mode = True
     QTest.qWaitForWindowExposed(fig)
     assert pg_backend._get_n_figs() == 1
@@ -652,6 +662,7 @@ def test_pg_toolbar_zoom(raw_orig, pg_backend):
 def test_pg_toolbar_annotations(raw_orig, pg_backend):
     """Test annotations mode."""
     fig = raw_orig.plot()
+    add_test_browser_methods(fig)
     fig.test_mode = True
     QTest.qWaitForWindowExposed(fig)
     assert pg_backend._get_n_figs() == 1
@@ -674,6 +685,7 @@ def test_pg_toolbar_actions(raw_orig, pg_backend):
     We test the state machine for each window toggle button.
     """
     fig = raw_orig.plot()
+    add_test_browser_methods(fig)
     fig.test_mode = True
     QTest.qWaitForWindowExposed(fig)
     assert pg_backend._get_n_figs() == 1

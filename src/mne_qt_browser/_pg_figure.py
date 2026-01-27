@@ -37,25 +37,21 @@ from packaging.version import parse
 from pyqtgraph import (
     InfiniteLine,
     PlotItem,
-    Point,
     mkPen,
     setConfigOption,
 )
 from qtpy import API_NAME, QT_VERSION
 from qtpy.QtCore import (
-    QEvent,
     QSettings,
     QSignalBlocker,
     QThread,
     Signal,
 )
-from qtpy.QtGui import QIcon, QMouseEvent
-from qtpy.QtTest import QTest
+from qtpy.QtGui import QIcon
 from qtpy.QtWidgets import (
     QAction,
     QActionGroup,
     QApplication,
-    QGraphicsView,
     QGridLayout,
     QLabel,
     QMainWindow,
@@ -78,7 +74,6 @@ from mne_qt_browser._dialogs import (
     SettingsDialog,
     _BaseDialog,
 )
-from mne_qt_browser._fixes import capture_exceptions
 from mne_qt_browser._graphic_items import (
     AnnotRegion,
     Crosshair,
@@ -108,6 +103,12 @@ from mne_qt_browser._widgets import (
     TimeAxis,
     TimeScrollBar,
 )
+
+# Optional import used only for test/CI introspection helpers
+try:  # pragma: no cover - best effort
+    from qtpy.QtTest import QTest  # noqa: F401
+except Exception:  # pragma: no cover
+    QTest = None
 
 name = "pyqtgraph"  # Backend name, used by MNE-Python
 
@@ -2030,136 +2031,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         logger.debug(f"Window size: {inch_width:0.1f} x {inch_height:0.1f} inches")
         return inch_width, inch_height
 
-    def _fake_keypress(self, key, fig=None):
-        fig = fig or self
-
-        if key.isupper():
-            key = key.lower()
-            modifier = Qt.ShiftModifier
-        elif key.startswith("shift+"):
-            key = key[6:]
-            modifier = Qt.ShiftModifier
-        else:
-            modifier = Qt.NoModifier
-
-        # Use pytest-qt's exception hook
-        with capture_exceptions() as exceptions:
-            QTest.keyPress(fig, self.mne.keyboard_shortcuts[key]["qt_key"], modifier)
-
-        for exc in exceptions:
-            raise RuntimeError(
-                f"There as been an {exc[0]} inside the Qt "
-                f"event loop (look above for traceback)."
-            )
-
-    def _fake_click(
-        self,
-        point,
-        add_points=None,
-        fig=None,
-        ax=None,
-        xform="ax",
-        button=1,
-        kind="press",
-        modifier=None,
-    ):
-        add_points = add_points or list()
-        # Wait until window is fully shown
-        QTest.qWaitForWindowExposed(self)
-        # Scene dimensions still seem to change to final state when waiting for a short
-        # time
-        QTest.qWait(10)
-
-        # Qt: right-button=2, matplotlib: right-button=3
-        if button == 1:
-            button = Qt.LeftButton
-        else:
-            button = Qt.RightButton
-
-        # For Qt, fig or ax both would be the widget to test interaction on.
-        fig = ax or fig or self.mne.view
-
-        if xform == "ax":
-            # For Qt, the equivalent of Matplotlib's transAxes would be a transformation
-            # to view coordinates. But for the View, top-left is (0, 0) and bottom-right
-            # is (view-width, view-height).
-            view_width = fig.width()
-            view_height = fig.height()
-            x = view_width * point[0]
-            y = view_height * (1 - point[1])
-            point = Point(x, y)
-            for idx, apoint in enumerate(add_points):
-                x2 = view_width * apoint[0]
-                y2 = view_height * (1 - apoint[1])
-                add_points[idx] = Point(x2, y2)
-
-        elif xform == "data":
-            # For Qt, the equivalent of Matplotlib's transData would be a transformation
-            # to the coordinate system of the ViewBox. This only works on the View
-            # (self.mne.view).
-            fig = self.mne.view
-            point = self.mne.viewbox.mapViewToScene(Point(*point))
-            for idx, apoint in enumerate(add_points):
-                add_points[idx] = self.mne.viewbox.mapViewToScene(Point(*apoint))
-
-        elif xform == "none" or xform is None:
-            if isinstance(point, tuple | list):
-                point = Point(*point)
-            else:
-                point = Point(point)
-            for idx, apoint in enumerate(add_points):
-                if isinstance(apoint, tuple | list):
-                    add_points[idx] = Point(*apoint)
-                else:
-                    add_points[idx] = Point(apoint)
-
-        # Use pytest-qt's exception hook
-        with capture_exceptions() as exceptions:
-            widget = fig.viewport() if isinstance(fig, QGraphicsView) else fig
-            if kind == "press":
-                # always click because most interactivity comes from mouseClickEvent
-                # from pyqtgraph (just press doesn't suffice here).
-                _mouseClick(widget=widget, pos=point, button=button, modifier=modifier)
-            elif kind == "release":
-                _mouseRelease(
-                    widget=widget, pos=point, button=button, modifier=modifier
-                )
-            elif kind == "motion":
-                _mouseMove(widget=widget, pos=point, buttons=button, modifier=modifier)
-            elif kind == "drag":
-                _mouseDrag(
-                    widget=widget,
-                    positions=[point] + add_points,
-                    button=button,
-                    modifier=modifier,
-                )
-
-        for exc in exceptions:
-            raise RuntimeError(
-                f"There as been an {exc[0]} inside the Qt "
-                f"event loop (look above for traceback)."
-            )
-
-        # Wait some time for events to be processed
-        QTest.qWait(50)
-
-    def _fake_scroll(self, x, y, step, fig=None):
-        # QTest doesn't support simulating scroll wheel
-        self.vscroll(step)
-
-    def _click_ch_name(self, ch_index, button):
-        self.mne.channel_axis.repaint()
-        # Wait because channel axis may need time
-        # (came up with test_epochs::test_plot_epochs_clicks)
-        QTest.qWait(100)
-        if not self.mne.butterfly:
-            ch_name = str(self.mne.ch_names[self.mne.picks[ch_index]])
-            xrange, yrange = self.mne.channel_axis.ch_texts[ch_name]
-            x = np.mean(xrange)
-            y = np.mean(yrange)
-
-            self._fake_click((x, y), fig=self.mne.view, button=button, xform="none")
-
     def _resize_by_factor(self, factor):
         pass
 
@@ -2258,17 +2129,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 source="resize_event", ch_type="all"
             )
 
-    def _fake_click_on_toolbar_action(self, action_name, wait_after=500):
-        """Trigger event associated with action 'action_name' in toolbar."""
-        for action in self.mne.toolbar.actions():
-            if not action.isSeparator():
-                if action.iconText() == action_name:
-                    action.trigger()
-                    break
-        else:
-            raise ValueError(f"action_name={repr(action_name)} not found")
-        QTest.qWait(wait_after)
-
     def _qicon(self, name):
         # Try to pull from the theme first but fall back to the local one
         kind = "dark" if self.mne.dark else "light"
@@ -2278,62 +2138,16 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
 
 
 def _get_n_figs():
-    # Wait for a short time to let the Qt loop clean up
-    QTest.qWait(100)
-    return len(
-        [window for window in QApplication.topLevelWindows() if window.isVisible()]
-    )
+    """Return number of visible top-level Qt windows."""
+    if QTest is not None:  # allow pending events to process
+        QTest.qWait(100)
+    return len([w for w in QApplication.topLevelWindows() if w.isVisible()])
 
 
 def _close_all():
+    """Close all top-level Qt windows."""
     if len(QApplication.topLevelWindows()) > 0:
         QApplication.closeAllWindows()
-
-
-# mouse testing functions adapted from pyqtgraph (pyqtgraph.tests.ui_testing.py)
-def _mousePress(widget, pos, button, modifier=None):
-    if modifier is None:
-        modifier = Qt.KeyboardModifier.NoModifier
-    event = QMouseEvent(
-        QEvent.Type.MouseButtonPress, pos, button, Qt.MouseButton.NoButton, modifier
-    )
-    QApplication.sendEvent(widget, event)
-
-
-def _mouseRelease(widget, pos, button, modifier=None):
-    if modifier is None:
-        modifier = Qt.KeyboardModifier.NoModifier
-    event = QMouseEvent(
-        QEvent.Type.MouseButtonRelease, pos, button, Qt.MouseButton.NoButton, modifier
-    )
-    QApplication.sendEvent(widget, event)
-
-
-def _mouseMove(widget, pos, buttons=None, modifier=None):
-    if buttons is None:
-        buttons = Qt.MouseButton.NoButton
-    if modifier is None:
-        modifier = Qt.KeyboardModifier.NoModifier
-    event = QMouseEvent(
-        QEvent.Type.MouseMove, pos, Qt.MouseButton.NoButton, buttons, modifier
-    )
-    QApplication.sendEvent(widget, event)
-
-
-def _mouseClick(widget, pos, button, modifier=None):
-    _mouseMove(widget, pos)
-    _mousePress(widget, pos, button, modifier)
-    _mouseRelease(widget, pos, button, modifier)
-
-
-def _mouseDrag(widget, positions, button, modifier=None):
-    _mouseMove(widget, positions[0])
-    _mousePress(widget, positions[0], button, modifier)
-    # Delay for 10 ms for drag to be recognized
-    QTest.qWait(10)
-    for pos in positions[1:]:
-        _mouseMove(widget, pos, button, modifier)
-    _mouseRelease(widget, positions[-1], button, modifier)
 
 
 # modified from: https://github.com/pyvista/pyvistaqt
