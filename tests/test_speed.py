@@ -9,6 +9,7 @@ import mne
 import numpy as np
 import pytest
 from qtpy.QtCore import QTimer
+from utils import add_test_browser_methods
 
 from mne_qt_browser._pg_figure import _methpartial
 from mne_qt_browser.figure import MNEQtBrowser
@@ -64,8 +65,9 @@ class _Benchmark:
             elif self.pg_fig.mne.t_start <= 0:
                 self.hscroll_dir = True
             key = "right" if self.hscroll_dir else "left"
+            add_test_browser_methods(self.pg_fig)
             self.pg_fig._fake_keypress(key)
-            # Get time-difference
+            # Get time difference
             now = perf_counter()
             if self.h_last_time is not None:
                 self.hscroll_diffs.append(now - self.h_last_time)
@@ -80,8 +82,9 @@ class _Benchmark:
             elif self.pg_fig.mne.ch_start <= 0:
                 self.vscroll_dir = True
             key = "down" if self.vscroll_dir else "up"
+            add_test_browser_methods(self.pg_fig)
             self.pg_fig._fake_keypress(key)
-            # get time-difference
+            # get time difference
             now = perf_counter()
             if self.v_last_time is not None:
                 self.vscroll_diffs.append(now - self.v_last_time)
