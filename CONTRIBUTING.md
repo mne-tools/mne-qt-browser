@@ -1,13 +1,14 @@
-# Contributing to mne-qt-browser
+# Contributing to MNE Qt Browser
 
-**Thank you very much for taking the time to contribute!** :+1::+1::+1:
+Thank you for taking the time to contribute!
 
-As this package is a subsidiarian of [MNE-Python](https://mne.tools/dev/index.html)
-its [guidelines](https://github.com/mne-tools/mne-python) for contributing apply as well.
+Since this package is a subsidiary of [MNE-Python](https://mne.tools/dev/index.html),
+the [MNE-Python contribution guidelines](https://mne.tools/dev/development/contributing.html) also apply here.
 
-## Setting up development environment
-Follow the [instructions from mne-python](https://mne.tools/dev/install/contributing.html#setting-up-your-local-development-environment)
-and additionally install the dependencies for this repository:
+
+## Setting up the development environment
+
+To get started, follow the [MNE-Python setup instructions](https://mne.tools/dev/development/contributing.html#setting-up-your-local-development-environment). Then, install the additional dependencies for this repository—for example, using `pip`:
 
 ```
 pip install -e ".[tests]"
