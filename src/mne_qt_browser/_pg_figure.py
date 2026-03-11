@@ -500,7 +500,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
             warn(
                 "On Linux, antialiasing without OpenGL can result in poor performance. "
                 "Consider installing PyOpenGL and setting 'use_opengl=True' or "
-                "disabling antialiasing in the browser settings (or by pressing 'l')."
+                "disabling antialiasing in the browser settings (or by pressing 'l'). "
+                "Note that on Wayland, even with OpenGL enabled, performance may still "
+                "be significantly lower than on X11. As a workaround, set "
+                "'QT_QPA_PLATFORM=xcb' to use XWayland (X11 compatibility layer)."
             )
         # Initialize BrowserView (inherits QGraphicsView)
         self.mne.view = BrowserView(
