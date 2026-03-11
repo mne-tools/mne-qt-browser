@@ -2,6 +2,7 @@
 # Copyright the MNE Qt Browser contributors.
 
 import os
+import platform
 from pathlib import Path
 
 import mne
@@ -13,6 +14,14 @@ _store = {"Raw": {}, "Epochs_unicolor": {}, "Epochs_multicolor": {}}
 
 def pytest_configure(config):
     """Configure pytest options."""
+    # Enable OpenGL on Linux
+    if platform.system() == "Linux" and "MNE_BROWSER_USE_OPENGL" not in os.environ:
+        try:
+            import OpenGL  # noqa: F401
+
+            os.environ["MNE_BROWSER_USE_OPENGL"] = "true"
+        except ImportError:
+            pass
     # Markers
     for marker in ("benchmark", "pgtest", "slowtest"):
         config.addinivalue_line("markers", marker)
