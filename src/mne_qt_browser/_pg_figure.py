@@ -222,7 +222,7 @@ class _PGMetaClass(type(QMainWindow), type(BrowserBase)):
     pass
 
 
-class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
+class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: ignore
     """A PyQtGraph-backend for 2D data browsing."""
 
     gotClosed = Signal()
@@ -460,8 +460,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         self._add_scalebars()
 
         # Check for OpenGL
-        # If a user doesn't specify whether or not to use it, disable it (performance
-        # differences seem minimal, and PyOpenGL is an optional requirement)
+        # If a user doesn't specify whether or not to use it, disable it (PyOpenGL is an
+        # optional requirement)
         opengl_key = "MNE_BROWSER_USE_OPENGL"
         if self.mne.use_opengl is None:  # default: opt-in
             config_val = get_config(opengl_key, "").lower()
@@ -472,9 +472,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                 import OpenGL
             except (ModuleNotFoundError, ImportError):
                 warn(
-                    "PyOpenGL was not found and OpenGL cannot be used. "
-                    "Consider installing pyopengl with pip or conda or set "
-                    '"use_opengl=False" to avoid this warning.'
+                    "PyOpenGL was not found so OpenGL cannot be used. Consider "
+                    "installing PyOpenGL or setting 'use_opengl=False' to avoid this "
+                    "warning."
                 )
                 self.mne.use_opengl = False
             else:
@@ -487,10 +487,23 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             and not check_version("pyqtgraph", "0.13.8")
         ):  # pragma: no cover
             warn(
-                "On macOS, Qt 6.10.0, pyqtgraph < 0.13.8, with use_opengl=True results "
-                f"in very slow performance. Consider downgrading {API_NAME}, "
-                "setting use_opengl=False (which can hurt performance), or "
-                "upgrading pyqtgraph once 0.13.8 is released"
+                "On macOS, the combination of Qt 6.10.0 and pyqtgraph < 0.13.8 with "
+                "'use_opengl=True' results in poor performance. Consider downgrading "
+                f"{API_NAME}, setting 'use_opengl=False' (which can hurt performance), "
+                "or upgrading pyqtgraph."
+            )
+        if (
+            platform.system() == "Linux"
+            and self.mne.antialiasing
+            and not self.mne.use_opengl
+        ):  # pragma: no cover
+            warn(
+                "On Linux, antialiasing without OpenGL can result in poor performance. "
+                "Consider installing PyOpenGL and setting 'use_opengl=True' or "
+                "disabling antialiasing in the browser settings (or by pressing 'l'). "
+                "Note that on Wayland, even with OpenGL enabled, performance may still "
+                "be significantly lower than on X11. As a workaround, set "
+                "'QT_QPA_PLATFORM=xcb' to use XWayland (X11 compatibility layer)."
             )
         # Initialize BrowserView (inherits QGraphicsView)
         self.mne.view = BrowserView(
