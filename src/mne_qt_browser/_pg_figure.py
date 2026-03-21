@@ -32,6 +32,15 @@ from mne.annotations import _sync_onset
 from mne.utils import _check_option, check_version, get_config, logger, sizeof_fmt, warn
 from mne.viz._figure import BrowserBase
 from mne.viz.backends._utils import _init_mne_qtapp, _qt_raise_window
+from mne.viz.ui_events import (
+    ChannelsSelect,
+    TimeBrowse,
+    TimeChange,
+    disable_ui_events,
+    publish,
+    subscribe,
+    unsubscribe,
+)
 from mne.viz.utils import _merge_annotations, _simplify_float
 from packaging.version import parse
 from pyqtgraph import (
@@ -877,6 +886,31 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             # disable histogram of epoch PTP amplitude
             del self.mne.keyboard_shortcuts["h"]
 
+        # Subscribe to UI events for cross-figure syncing
+        subscribe(self, "time_change", self._on_time_change_event)
+        subscribe(self, "time_browse", self._on_time_browse_event)
+        subscribe(self, "channels_select", self._on_channels_select_event)
+
+    def _on_time_change_event(self, event):
+        """Response to TimeChange event from the ui_events system."""
+        with disable_ui_events(self):
+            self._add_vline(event.time)
+
+    def _on_time_browse_event(self, event):
+        """Response to TimeBrowse event from the ui_events system."""
+        with disable_ui_events(self):
+            self.mne.plt.setXRange(event.time_start, event.time_end, padding=0)
+
+    def _on_channels_select_event(self, event):
+        """Response to ChannelsSelect event from the ui_events system."""
+        all_channels = self.mne.ch_names[self.mne.ch_order]
+        ch_indices = np.where(np.isin(all_channels, event.ch_names))[0]
+        if len(ch_indices) == 0:
+            return
+        with disable_ui_events(self):
+            start_idx, end_idx = ch_indices.min(), ch_indices.max() + 2
+            self.mne.plt.setYRange(start_idx, end_idx, padding=0)
+
     def _save_setting(self, key, value):
         """Save a setting to QSettings."""
         QSettings("mne-tools", "mne-qt-browser").setValue(key, value)
@@ -1131,6 +1165,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                     vl.setPos(xt)
         self.mne.overview_bar.update_vline()
 
+    def _vline_drag_slot(self, vline):
+        """Publish TimeChange on vline drag for cross-figure syncing."""
+        publish(self, TimeChange(time=vline.value()))
+
     def _add_vline(self, t):
         if self.mne.is_epochs:
             ts = self._get_vline_times(t)
@@ -1148,8 +1186,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
                     # Avoid off-by-one-error at bmax for VlineLabel
                     bmax -= 1 / self.mne.info["sfreq"]
                     vl = VLine(self.mne, xt, bounds=(bmin, bmax))
-                    # Should only be emitted when dragged
                     vl.sigPositionChangeFinished.connect(self._vline_slot)
+                    vl.sigDragged.connect(self._vline_drag_slot)
                     self.mne.vline.append(vl)
                     self.mne.plt.addItem(vl)
             else:
@@ -1159,12 +1197,14 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             if self.mne.vline is None:
                 self.mne.vline = VLine(self.mne, t, bounds=(0, self.mne.xmax))
                 self.mne.vline.sigPositionChangeFinished.connect(self._vline_slot)
+                self.mne.vline.sigDragged.connect(self._vline_drag_slot)
                 self.mne.plt.addItem(self.mne.vline)
             else:
                 self.mne.vline.setPos(t)
 
         self.mne.vline_visible = True
         self.mne.overview_bar.update_vline()
+        publish(self, TimeChange(time=t))
 
     def _mouse_moved(self, pos):
         """Show crosshair if enabled at mouse move."""
@@ -1264,6 +1304,15 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
         # Update annotations
         self._update_regions_visible()
 
+        # Publish event for cross-figure syncing
+        publish(
+            self,
+            TimeBrowse(
+                time_start=self.mne.t_start,
+                time_end=self.mne.t_start + self.mne.duration,
+            ),
+        )
+
     def _yrange_changed(self, _, yrange):
         if not self.mne.butterfly:
             if not self.mne.fig_selection:
@@ -1316,6 +1365,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
             trace.set_ch_idx(ch_idx)
             trace.update_color()
             trace.update_data()
+
+        # Publish event for cross-figure syncing
+        publish(self, ChannelsSelect(ch_names=self.mne.ch_names[self.mne.picks]))
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     # DATA HANDLING
@@ -2200,6 +2252,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):
     def closeEvent(self, event):
         """Customize close event."""
         event.accept()
+        unsubscribe(self, ["time_change", "time_browse", "channels_select"])
         if hasattr(self, "mne"):
             # Explicit disconnects to avoid reference cycles that GC can't properly
             # resolve
