@@ -134,3 +134,4 @@ dmypy.json
 *.orig
 junit-results.xml
 .vscode/
+.DS_Store
