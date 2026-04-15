@@ -74,7 +74,9 @@ jobs:
           python -m pip install -ve .${PIP_OPTION} "PyQt6!=6.6.1" "PyQt6-Qt6!=6.6.1,!=6.6.2,!=6.6.3"
           if [[ "${{ matrix.pip }}" == "pre" ]]; then
             echo "Upgrading to pre-release NumPy, SciPy, matplotlib, and pyqtgraph"
-            python -m pip install --upgrade --pre --only-binary ":all:" --default-timeout=60 --extra-index-url "https://pypi.anaconda.org/scientific-python-nightly-wheels/simple" "numpy>=2.0.0.dev0" "scipy>=1.14.0.dev0" "matplotlib>=3.9.0.dev0" "scikit-learn>=1.5.dev0" "git+https://github.com/pyqtgraph/pyqtgraph.git"
+            # No SciPy until https://github.com/scikit-learn/scikit-learn/issues/33616
+            # "scipy>=1.14.0.dev0"
+            python -m pip install --upgrade --pre --only-binary ":all:" --default-timeout=60 --extra-index-url "https://pypi.anaconda.org/scientific-python-nightly-wheels/simple" "numpy>=2.0.0.dev0" "matplotlib>=3.9.0.dev0" "scikit-learn>=1.5.dev0" "git+https://github.com/pyqtgraph/pyqtgraph.git"
           fi
       - run: ./tools/get_testing_version.sh
         working-directory: ../mne-python
@@ -100,7 +102,7 @@ jobs:
       - run: pytest tests/test_speed.py --cov-report=xml --cov-append
         name: Run benchmarks
         if: runner.os != 'macOS'
-      - uses: codecov/codecov-action@v5
+      - uses: codecov/codecov-action@v6
         if: always()
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -195,7 +197,7 @@ jobs:
       - run: pytest tests/test_speed.py --cov-report=xml --cov-append
         name: Run benchmarks
         if: runner.os != 'Linux' || matrix.qt != 'PyQt5'
-      - uses: codecov/codecov-action@v5
+      - uses: codecov/codecov-action@v6
         if: always()
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
