@@ -496,6 +496,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
             platform.system() == "Linux"
             and self.mne.antialiasing
             and not self.mne.use_opengl
+            and not check_version("pyqtgraph", "0.14")
         ):  # pragma: no cover
             warn(
                 "On Linux, antialiasing without OpenGL can result in poor performance. "
