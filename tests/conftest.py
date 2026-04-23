@@ -2,7 +2,6 @@
 # Copyright the MNE Qt Browser contributors.
 
 import os
-import platform
 from pathlib import Path
 
 import mne
