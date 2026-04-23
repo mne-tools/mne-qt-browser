@@ -467,7 +467,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
             config_val = get_config(opengl_key, "").lower()
             self.mne.use_opengl = config_val == "true"
 
-        if self.mne.use_opengl:
+        if self.mne.use_opengl and not check_version("pyqtgraph", "0.14"):
             try:
                 import OpenGL
             except (ModuleNotFoundError, ImportError):
