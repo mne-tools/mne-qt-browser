@@ -460,8 +460,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         self._add_scalebars()
 
         # Check for OpenGL
-        # If a user doesn't specify whether or not to use it, disable it (PyOpenGL is an
-        # optional requirement)
+        # If a user doesn't specify whether or not to use it, disable it
         opengl_key = "MNE_BROWSER_USE_OPENGL"
         if self.mne.use_opengl is None:  # default: opt-in
             config_val = get_config(opengl_key, "").lower()
