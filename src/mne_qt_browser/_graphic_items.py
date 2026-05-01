@@ -526,7 +526,10 @@ class DataTrace(PlotCurveItem):
     @propagate_to_children
     def update_scale(self):  # noqa: D102
         transform = QTransform()
-        transform.scale(1.0, self.mne.scale_factor)
+        if self.mne.data_precomputed:
+            transform.scale(1.0, self.mne.scale_factor / self.mne.scalings[self.ch_type])
+        else:
+            transform.scale(1.0, self.mne.scale_factor)
         self.setTransform(transform)
 
         if self.mne.clipping is not None:
@@ -561,11 +564,14 @@ class DataTrace(PlotCurveItem):
             connect = "all"
             skip = True
 
+        transform = QTransform()
         if self.mne.data_precomputed:
+            transform.scale(1.0, self.mne.scale_factor / self.mne.scalings[self.ch_type])
             data = self.mne.data[self.order_idx]
-            data /= self.mne.scalings[self.ch_type]
         else:
+            transform.scale(1.0, self.mne.scale_factor)
             data = self.mne.data[self.range_idx]
+        self.setTransform(transform)
         times = self.mne.times
 
         # Get decim-specific time if enabled
