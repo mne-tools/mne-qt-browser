@@ -527,7 +527,9 @@ class DataTrace(PlotCurveItem):
     def update_scale(self):  # noqa: D102
         transform = QTransform()
         if self.mne.data_precomputed:
-            transform.scale(1.0, self.mne.scale_factor / self.mne.scalings[self.ch_type])
+            transform.scale(
+                1.0, self.mne.scale_factor / self.mne.scalings[self.ch_type]
+            )
         else:
             transform.scale(1.0, self.mne.scale_factor)
         self.setTransform(transform)
@@ -566,7 +568,9 @@ class DataTrace(PlotCurveItem):
 
         transform = QTransform()
         if self.mne.data_precomputed:
-            transform.scale(1.0, self.mne.scale_factor / self.mne.scalings[self.ch_type])
+            transform.scale(
+                1.0, self.mne.scale_factor / self.mne.scalings[self.ch_type]
+            )
             data = self.mne.data[self.order_idx]
         else:
             transform.scale(1.0, self.mne.scale_factor)
