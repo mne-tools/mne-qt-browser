@@ -438,11 +438,11 @@ class DataTrace(PlotCurveItem):
         # set attributes
         self.set_ch_idx(ch_idx)
         self.update_color()
-        self.update_scale()
-        # Avoid calling self.update_data() twice on initialization because of
-        # update_scale()
+
         if self.mne.clipping is None:
             self.update_data()
+        else:
+            self.update_scale()
 
         # Add to main plot
         self.mne.plt.addItem(self)
