@@ -438,11 +438,11 @@ class DataTrace(PlotCurveItem):
         # set attributes
         self.set_ch_idx(ch_idx)
         self.update_color()
-        self.update_scale()
-        # Avoid calling self.update_data() twice on initialization because of
-        # update_scale()
+
         if self.mne.clipping is None:
             self.update_data()
+        else:
+            self.update_scale()
 
         # Add to main plot
         self.mne.plt.addItem(self)
@@ -523,11 +523,19 @@ class DataTrace(PlotCurveItem):
         else:
             self.ypos = self.range_idx + self.mne.ch_start + 1
 
+    def _apply_transform(self):
+        transform = QTransform()
+        if self.mne.data_precomputed:
+            transform.scale(
+                1.0, self.mne.scale_factor / self.mne.scalings[self.ch_type]
+            )
+        else:
+            transform.scale(1.0, self.mne.scale_factor)
+        self.setTransform(transform)
+
     @propagate_to_children
     def update_scale(self):  # noqa: D102
-        transform = QTransform()
-        transform.scale(1.0, self.mne.scale_factor)
-        self.setTransform(transform)
+        self._apply_transform()
 
         if self.mne.clipping is not None:
             self.update_data(propagate=False)
@@ -561,9 +569,9 @@ class DataTrace(PlotCurveItem):
             connect = "all"
             skip = True
 
+        self._apply_transform()
         if self.mne.data_precomputed:
             data = self.mne.data[self.order_idx]
-            data /= self.mne.scalings[self.ch_type]
         else:
             data = self.mne.data[self.range_idx]
         times = self.mne.times
