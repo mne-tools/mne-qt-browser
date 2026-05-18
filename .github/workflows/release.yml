@@ -17,6 +17,11 @@ permissions:
 jobs:
   package:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    environment:
+      name: pypi
+      url: https://pypi.org/p/mne-qt-browser
     steps:
       - uses: actions/checkout@v6
       - name: Set up Python
@@ -33,7 +38,4 @@ jobs:
         run: twine check --strict dist/*
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          user: __token__
-          password: ${{ secrets.PYPI_PASSWORD }}
         if: github.event_name == 'release'
