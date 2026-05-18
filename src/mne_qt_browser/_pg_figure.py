@@ -1418,6 +1418,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         if self._rerun_load_thread:
             self._rerun_load_thread = False
             self._init_precompute()
+        else:
+            self._redraw()
 
     def _init_precompute(self):
         # Remove previously loaded data
