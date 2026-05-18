@@ -2301,6 +2301,7 @@ def _get_n_figs():
 def _close_all():
     if len(QApplication.topLevelWindows()) > 0:
         QApplication.closeAllWindows()
+        QApplication.processEvents()
 
 
 # mouse testing functions adapted from pyqtgraph (pyqtgraph.tests.ui_testing.py)
