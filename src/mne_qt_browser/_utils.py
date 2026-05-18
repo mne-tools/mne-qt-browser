@@ -34,7 +34,7 @@ def _disconnect(sig, *, allow_error=False):
                 "ignore", "Failed to disconnect", category=RuntimeWarning
             )
             sig.disconnect()
-    except (TypeError, RuntimeError):  # if there are no connections, ignore it
+    except (TypeError, RuntimeError, SystemError):  # if are no connections, ignore
         if not allow_error:
             raise
 
