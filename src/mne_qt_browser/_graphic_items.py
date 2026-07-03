@@ -423,6 +423,8 @@ class DataTrace(PlotCurveItem):
         self.ch_type = None
         # Color specifier (all possible Matplotlib color formats)
         self.color = None
+        # Horizontal reference line at this trace's zero (parent traces only)
+        self.zero_line = None
 
         # Attributes for epochs mode
 
@@ -447,12 +449,26 @@ class DataTrace(PlotCurveItem):
         # Add to main plot
         self.mne.plt.addItem(self)
 
+        # Only for parent traces
+        if self.parent_trace is None:
+            color = _get_color("k", self.mne.dark)
+            color.setAlpha(76)
+            pen = self.mne.mkPen(color, width=1, style=Qt.DashLine)
+            self.zero_line = InfiniteLine(
+                pos=self.ypos, angle=0, movable=False, pen=pen
+            )
+            self.zero_line.setZValue(0)
+            self.zero_line.setVisible(self.mne.zero_line_visible)
+            self.mne.plt.addItem(self.zero_line)
+
     @propagate_to_children
     def remove(self):  # noqa: D102
         self.mne.plt.removeItem(self)
         # Only for parent trace
         if self.parent_trace is None:
             self.mne.traces.remove(self)
+            self.mne.plt.removeItem(self.zero_line)
+            self.zero_line.deleteLater()
         self.deleteLater()
 
     @propagate_to_children
@@ -522,6 +538,8 @@ class DataTrace(PlotCurveItem):
             self.ypos = self.mne.butterfly_type_order.index(self.ch_type) + 1
         else:
             self.ypos = self.range_idx + self.mne.ch_start + 1
+        if self.zero_line is not None:
+            self.zero_line.setPos(self.ypos)
 
     def _apply_transform(self):
         transform = QTransform()

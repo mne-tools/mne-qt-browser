@@ -857,6 +857,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                 "slot": [self._toggle_scalebars],
                 "description": ["Toggle Scalebars"],
             },
+            "0": {
+                "qt_key": Qt.Key_0,
+                "slot": [self._toggle_zero_line],
+                "description": ["Toggle Zero Line"],
+            },
             "w": {
                 "qt_key": Qt.Key_W,
                 "slot": [self._toggle_whitening],
@@ -975,6 +980,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
     def _toggle_scalebars(self):
         self.mne.scalebars_visible = not self.mne.scalebars_visible
         self._set_scalebars_visible(self.mne.scalebars_visible)
+
+    def _toggle_zero_line(self):
+        self.mne.zero_line_visible = not self.mne.zero_line_visible
+        for trace in self.mne.traces:
+            trace.zero_line.setVisible(self.mne.zero_line_visible)
 
     def _overview_mode_changed(self, new_mode):
         self.mne.overview_mode = new_mode
