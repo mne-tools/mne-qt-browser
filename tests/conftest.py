@@ -7,8 +7,23 @@ from pathlib import Path
 import mne
 import pytest
 from mne.conftest import garbage_collect, pg_backend  # noqa: F401
+from qtpy.QtCore import QSettings
 
 _store = {"Raw": {}, "Epochs_unicolor": {}, "Epochs_multicolor": {}}
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _isolated_qsettings(tmp_path_factory):
+    """Isolate QSettings to a temporary file for the test session."""
+    ini_path = tmp_path_factory.mktemp("qsettings") / "mne-qt-browser-test.ini"
+
+    def _fake_qsettings(*_args, **_kwargs):
+        return QSettings(str(ini_path), QSettings.IniFormat)
+
+    mp = pytest.MonkeyPatch()
+    mp.setattr("mne_qt_browser._pg_figure.QSettings", _fake_qsettings)
+    yield
+    mp.undo()
 
 
 def pytest_configure(config):

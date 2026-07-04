@@ -213,6 +213,11 @@ class LoadThread(QThread):
         del self.weakbrowser
 
 
+# Flag a manually-set downsampling factor this many times (or more) larger than what
+# "auto" would pick for the current view is flagged as a warning
+_DS_WARN_RATIO = 3
+
+
 class _PGMetaClass(type(QMainWindow), type(BrowserBase)):
     """Class is necessary to prevent a metaclass conflict.
 
@@ -367,6 +372,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         self.mne.load_progressbar.setMaximum(10)
         self.statusBar().addWidget(self.mne.load_progressbar, stretch=1)
         self.mne.load_progressbar.hide()
+
+        # Indicator shown whenever downsampling is actively reducing the displayed data
+        self.mne.ds_status_label = QLabel()
+        self.statusBar().addPermanentWidget(self.mne.ds_status_label)
+        self.mne.ds_status_label.hide()
 
         # A QThread for preloading
         self.load_thread = LoadThread(self)
@@ -1333,36 +1343,43 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     # DATA HANDLING
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+    def _auto_downsampling_factor(self):
+        """Compute the downsampling factor PyQtGraph's "auto" mode would use."""
+        ds = 1
+        if all([hasattr(self.mne, a) for a in ["viewbox", "times"]]):
+            vb = self.mne.viewbox
+            if vb is not None:
+                view_range = vb.viewRect()
+            else:
+                view_range = None
+            if view_range is not None and len(self.mne.times) > 1:
+                dx = float(self.mne.times[-1] - self.mne.times[0]) / (
+                    len(self.mne.times) - 1
+                )
+                if dx != 0.0:
+                    x0 = view_range.left() / dx
+                    x1 = view_range.right() / dx
+                    width = vb.width()
+                    if width != 0.0:
+                        # Auto-downsampling with 5 samples per pixel
+                        ds = int(max(1, (x1 - x0) / (width * 5)))
+        return ds
+
     def _apply_downsampling(self):
-        """
-        Get downsampling factor and apply with one of multiple methods.
+        """Get downsampling factor and apply with one of multiple methods.
 
         The methods are taken from PlotDataItem in PyQtGraph and adjusted to
         multi-channel data.
         """
         # Get downsampling factor
         # Auto-Downsampling from PyQtGraph
+        auto_ds = self._auto_downsampling_factor()
         if self.mne.downsampling == "auto":
-            ds = 1
-            if all([hasattr(self.mne, a) for a in ["viewbox", "times"]]):
-                vb = self.mne.viewbox
-                if vb is not None:
-                    view_range = vb.viewRect()
-                else:
-                    view_range = None
-                if view_range is not None and len(self.mne.times) > 1:
-                    dx = float(self.mne.times[-1] - self.mne.times[0]) / (
-                        len(self.mne.times) - 1
-                    )
-                    if dx != 0.0:
-                        x0 = view_range.left() / dx
-                        x1 = view_range.right() / dx
-                        width = vb.width()
-                        if width != 0.0:
-                            # Auto-downsampling with 5 samples per pixel
-                            ds = int(max(1, (x1 - x0) / (width * 5)))
+            ds = auto_ds
         else:
             ds = self.mne.downsampling
+
+        self._update_ds_status_label(ds, auto_ds)
 
         # Apply downsampling
         if ds not in [None, 1]:
@@ -1400,6 +1417,23 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                 data = y1.reshape((n_ch, n * 2))
 
             self.mne.times, self.mne.data = times, data
+
+    def _update_ds_status_label(self, ds, auto_ds):
+        """Show/hide the status bar indicator for active downsampling."""
+        label = self.mne.ds_status_label
+        if ds in (None, 1):
+            label.hide()
+            return
+
+        text = f"Downsampling: {ds}x ({self.mne.ds_method})"
+        is_manual = self.mne.downsampling != "auto"
+        if is_manual and ds >= auto_ds * _DS_WARN_RATIO:
+            label.setStyleSheet("color: red; font-weight: bold;")
+            label.setText(f"{text} — unusually high")
+        else:
+            label.setStyleSheet("")
+            label.setText(text)
+        label.show()
 
     def _show_process(self, message):
         if self.mne.load_progressbar.isVisible():
