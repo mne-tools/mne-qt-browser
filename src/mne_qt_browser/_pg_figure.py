@@ -982,7 +982,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         self._set_scalebars_visible(self.mne.scalebars_visible)
 
     def _toggle_zero_line(self):
-        self.mne.zero_line_visible = not self.mne.zero_line_visible
+        self.mne.zero_line_visible = not getattr(self.mne, "zero_line_visible", False)
         for trace in self.mne.traces:
             trace.zero_line.setVisible(self.mne.zero_line_visible)
 

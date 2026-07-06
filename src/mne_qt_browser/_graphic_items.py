@@ -455,7 +455,7 @@ class DataTrace(PlotCurveItem):
                 pos=self.ypos, angle=0, movable=False, pen=self._zero_line_pen()
             )
             self.zero_line.setZValue(0)
-            self.zero_line.setVisible(self.mne.zero_line_visible)
+            self.zero_line.setVisible(getattr(self.mne, "zero_line_visible", False))
             self.mne.plt.addItem(self.zero_line)
 
     @propagate_to_children
