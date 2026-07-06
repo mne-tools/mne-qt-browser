@@ -1907,6 +1907,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
 
     def _toggle_dc(self):
         self.mne.remove_dc = not self.mne.remove_dc
+        for trace in self.mne.traces:
+            trace.update_zero_line_style()
         self._redraw()
 
     def _set_events_visible(self, visible):

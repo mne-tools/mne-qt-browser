@@ -451,11 +451,8 @@ class DataTrace(PlotCurveItem):
 
         # Only for parent traces
         if self.parent_trace is None:
-            color = _get_color("k", self.mne.dark)
-            color.setAlpha(76)
-            pen = self.mne.mkPen(color, width=1, style=Qt.DashLine)
             self.zero_line = InfiniteLine(
-                pos=self.ypos, angle=0, movable=False, pen=pen
+                pos=self.ypos, angle=0, movable=False, pen=self._zero_line_pen()
             )
             self.zero_line.setZValue(0)
             self.zero_line.setVisible(self.mne.zero_line_visible)
@@ -540,6 +537,17 @@ class DataTrace(PlotCurveItem):
             self.ypos = self.range_idx + self.mne.ch_start + 1
         if self.zero_line is not None:
             self.zero_line.setPos(self.ypos)
+
+    def _zero_line_pen(self):
+        color = _get_color("k", self.mne.dark)
+        color.setAlpha(76)
+        style = Qt.DashLine if self.mne.remove_dc else Qt.SolidLine
+        return self.mne.mkPen(color, width=1, style=style)
+
+    def update_zero_line_style(self):
+        """Update the zero line's style after remove_dc is toggled."""
+        if self.zero_line is not None:
+            self.zero_line.setPen(self._zero_line_pen())
 
     def _apply_transform(self):
         transform = QTransform()
