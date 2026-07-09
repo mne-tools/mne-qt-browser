@@ -1458,8 +1458,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
     def _init_precompute(self):
         # Remove previously loaded data
         self.mne.data_precomputed = False
-        if all([hasattr(self.mne, st) for st in ["global_data", "global_times"]]):
-            del self.mne.global_data, self.mne.global_times
+        for st in ["global_data", "global_times"]:
+            if hasattr(self.mne, st):
+                delattr(self.mne, st)
         gc.collect()
 
         if self.mne.precompute == "auto":

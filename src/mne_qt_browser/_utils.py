@@ -29,7 +29,7 @@ _unit_per_inch = dict(mm=25.4, cm=2.54, inch=1.0)
 
 def _disconnect(sig, *, allow_error=False):
     try:
-        with warnings.catch_warnings():
+        with warnings.catch_warnings(record=True):
             warnings.filterwarnings(
                 "ignore", "Failed to disconnect", category=RuntimeWarning
             )
