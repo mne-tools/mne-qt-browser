@@ -65,13 +65,18 @@ jobs:
           set -eo pipefail
           python -m pip install --upgrade pip
           git clone -b ${MNE_BRANCH} --single-branch --branch main https://github.com/mne-tools/mne-python.git ../mne-python
-          python -m pip install -qe ../mne-python
+          pushd ../mne-python
+          if [[ "${{ matrix.mne }}" == "main" ]]; then
+            GROUP_EXTRA="--group test"
+          fi
+          python -m pip install -qe . $GROUP_EXTRA
+          popd
           if [[ "${{ matrix.opengl }}" == "opengl" ]]; then
             PIP_OPTION="[opengl,tests]"
           else
             PIP_OPTION="[tests]"
           fi
-          python -m pip install -ve .${PIP_OPTION} "PyQt6!=6.6.1" "PyQt6-Qt6!=6.6.1,!=6.6.2,!=6.6.3"
+          python -m pip install -ve .${PIP_OPTION} PySide6
           if [[ "${{ matrix.pip }}" == "pre" ]]; then
             echo "Upgrading to pre-release NumPy, SciPy, matplotlib, and pyqtgraph"
             python -m pip install --upgrade --pre --only-binary ":all:" --default-timeout=60 --extra-index-url "https://pypi.anaconda.org/scientific-python-nightly-wheels/simple" "numpy>=2.6.0.dev0" "scipy>=1.19.0.dev0" "matplotlib>=3.12.0.dev0" "scikit-learn>=1.10.dev0" "git+https://github.com/pyqtgraph/pyqtgraph.git"
