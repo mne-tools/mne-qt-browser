@@ -149,7 +149,9 @@ jobs:
           set -eo pipefail
           python -m pip install --upgrade pip
           git clone -b ${MNE_BRANCH} --single-branch --branch main https://github.com/mne-tools/mne-python.git ../mne-python
-          python -m pip install -qe ../mne-python --group test
+          pushd ../mne-python
+          python -m pip install -qe . --group test
+          popd
           if [[ "${{ matrix.opengl }}" == "opengl" ]]; then
             PIP_OPTION="[opengl,tests]"
           else
