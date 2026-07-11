@@ -857,6 +857,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                 "slot": [self._toggle_scalebars],
                 "description": ["Toggle Scalebars"],
             },
+            "0": {
+                "qt_key": Qt.Key_0,
+                "slot": [self._toggle_zero_line],
+                "description": ["Toggle Zero Line"],
+            },
             "w": {
                 "qt_key": Qt.Key_W,
                 "slot": [self._toggle_whitening],
@@ -975,6 +980,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
     def _toggle_scalebars(self):
         self.mne.scalebars_visible = not self.mne.scalebars_visible
         self._set_scalebars_visible(self.mne.scalebars_visible)
+
+    def _toggle_zero_line(self):
+        self.mne.zero_line_visible = not getattr(self.mne, "zero_line_visible", False)
+        for trace in self.mne.traces:
+            trace.zero_line.setVisible(self.mne.zero_line_visible)
 
     def _overview_mode_changed(self, new_mode):
         self.mne.overview_mode = new_mode
@@ -1551,11 +1561,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
             self.mne.times = self.mne.global_times[start:stop]
             self.mne.data = self.mne.global_data[:, start:stop]
 
-            # remove DC locally
+            # remove DC locally but keep track of the offset
             if self.mne.remove_dc:
-                self.mne.data = self.mne.data - np.nanmean(
-                    self.mne.data, axis=1, keepdims=True
-                )
+                dc_offset = np.nanmean(self.mne.data, axis=1, keepdims=True)
+                self.mne.zero_line_offset = -dc_offset[:, 0]
+                self.mne.data = self.mne.data - dc_offset
+            else:
+                self.mne.zero_line_offset = None
         else:
             # While data is not precomputed get data only from shown range and process
             # only those
