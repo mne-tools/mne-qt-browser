@@ -1561,11 +1561,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
             self.mne.times = self.mne.global_times[start:stop]
             self.mne.data = self.mne.global_data[:, start:stop]
 
-            # remove DC locally
+            # remove DC locally but keep track of the offset
             if self.mne.remove_dc:
-                self.mne.data = self.mne.data - np.nanmean(
-                    self.mne.data, axis=1, keepdims=True
-                )
+                dc_offset = np.nanmean(self.mne.data, axis=1, keepdims=True)
+                self.mne.zero_line_offset = -dc_offset[:, 0]
+                self.mne.data = self.mne.data - dc_offset
+            else:
+                self.mne.zero_line_offset = None
         else:
             # While data is not precomputed get data only from shown range and process
             # only those
@@ -1907,8 +1909,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
 
     def _toggle_dc(self):
         self.mne.remove_dc = not self.mne.remove_dc
-        for trace in self.mne.traces:
-            trace.update_zero_line_style()
         self._redraw()
 
     def _set_events_visible(self, visible):
