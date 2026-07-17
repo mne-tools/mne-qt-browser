@@ -6,6 +6,7 @@ import os
 import warnings
 import weakref
 
+import numpy as np
 from mne.io.pick import _DATA_CH_TYPES_ORDER_DEFAULT
 from qtpy.QtCore import QPoint, Qt
 from qtpy.QtGui import QFont, QGuiApplication
@@ -79,10 +80,11 @@ def _safe_splash(meth):
     return func
 
 
-def _screen_geometry(widget):
+def _screen(widget):
+    """Get the screen the widget is (mostly) displayed on."""
     try:
         # Qt 5.14+
-        return widget.screen().geometry()
+        return widget.screen()
     except AttributeError:
         # Top center of the widget
         screen = QGuiApplication.screenAt(
@@ -90,9 +92,19 @@ def _screen_geometry(widget):
         )
         if screen is None:
             screen = QGuiApplication.primaryScreen()
-        geometry = screen.geometry()
 
-        return geometry
+        return screen
+
+
+def _screen_geometry(widget):
+    return _screen(widget).geometry()
+
+
+def _unique_ordered_ch_types(mne):
+    """Get the unique channel types in displayed order."""
+    ordered_types = mne.ch_types[mne.ch_order]
+    unique_type_idxs = np.unique(ordered_types, return_index=True)[1]
+    return [ordered_types[idx] for idx in sorted(unique_type_idxs)]
 
 
 def _set_window_flags(widget):

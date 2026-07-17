@@ -175,8 +175,8 @@ class AnnotationDock(QDockWidget):
         # Update related widgets
         self.weakmain()._setup_annotation_colors()
         self._update_regions_colors()
-        self._update_description_cmbx()
         self.mne.current_description = new_des
+        self._update_description_cmbx()
         self.mne.overview_bar.update_annotations()
 
     def _edit_description_selected(self, new_des):
@@ -233,11 +233,6 @@ class AnnotationDock(QDockWidget):
             # Remove from color mapping
             if rm_description in self.mne.annotation_segment_colors:
                 self.mne.annotation_segment_colors.pop(rm_description)
-
-            # Set first description in combobox to current description
-            if self.description_cmbx.count() > 0:
-                self.description_cmbx.setCurrentIndex(0)
-                self.mne.current_description = self.description_cmbx.currentText()
 
     def _remove_description_dlg(self):
         rm_description = self.description_cmbx.currentText()
@@ -387,11 +382,20 @@ class AnnotationDock(QDockWidget):
             self.stop_bx.setValue(rgn[1])
 
     def _update_description_cmbx(self):
-        self.description_cmbx.clear()
-        descriptions = self.weakmain()._get_annotation_labels()
-        for description in descriptions:
-            self._add_description_to_cmbx(description)
-        self.description_cmbx.setCurrentText(self.mne.current_description)
+        # Rebuilding emits currentIndexChanged (-1 on clear, 0 on the first
+        # addItem), which would clobber mne.current_description through
+        # _description_changed, so block signals and restore the selection
+        # explicitly afterwards
+        with QSignalBlocker(self.description_cmbx):
+            self.description_cmbx.clear()
+            descriptions = self.weakmain()._get_annotation_labels()
+            for description in descriptions:
+                self._add_description_to_cmbx(description)
+            self.description_cmbx.setCurrentText(self.mne.current_description)
+        if self.description_cmbx.count() > 0:
+            # Sync mne.current_description (it may no longer exist, in which
+            # case the combobox settled on the first item) and region z-values
+            self._description_changed(self.description_cmbx.currentIndex())
 
     def _update_regions_colors(self):
         for region in self.mne.regions:
@@ -1280,8 +1284,10 @@ class TimeScrollBar(BaseScrollBar):
             self.setPageStep(self.mne.n_epochs)
             self.setMaximum(len(self.mne.inst) - self.mne.n_epochs)
         else:
-            self.setPageStep(int(self.mne.duration))
             self.step_factor = self.mne.scroll_sensitivity / self.mne.duration
+            # One page (the visible duration) in scrollbar units, so that the
+            # slider length matches the visible fraction of the recording
+            self.setPageStep(int(self.mne.duration * self.step_factor))
             self.setMaximum(int((self.mne.xmax - self.mne.duration) * self.step_factor))
 
     def _update_scroll_sensitivity(self):

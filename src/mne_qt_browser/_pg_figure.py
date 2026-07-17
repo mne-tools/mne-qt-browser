@@ -94,6 +94,7 @@ from mne_qt_browser._utils import (
     _safe_splash,
     _screen_geometry,
     _set_window_flags,
+    _unique_ordered_ch_types,
     qsettings_params,
 )
 from mne_qt_browser._widgets import (
@@ -946,13 +947,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         The scene handles showing them in when in view range.
         """
         self.mne.scalebars.clear()
-        # To keep order (np.unique sorts)
-        ordered_types = self.mne.ch_types[self.mne.ch_order]
-        unique_type_idxs = np.unique(ordered_types, return_index=True)[1]
-        ch_types_ordered = [ordered_types[idx] for idx in sorted(unique_type_idxs)]
         for ch_type in [
             ct
-            for ct in ch_types_ordered
+            for ct in _unique_ordered_ch_types(self.mne)
             if ct != "stim"
             and ct in self.mne.scalings
             and ct in getattr(self.mne, "units", {})
@@ -1754,7 +1751,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
 
     def _get_onset_idx(self, plot_onset):
         onset = _sync_onset(self.mne.inst, plot_onset, inverse=True)
-        idx = np.where(self.mne.inst.annotations.onset == onset)[0][0]
+        # Exact float equality can fail after round-trips through _sync_onset,
+        # so take the closest onset as long as it's within half a sample
+        dist = np.abs(self.mne.inst.annotations.onset - onset)
+        idx = int(np.argmin(dist))
+        assert dist[idx] < 0.5 / self.mne.info["sfreq"], (dist[idx], onset)
         return idx
 
     def _region_changed(self, region):
@@ -2186,7 +2187,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         kind="press",
         modifier=None,
     ):
-        add_points = add_points or list()
+        # Copy so the transformations below don't mutate the caller's list
+        add_points = list(add_points) if add_points is not None else list()
         # Wait until window is fully shown
         QTest.qWaitForWindowExposed(self)
         # Scene dimensions still seem to change to final state when waiting for a short
@@ -2508,13 +2510,11 @@ def _setup_ipython(ipython=None):
 
 def _init_browser(**kwargs):
     _setup_ipython()
-    # Don't enable experimental on PySide6 6.10+ and pyqtgraph<0.13.7 as it segfaults
-    if check_version("pyqtgraph", "0.13.7") or (
+    # Experimental mode is needed for fast code paths on pyqtgraph < 0.13.7,
+    # but on PySide6 6.10+ the combination segfaults
+    if not check_version("pyqtgraph", "0.13.7") and not (
         API_NAME == "PySide6" and check_version("PySide6", "6.10.0")
     ):
-        pass
-    else:
-        # Needed for fast code paths
         setConfigOption("enableExperimental", True)
     app_kwargs = dict()
     if kwargs.get("splash", False):

@@ -14,7 +14,6 @@ from qtpy.QtCore import QSignalBlocker, Qt
 from qtpy.QtGui import QPainter, QPainterPath
 from qtpy.QtWidgets import (
     QAbstractSpinBox,
-    QApplication,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -45,8 +44,10 @@ from mne_qt_browser._utils import (
     _get_channel_scaling,
     _methpartial,
     _q_font,
+    _screen,
     _screen_geometry,
     _set_window_flags,
+    _unique_ordered_ch_types,
 )
 
 
@@ -233,12 +234,10 @@ class SettingsDialog(_BaseDialog):
         layout.addItem(QSpacerItem(10, 10, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
         # Get all unique channel types
-        ordered_types = self.mne.ch_types[self.mne.ch_order]
-        unique_type_idxs = np.unique(ordered_types, return_index=True)[1]
         ch_types_ordered = [
-            ordered_types[idx]
-            for idx in sorted(unique_type_idxs)
-            if ordered_types[idx] in self.mne.unit_scalings
+            ct
+            for ct in _unique_ordered_ch_types(self.mne)
+            if ct in self.mne.unit_scalings
         ]
 
         # Grid layout for channel spinboxes and settings
@@ -395,9 +394,9 @@ class SettingsDialog(_BaseDialog):
         self.weakmain()._toggle_antialiasing()
 
     def _update_monitor(self, *args, dim="height"):
-        dpr = QApplication.primaryScreen().devicePixelRatio()
-        px_height = QApplication.primaryScreen().size().height()
-        px_width = QApplication.primaryScreen().size().width()
+        screen = _screen(self)
+        px_height = screen.size().height()
+        px_width = screen.size().width()
         if dim == "height":
             new_ht_val = self.mon_height_spinbox.value()
 
@@ -406,7 +405,7 @@ class SettingsDialog(_BaseDialog):
             mon_height_inch = _convert_physical_units(
                 new_ht_val, from_unit=mon_units, to_unit="inch"
             )
-            dpi = px_height / mon_height_inch  # / dpr
+            dpi = px_height / mon_height_inch
 
             # Find new width of monitor
             with QSignalBlocker(self.mon_width_spinbox):
@@ -426,7 +425,7 @@ class SettingsDialog(_BaseDialog):
             mon_width_inch = _convert_physical_units(
                 new_wd_value, from_unit=mon_units, to_unit="inch"
             )
-            dpi = px_width / mon_width_inch  # / dpr
+            dpi = px_width / mon_width_inch
 
             # Find new height of monitor
             with QSignalBlocker(self.mon_height_spinbox):
@@ -462,6 +461,7 @@ class SettingsDialog(_BaseDialog):
             new_value = self.dpi_spinbox.value()
             self.mne.dpi = new_value
             mon_units = self.current_monitor_units
+            dpr = screen.devicePixelRatio()
 
             with QSignalBlocker(self.mon_height_spinbox):
                 mon_height_inch = (px_height / dpr) / new_value
@@ -489,8 +489,9 @@ class SettingsDialog(_BaseDialog):
         mon_units = self.mon_units_cmbx.currentText()
 
         # Get the screen size
-        height_mm = QApplication.primaryScreen().physicalSize().height()
-        width_mm = QApplication.primaryScreen().physicalSize().width()
+        screen = _screen(self)
+        height_mm = screen.physicalSize().height()
+        width_mm = screen.physicalSize().width()
 
         height_mon_units = _convert_physical_units(
             height_mm, from_unit="mm", to_unit=mon_units
@@ -499,7 +500,7 @@ class SettingsDialog(_BaseDialog):
             width_mm, from_unit="mm", to_unit=mon_units
         )
 
-        self.mne.dpi = QApplication.primaryScreen().physicalDotsPerInch()
+        self.mne.dpi = screen.physicalDotsPerInch()
 
         # Set the spinbox values as such
         self.mon_height_spinbox.setValue(height_mon_units)
@@ -559,22 +560,19 @@ class SettingsDialog(_BaseDialog):
 
             elif source == "unit_change":
                 new_unit = new_value.split()[-1]
-                ch_types = self.ch_scaling_spinboxes.keys()
-                for ch_type in ch_types:
-                    with QSignalBlocker(self.ch_sensitivity_spinboxes[ch_type]):
-                        self.ch_sensitivity_spinboxes[ch_type].setValue(
-                            _calc_chan_type_to_physical(self, ch_type, units=new_unit)
+                for this_type in self.ch_scaling_spinboxes:
+                    with QSignalBlocker(self.ch_sensitivity_spinboxes[this_type]):
+                        self.ch_sensitivity_spinboxes[this_type].setValue(
+                            _calc_chan_type_to_physical(self, this_type, units=new_unit)
                         )
 
             else:
                 raise ValueError(
-                    f"Unknown source: {source}. "
-                    f"Must be scaling or sensitivity. if specifying a new value"
+                    f"Unknown source: {repr(source)}; when passing a new value it "
+                    'must be "scaling", "sensitivity", or "unit_change"'
                 )
 
-            self.mne.scalebar_texts[ch_type].update_value()
             self.weakmain()._redraw()
-            # self.weakmain().scale_all(step=1, update_spinboxes=False)
 
         else:
             # Update all spinboxes
@@ -676,7 +674,6 @@ class ProjDialog(_BaseDialog):
     """A dialog to toggle projections."""
 
     def __init__(self, main, *, name):
-        self.external_change = True
         # Create projection layout
         super().__init__(main.window(), name=name, title="Projectors")
 
