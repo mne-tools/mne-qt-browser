@@ -1567,8 +1567,15 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                 # data will be loaded into a copy of self.mne.inst._data to apply
                 # processing.
                 expected_ram = disk_space * fmt_multipliers[fmt] * 2
-            else:
+            elif self.mne.inst.preload:
                 expected_ram = self.mne.inst._data.nbytes
+            else:
+                # No file and not preloaded (e.g., epochs constructed from a
+                # non-preloaded raw): estimate the float64 size once loaded
+                n_samples = len(self.mne.inst)
+                if self.mne.is_epochs:
+                    n_samples *= len(self.mne.inst.times)
+                expected_ram = 8 * n_samples * len(self.mne.inst.ch_names)
 
             # Get available RAM
             free_ram = psutil.virtual_memory().free
