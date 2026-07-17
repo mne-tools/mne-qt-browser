@@ -8,6 +8,7 @@ import inspect
 import math
 import platform
 import sys
+import warnings
 import weakref
 from ast import literal_eval
 from os.path import getsize
@@ -1453,6 +1454,14 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
 
     def _precompute_finished(self):
         self.statusBar().showMessage("Loading Finished", 5)
+        if not all(hasattr(self.mne, st) for st in ("global_data", "global_times")):
+            # Stale signal: QThread.isRunning() goes False as soon as run()
+            # returns, i.e. before its queued loadingFinished is delivered, so
+            # _rerun_precompute() can see an idle thread and let
+            # _init_precompute() drop the data before we get here. The restarted
+            # load thread will emit loadingFinished again, so just ignore this
+            # one (and leave _rerun_load_thread for that later emission).
+            return
         self.mne.data_precomputed = True
 
         if self.mne.overview_mode == "zscore":
@@ -1563,7 +1572,15 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
 
             # remove DC locally but keep track of the offset
             if self.mne.remove_dc:
-                dc_offset = np.nanmean(self.mne.data, axis=1, keepdims=True)
+                with warnings.catch_warnings():
+                    # All-NaN channels are supported (they are drawn blank), and
+                    # nanmean warns "Mean of empty slice" for them, which is
+                    # expected here. This runs in a queued slot, so callers have
+                    # no way to filter it themselves.
+                    warnings.filterwarnings(
+                        "ignore", "Mean of empty slice", RuntimeWarning
+                    )
+                    dc_offset = np.nanmean(self.mne.data, axis=1, keepdims=True)
                 self.mne.zero_line_offset = -dc_offset[:, 0]
                 self.mne.data = self.mne.data - dc_offset
             else:
