@@ -24,7 +24,7 @@ from qtpy.QtGui import QTransform
 from qtpy.QtWidgets import QGraphicsLineItem
 
 from mne_qt_browser._colors import _get_color
-from mne_qt_browser._utils import _get_channel_scaling, _methpartial, _q_font
+from mne_qt_browser._utils import _get_channel_scaling, _q_font
 
 _vline_color = (0, 191, 0)
 
@@ -950,4 +950,4 @@ class VLineLabel(InfLineLabel):
         self.updatePosition()
 
     def hoverEvent(self, ev):
-        _methpartial(self.line.hoverEvent)(ev)
+        self.line.hoverEvent(ev)

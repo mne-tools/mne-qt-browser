@@ -5,7 +5,6 @@
 
 import inspect
 import platform
-import sys
 import warnings
 import weakref
 from ast import literal_eval
@@ -111,6 +110,12 @@ from mne_qt_browser._widgets import (
 name = "pyqtgraph"  # Backend name, used by MNE-Python
 
 
+def _qsettings():
+    """Get the persistent settings for this application."""
+    # The tests monkeypatch the module-level QSettings name, so keep using it
+    return QSettings("mne-tools", "mne-qt-browser")
+
+
 class LoadThread(QThread):
     """A worker object for precomputing in a separate QThread."""
 
@@ -122,6 +127,11 @@ class LoadThread(QThread):
         super().__init__()
         self.weakbrowser = weakref.ref(browser)
         self.mne = browser.mne
+        # Split data loading into chunks to show the user progress. Testing
+        # showed that e.g. n_chunks=100 extends loading time (at least for the
+        # sample dataset) because of the frequent gui-update-calls.
+        # Thus n_chunks = 10 should suffice.
+        self.n_chunks = min(10, len(self.mne.inst))
         # Set on the GUI thread before start() (screen access is not
         # thread-safe, so run() must not query it itself)
         self.max_pixel_width = None
@@ -131,11 +141,6 @@ class LoadThread(QThread):
 
     def run(self):
         """Load and process data in a separate QThread."""
-        # Split data loading into 10 chunks to show user progress.
-        # Testing showed that e.g. n_chunks=100 extends loading time
-        # (at least for the sample dataset)
-        # because of the frequent gui-update-calls.
-        # Thus n_chunks = 10 should suffice.
         if self.mne.is_epochs:
             times = (
                 np.arange(len(self.mne.inst) * len(self.mne.inst.times))
@@ -143,7 +148,7 @@ class LoadThread(QThread):
             )
         else:
             times = None
-        n_chunks = min(10, len(self.mne.inst))
+        n_chunks = self.n_chunks
         chunk_size = len(self.mne.inst) // n_chunks
         browser = self.weakbrowser()
         if browser is None:
@@ -340,9 +345,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         # Load from QSettings if available
         for qparam in qsettings_params:
             default = qsettings_params[qparam]
-            qvalue = QSettings("mne-tools", "mne-qt-browser").value(
-                qparam, defaultValue=default
-            )
+            qvalue = _qsettings().value(qparam, defaultValue=default)
             # QSettings may alter types depending on OS
             if not isinstance(qvalue, type(default)):
                 try:
@@ -390,8 +393,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         self.statusBar().addWidget(self.mne.load_prog_label)
         self.mne.load_prog_label.hide()
         self.mne.load_progressbar = QProgressBar()
-        # Set to n_chunks of LoadRunner
-        self.mne.load_progressbar.setMaximum(10)
+        # Maximum is set to LoadThread.n_chunks in _init_precompute
         self.statusBar().addWidget(self.mne.load_progressbar, stretch=1)
         self.mne.load_progressbar.hide()
 
@@ -688,7 +690,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                 _methpartial(self._overview_radio_clicked, menu=menu, new_mode=key)
             )
         menu.addSeparator()
-        visible = QAction("Visible", parent=menu)
+        visible = self.mne.overview_visible_action = QAction("Visible", parent=menu)
         menu.addAction(visible)
         visible.setCheckable(True)
         visible.setChecked(self.mne.overview_visible)
@@ -929,7 +931,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
 
     def _save_setting(self, key, value):
         """Save a setting to QSettings."""
-        QSettings("mne-tools", "mne-qt-browser").setValue(key, value)
+        _qsettings().setValue(key, value)
 
     def _hidpi_mkPen(self, *args, **kwargs):
         kwargs["width"] = self._pixel_ratio * kwargs.get("width", 1.0)
@@ -1521,6 +1523,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
 
         if self.mne.enable_precompute:
             # Start precompute thread
+            self.mne.load_progressbar.setMaximum(self.load_thread.n_chunks)
             self.mne.load_progressbar.show()
             self.mne.load_prog_label.show()
             screen_geometry = _screen_geometry(self)
@@ -1565,7 +1568,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                 # processing.
                 expected_ram = disk_space * fmt_multipliers[fmt] * 2
             else:
-                expected_ram = sys.getsizeof(self.mne.inst._data)
+                expected_ram = self.mne.inst._data.nbytes
 
             # Get available RAM
             free_ram = psutil.virtual_memory().free
@@ -1860,8 +1863,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         if toggle_all:
             on = self.mne.projs_on
             applied = self.mne.projs_active
-            value = False if all(on) else True
-            new_state = np.full_like(on, value)
+            new_state = np.full_like(on, not all(on))
             # Always activate applied projections
             new_state[applied] = True
             self.mne.projs_on = new_state
@@ -1999,10 +2001,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
 
     def _toggle_overview_bar(self):
         visible = not self.mne.overview_bar.isVisible()
-        for item in self.mne.overview_menu.actions():
-            if item.text() == "Visible":
-                item.setChecked(visible)
-                break
+        self.mne.overview_visible_action.setChecked(visible)
         self.mne.overview_bar.setVisible(visible)
         self.mne.overview_visible = visible
         self._save_setting("overview_visible", visible)
@@ -2096,14 +2095,14 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
     def keyPressEvent(self, event):
         """Customize key press events."""
         # On macOS additionally KeypadModifier is set when arrow keys are pressed
-        mods = event.modifiers()
+        event_mods = event.modifiers()
         try:
-            mods = int(mods)  # PyQt < 5.13
+            event_mods = int(event_mods)  # PyQt < 5.13
         except Exception:
             pass
         modifiers = {
-            "Shift": bool(Qt.ShiftModifier & mods),
-            "Ctrl": bool(Qt.ControlModifier & mods),
+            "Shift": bool(Qt.ShiftModifier & event_mods),
+            "Ctrl": bool(Qt.ControlModifier & event_mods),
         }
         for key_name in self.mne.keyboard_shortcuts:
             key_dict = self.mne.keyboard_shortcuts[key_name]
@@ -2111,12 +2110,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                 mod_idx = 0
                 # Get modifier
                 if "modifier" in key_dict:
-                    mods = [modifiers[mod] for mod in modifiers]
-                    if any(mods):
+                    pressed = [mod for mod in modifiers if modifiers[mod]]
+                    if pressed:
                         # No multiple modifiers supported yet
-                        mod = [mod for mod in modifiers if modifiers[mod]][0]
-                        if mod in key_dict["modifier"]:
-                            mod_idx = key_dict["modifier"].index(mod)
+                        if pressed[0] in key_dict["modifier"]:
+                            mod_idx = key_dict["modifier"].index(pressed[0])
 
                 slot_idx = mod_idx if mod_idx < len(key_dict["slot"]) else 0
                 slot = key_dict["slot"][slot_idx]
@@ -2132,6 +2130,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                     slot()
 
                 break
+        else:
+            # Let Qt handle keys we don't (e.g., for ambient shortcuts)
+            super().keyPressEvent(event)
 
     def _draw_traces(self):
         # Update data in traces (=drawing traces)
@@ -2374,6 +2375,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                 "ax_vscroll",
                 "overview_bar",
                 "overview_menu",
+                "overview_visible_action",
                 "crosshair_action",
                 "load_progressbar",
                 "load_prog_label",
