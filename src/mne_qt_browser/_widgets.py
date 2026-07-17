@@ -490,7 +490,7 @@ class ChannelAxis(AxisItem):
             ixs.sort()
             tick_strings = np.array(DATA_CH_TYPES_ORDER)[ixs]
         else:
-            # Get channel names and by substracting 1 from tick values since the first
+            # Get channel names by subtracting 1 from tick values since the first
             # channel starts at y=1
             tick_strings = self.mne.ch_names[self.mne.ch_order[[v - 1 for v in values]]]
 
@@ -1023,7 +1023,7 @@ class OverviewBar(QGraphicsView):
         # This temporarily circumvents a bug, which only appears on Windows and when
         # pyqt>=5.14.2 is installed from conda-forge. It leads to receiving
         # mouseMoveEvents all the time when the Mouse is moved through the OverviewBar,
-        # even when now MouseBUtton is pressed. Dragging the mouse on OverviewBar is
+        # even when no MouseButton is pressed. Dragging the mouse on OverviewBar is
         # then not possible anymore.
         if not platform.system() == "Windows":
             self._set_range_from_pos(event.pos())
