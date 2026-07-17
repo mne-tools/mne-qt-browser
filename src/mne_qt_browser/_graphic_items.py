@@ -675,7 +675,7 @@ class DataTrace(PlotCurveItem):
             # Update overview bar
             self.mne.overview_bar.update_bad_epochs()
 
-            # Update other traces inlcuding self
+            # Update other traces including self
             for trace in self.mne.traces:
                 trace.update_color()
                 # Update data is necessary because colored segments will vary
