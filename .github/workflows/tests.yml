@@ -79,7 +79,7 @@ jobs:
           python -m pip install -ve .${PIP_OPTION} PySide6
           if [[ "${{ matrix.pip }}" == "pre" ]]; then
             echo "Upgrading to pre-release NumPy, SciPy, matplotlib, and pyqtgraph"
-            python -m pip install --upgrade --pre --only-binary ":all:" --default-timeout=60 --extra-index-url "https://pypi.anaconda.org/scientific-python-nightly-wheels/simple" "numpy>=2.6.0.dev0" "scipy>=1.19.0.dev0" "matplotlib>=3.12.0.dev0" "scikit-learn>=1.10.dev0" "git+https://github.com/pyqtgraph/pyqtgraph.git"
+            python -m pip install --upgrade --pre --only-binary ":all:" --default-timeout=60 --extra-index-url "https://pypi.anaconda.org/scientific-python-nightly-wheels/simple" "numpy>=2.6.0.dev0" "scipy>=1.19.0.dev0" "matplotlib>=3.12.0.dev0" "git+https://github.com/pyqtgraph/pyqtgraph.git"
           fi
       - run: ./tools/get_testing_version.sh
         working-directory: ../mne-python

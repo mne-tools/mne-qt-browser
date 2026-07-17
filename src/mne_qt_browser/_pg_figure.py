@@ -3,11 +3,10 @@
 
 """Base classes and functions for 2D browser backends."""
 
-import gc
 import inspect
-import math
 import platform
 import sys
+import warnings
 import weakref
 from ast import literal_eval
 from os.path import getsize
@@ -123,6 +122,9 @@ class LoadThread(QThread):
         super().__init__()
         self.weakbrowser = weakref.ref(browser)
         self.mne = browser.mne
+        # Set on the GUI thread before start() (screen access is not
+        # thread-safe, so run() must not query it itself)
+        self.max_pixel_width = None
         self.loadProgress.connect(self.mne.load_progressbar.setValue)
         self.processText.connect(_methpartial(browser._show_process))
         self.loadingFinished.connect(_methpartial(browser._precompute_finished))
@@ -134,7 +136,6 @@ class LoadThread(QThread):
         # (at least for the sample dataset)
         # because of the frequent gui-update-calls.
         # Thus n_chunks = 10 should suffice.
-        data = None
         if self.mne.is_epochs:
             times = (
                 np.arange(len(self.mne.inst) * len(self.mne.inst.times))
@@ -145,7 +146,14 @@ class LoadThread(QThread):
         n_chunks = min(10, len(self.mne.inst))
         chunk_size = len(self.mne.inst) // n_chunks
         browser = self.weakbrowser()
+        if browser is None:
+            return
+        data_chunks = list()
+        times_chunks = list()
         for n in range(n_chunks):
+            # The browser requests interruption when it closes mid-load
+            if self.isInterruptionRequested():
+                return
             start = n * chunk_size
             if n == n_chunks - 1:
                 # Get last chunk which may be larger due to rounding above
@@ -159,48 +167,62 @@ class LoadThread(QThread):
                     kwargs["copy"] = False
                 item = slice(start, stop)
                 with self.mne.inst.info._unlock():
-                    data_chunk = np.concatenate(
-                        self.mne.inst.get_data(item=item, **kwargs), axis=-1
+                    data_chunks.append(
+                        np.concatenate(
+                            self.mne.inst.get_data(item=item, **kwargs), axis=-1
+                        )
                     )
             # Load raw
             else:
                 data_chunk, times_chunk = browser._load_data(start, stop)
-                if times is None:
-                    times = times_chunk
-                else:
-                    times = np.concatenate((times, times_chunk), axis=0)
-
-            if data is None:
-                data = data_chunk
-            else:
-                data = np.concatenate((data, data_chunk), axis=1)
+                data_chunks.append(data_chunk)
+                times_chunks.append(times_chunk)
 
             self.loadProgress.emit(n + 1)
 
+        # Concatenate once at the end: concatenating every chunk onto a growing
+        # array instead would re-copy all previously loaded data on each chunk
+        if len(data_chunks) == 1:
+            data = data_chunks[0]
+        else:
+            data = np.concatenate(data_chunks, axis=1)
+        if times is None:
+            times = np.concatenate(times_chunks, axis=0)
+        del data_chunks, times_chunks
+
+        if self.isInterruptionRequested():
+            return
         picks = self.mne.ch_order
-        # Deactive remove dc because it will be removed for visible range
+        # Deactivate remove_dc because DC is removed for the visible range instead
         stashed_remove_dc = self.mne.remove_dc
         self.mne.remove_dc = False
         data = browser._process_data(data, 0, data.shape[-1], picks, self)
-        self.mne.remove_dc = stashed_remove_dc
+        # The GUI thread may have toggled remove_dc while we were processing;
+        # only restore the stashed value if it did not (so we never clobber a
+        # user toggle)
+        if self.mne.remove_dc is False:
+            self.mne.remove_dc = stashed_remove_dc
 
         ch_type_ordered = self.mne.ch_types[self.mne.ch_order]
         for chii in range(data.shape[0]):
             ch_type = ch_type_ordered[chii]
             data[chii, :] *= self.mne.scalings[ch_type]
 
+        if self.isInterruptionRequested():
+            return
         self.mne.global_data = data
         self.mne.global_times = times
 
         # Calculate Z-Scores
         self.processText.emit("Calculating Z-Scores...")
-        browser._get_zscore(data)
+        browser._get_zscore(data, max_pixel_width=self.max_pixel_width)
         del browser
 
         self.loadingFinished.emit()
 
     def clean(self):  # noqa: D102
         if self.isRunning():
+            self.requestInterruption()  # run() checks this between chunks
             wait_time = 10  # max. waiting time in seconds
             logger.info(
                 f"Waiting for Loading-Thread to finish... (max. {wait_time} sec)"
@@ -857,6 +879,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                 "slot": [self._toggle_scalebars],
                 "description": ["Toggle Scalebars"],
             },
+            "0": {
+                "qt_key": Qt.Key_0,
+                "slot": [self._toggle_zero_line],
+                "description": ["Toggle Zero Line"],
+            },
             "w": {
                 "qt_key": Qt.Key_W,
                 "slot": [self._toggle_whitening],
@@ -975,6 +1002,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
     def _toggle_scalebars(self):
         self.mne.scalebars_visible = not self.mne.scalebars_visible
         self._set_scalebars_visible(self.mne.scalebars_visible)
+
+    def _toggle_zero_line(self):
+        self.mne.zero_line_visible = not getattr(self.mne, "zero_line_visible", False)
+        for trace in self.mne.traces:
+            trace.zero_line.setVisible(self.mne.zero_line_visible)
 
     def _overview_mode_changed(self, new_mode):
         self.mne.overview_mode = new_mode
@@ -1443,6 +1475,14 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
 
     def _precompute_finished(self):
         self.statusBar().showMessage("Loading Finished", 5)
+        if not all(hasattr(self.mne, st) for st in ("global_data", "global_times")):
+            # Stale signal: QThread.isRunning() goes False as soon as run()
+            # returns, i.e. before its queued loadingFinished is delivered, so
+            # _rerun_precompute() can see an idle thread and let
+            # _init_precompute() drop the data before we get here. The restarted
+            # load thread will emit loadingFinished again, so just ignore this
+            # one (and leave _rerun_load_thread for that later emission).
+            return
         self.mne.data_precomputed = True
 
         if self.mne.overview_mode == "zscore":
@@ -1456,11 +1496,16 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
             self._redraw()
 
     def _init_precompute(self):
-        # Remove previously loaded data
+        # Remove previously loaded data. No gc.collect() is needed to release it
+        # before _check_space_for_precompute() reads the free RAM below:
+        # global_data is in no reference cycle, so refcounting frees it right
+        # here, and anything still referenced (self.mne.times is a view onto
+        # global_times) is live rather than garbage, so collecting would not
+        # free it either. gc.collect() walks the entire heap, which is costly
+        # wherever many browsers get built.
         self.mne.data_precomputed = False
         if all([hasattr(self.mne, st) for st in ["global_data", "global_times"]]):
             del self.mne.global_data, self.mne.global_times
-        gc.collect()
 
         if self.mne.precompute == "auto":
             self.mne.enable_precompute = self._check_space_for_precompute()
@@ -1471,6 +1516,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
             # Start precompute thread
             self.mne.load_progressbar.show()
             self.mne.load_prog_label.show()
+            screen_geometry = _screen_geometry(self)
+            self.load_thread.max_pixel_width = (
+                3840 if screen_geometry is None else screen_geometry.width()
+            )
             self.load_thread.start()
 
     def _rerun_precompute(self):
@@ -1551,11 +1600,21 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
             self.mne.times = self.mne.global_times[start:stop]
             self.mne.data = self.mne.global_data[:, start:stop]
 
-            # remove DC locally
+            # remove DC locally but keep track of the offset
             if self.mne.remove_dc:
-                self.mne.data = self.mne.data - np.nanmean(
-                    self.mne.data, axis=1, keepdims=True
-                )
+                with warnings.catch_warnings():
+                    # All-NaN channels are supported (they are drawn blank), and
+                    # nanmean warns "Mean of empty slice" for them, which is
+                    # expected here. This runs in a queued slot, so callers have
+                    # no way to filter it themselves.
+                    warnings.filterwarnings(
+                        "ignore", "Mean of empty slice", RuntimeWarning
+                    )
+                    dc_offset = np.nanmean(self.mne.data, axis=1, keepdims=True)
+                self.mne.zero_line_offset = -dc_offset[:, 0]
+                self.mne.data = self.mne.data - dc_offset
+            else:
+                self.mne.zero_line_offset = None
         else:
             # While data is not precomputed get data only from shown range and process
             # only those
@@ -1578,13 +1637,14 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         # Apply downsampling (if enabled)
         self._apply_downsampling()
 
-    def _get_zscore(self, data):
+    def _get_zscore(self, data, max_pixel_width=None):
         # Reshape data to reasonable size for display
-        screen_geometry = _screen_geometry(self)
-        if screen_geometry is None:
-            max_pixel_width = 3840  # default=UHD
-        else:
-            max_pixel_width = screen_geometry.width()
+        if max_pixel_width is None:
+            screen_geometry = _screen_geometry(self)
+            if screen_geometry is None:
+                max_pixel_width = 3840  # default=UHD
+            else:
+                max_pixel_width = screen_geometry.width()
         collapse_by = data.shape[1] // max_pixel_width
         data = data[:, : max_pixel_width * collapse_by]
         if collapse_by > 0:
@@ -1592,27 +1652,23 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
             data = data.mean(axis=2)
         z = zscore(data, axis=1)
         if z.size > 0:
-            zmin = np.min(z, axis=1)
-            zmax = np.max(z, axis=1)
+            zmin = np.min(z, axis=1, keepdims=True)
+            zmax = np.max(z, axis=1, keepdims=True)
 
-            # Convert into RGBA
-            zrgba = np.empty((*z.shape, 4))
-            for row_idx, row in enumerate(z):
-                for col_idx, value in enumerate(row):
-                    if math.isnan(value):
-                        value = 0
-                    if value == 0:
-                        rgba = [0, 0, 0, 0]
-                    elif value < 0:
-                        alpha = int(255 * value / abs(zmin[row_idx]))
-                        rgba = [0, 0, 255, alpha]
-                    else:
-                        alpha = int(255 * value / zmax[row_idx])
-                        rgba = [255, 0, 0, alpha]
-
-                    zrgba[row_idx, col_idx] = rgba
-
-            zrgba = np.require(zrgba, np.uint8, "C")
+            # Convert into RGBA: positive z-scores fade in red and negative
+            # ones in blue, both scaled to each channel's extremum; NaNs
+            # (e.g., all-NaN channels) and zeros are transparent
+            z = np.nan_to_num(z)
+            pos = z > 0
+            neg = z < 0
+            with np.errstate(divide="ignore", invalid="ignore"):
+                alpha_pos = 255 * z / zmax
+                alpha_neg = 255 * z / zmin
+            zrgba = np.zeros((*z.shape, 4), np.uint8)
+            zrgba[pos, 0] = 255
+            zrgba[pos, 3] = alpha_pos[pos]
+            zrgba[neg, 2] = 255
+            zrgba[neg, 3] = alpha_neg[neg]
 
             self.mne.zscore_rgba = zrgba
 
@@ -2097,7 +2153,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
 
         for exc in exceptions:
             raise RuntimeError(
-                f"There as been an {exc[0]} inside the Qt "
+                f"There has been an {exc[0]} inside the Qt "
                 f"event loop (look above for traceback)."
             )
 
@@ -2185,7 +2241,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
 
         for exc in exceptions:
             raise RuntimeError(
-                f"There as been an {exc[0]} inside the Qt "
+                f"There has been an {exc[0]} inside the Qt "
                 f"event loop (look above for traceback)."
             )
 
@@ -2249,6 +2305,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
     def closeEvent(self, event):
         """Customize close event."""
         event.accept()
+        # Stop the load thread before tearing down what it writes to
+        if getattr(self, "load_thread", None) is not None:
+            self.load_thread.clean()
+            self.load_thread = None
         if hasattr(self, "mne"):
             # Explicit disconnects to avoid reference cycles that GC can't properly
             # resolve
@@ -2259,25 +2319,16 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                 for action in self.mne.toolbar.actions():
                     allow_error = action.text() == ""
                     _disconnect(action.triggered, allow_error=allow_error)
+            if hasattr(self.mne, "view"):
+                _disconnect(self.mne.view.sigSceneMouseMoved, allow_error=True)
             # Save settings going into QSettings
             for qsetting in qsettings_params:
                 value = getattr(self.mne, qsetting)
                 self._save_setting(qsetting, value)
-            for attr in (
-                "keyboard_shortcuts",
-                "traces",
-                "plt",
-                "toolbar",
-                "fig_annotation",
-            ):
-                if hasattr(self.mne, attr):
-                    delattr(self.mne, attr)
             if hasattr(self.mne, "child_figs"):
                 for fig in self.mne.child_figs:
                     fig.close()
                 self.mne.child_figs.clear()
-            for attr in ("traces", "event_lines", "regions"):
-                getattr(self.mne, attr, []).clear()
             if getattr(self.mne, "vline", None) is not None:
                 if self.mne.is_epochs:
                     for vl in self.mne.vline:
@@ -2287,9 +2338,45 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                     _disconnect(
                         self.mne.vline.sigPositionChangeFinished, allow_error=True
                     )
-        if getattr(self, "load_thread", None) is not None:
-            self.load_thread.clean()
-            self.load_thread = None
+            # Drop every Qt object referenced from self.mne so that the whole
+            # Python-side scene graph is freed by refcounting right here, while
+            # the C++ side is still fully alive. Anything we leave in the
+            # mne <-> widget reference cycles instead becomes garbage that some
+            # later gc pass tears down in arbitrary order, which can segfault
+            # in the Qt bindings (gh-427).
+            for trace in getattr(self.mne, "traces", []):
+                # Break the epochs parent <-> child trace cycles
+                if getattr(trace, "child_traces", None):
+                    trace.child_traces.clear()
+            for attr in ("traces", "event_lines", "regions"):
+                getattr(self.mne, attr, []).clear()
+            for attr in (
+                "keyboard_shortcuts",
+                "traces",
+                "plt",
+                "toolbar",
+                "fig_annotation",
+                "time_axis",
+                "channel_axis",
+                "viewbox",
+                "view",
+                "ax_hscroll",
+                "ax_vscroll",
+                "overview_bar",
+                "overview_menu",
+                "crosshair_action",
+                "load_progressbar",
+                "load_prog_label",
+                "ds_status_label",
+                "vline",
+                "crosshair",
+                "scalebars",
+                "scalebar_texts",
+                "global_data",
+                "global_times",
+            ):
+                if hasattr(self.mne, attr):
+                    delattr(self.mne, attr)
 
         # Remove self from browser_instances in globals
         if self in _browser_instances:

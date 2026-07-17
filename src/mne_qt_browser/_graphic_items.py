@@ -423,6 +423,8 @@ class DataTrace(PlotCurveItem):
         self.ch_type = None
         # Color specifier (all possible Matplotlib color formats)
         self.color = None
+        # Horizontal reference line at this trace's zero (parent traces only)
+        self.zero_line = None
 
         # Attributes for epochs mode
 
@@ -447,12 +449,26 @@ class DataTrace(PlotCurveItem):
         # Add to main plot
         self.mne.plt.addItem(self)
 
+        # Only for parent traces
+        if self.parent_trace is None:
+            self.zero_line = InfiniteLine(
+                pos=self._true_zero_ypos(),
+                angle=0,
+                movable=False,
+                pen=self._zero_line_pen(),
+            )
+            self.zero_line.setZValue(0)
+            self.zero_line.setVisible(getattr(self.mne, "zero_line_visible", False))
+            self.mne.plt.addItem(self.zero_line)
+
     @propagate_to_children
     def remove(self):  # noqa: D102
         self.mne.plt.removeItem(self)
         # Only for parent trace
         if self.parent_trace is None:
             self.mne.traces.remove(self)
+            self.mne.plt.removeItem(self.zero_line)
+            self.zero_line.deleteLater()
         self.deleteLater()
 
     @propagate_to_children
@@ -522,6 +538,30 @@ class DataTrace(PlotCurveItem):
             self.ypos = self.mne.butterfly_type_order.index(self.ch_type) + 1
         else:
             self.ypos = self.range_idx + self.mne.ch_start + 1
+        self.update_zero_line_pos()
+
+    def _true_zero_ypos(self):
+        """Compute the y-position of this trace's true (DC-included) zero.
+
+        Even with DC removal enabled, the zero line should always mark where the
+        unmodified (non-mean-subtracted) signal would be zero, not the mean of the
+        currently visible window.
+        """
+        offset = getattr(self.mne, "zero_line_offset", None)
+        if offset is None:
+            return self.ypos
+        idx = self.order_idx if self.mne.data_precomputed else self.range_idx
+        return self.ypos + offset[idx] * self.transform().m22()
+
+    def update_zero_line_pos(self):
+        """Update the zero line's position, e.g. after data, scale or ypos changes."""
+        if self.zero_line is not None:
+            self.zero_line.setPos(self._true_zero_ypos())
+
+    def _zero_line_pen(self):
+        color = _get_color("k", self.mne.dark)
+        color.setAlpha(76)
+        return self.mne.mkPen(color, width=1, style=Qt.SolidLine)
 
     def _apply_transform(self):
         transform = QTransform()
@@ -536,6 +576,7 @@ class DataTrace(PlotCurveItem):
     @propagate_to_children
     def update_scale(self):  # noqa: D102
         self._apply_transform()
+        self.update_zero_line_pos()
 
         if self.mne.clipping is not None:
             self.update_data(propagate=False)
@@ -603,6 +644,7 @@ class DataTrace(PlotCurveItem):
         )
 
         self.setPos(0, self.ypos)
+        self.update_zero_line_pos()
 
     def toggle_bad(self, x=None):
         """Toggle bad status."""
@@ -633,7 +675,7 @@ class DataTrace(PlotCurveItem):
             # Update overview bar
             self.mne.overview_bar.update_bad_epochs()
 
-            # Update other traces inlcuding self
+            # Update other traces including self
             for trace in self.mne.traces:
                 trace.update_color()
                 # Update data is necessary because colored segments will vary

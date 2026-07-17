@@ -728,3 +728,29 @@ def test_color_conversion(rgb, lab):
     assert_allclose(our_lab, lab, atol=2e-2)
     rgb_2 = _lab_to_rgb(lab)
     assert_allclose(rgb, rgb_2, atol=2e-2)
+
+
+def test_zscore_rgba(raw_orig, pg_backend):
+    """Test the z-score overview RGBA mapping."""
+    fig = raw_orig.plot()
+    fig.test_mode = True
+    # One symmetric ramp channel and one all-NaN channel
+    data = np.array([np.linspace(-2, 2, 5), [np.nan] * 5])
+    fig._get_zscore(data, max_pixel_width=5)
+    zrgba = fig.mne.zscore_rgba
+    assert zrgba.dtype == np.uint8
+    assert zrgba.shape == (2, 5, 4)
+    # Negative z-scores fade to blue, positive to red, extrema fully opaque
+    expected = np.array(
+        [
+            [0, 0, 255, 255],
+            [0, 0, 255, 127],
+            [0, 0, 0, 0],
+            [255, 0, 0, 127],
+            [255, 0, 0, 255],
+        ],
+        dtype=np.uint8,
+    )
+    assert_allclose(zrgba[0], expected)
+    # NaN channels are fully transparent
+    assert_allclose(zrgba[1], 0)

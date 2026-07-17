@@ -8,6 +8,6 @@ try:
 except Exception:
     __version__ = "0.0.0"
 
-# Keep references to all created brower instances to prevent them from being
+# Keep references to all created browser instances to prevent them from being
 # garbage-collected prematurely
 _browser_instances = list()
