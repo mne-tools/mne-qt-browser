@@ -3,7 +3,6 @@
 
 """Base classes and functions for 2D browser backends."""
 
-import gc
 import inspect
 import math
 import platform
@@ -1475,11 +1474,16 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
             self._redraw()
 
     def _init_precompute(self):
-        # Remove previously loaded data
+        # Remove previously loaded data. No gc.collect() is needed to release it
+        # before _check_space_for_precompute() reads the free RAM below:
+        # global_data is in no reference cycle, so refcounting frees it right
+        # here, and anything still referenced (self.mne.times is a view onto
+        # global_times) is live rather than garbage, so collecting would not
+        # free it either. gc.collect() walks the entire heap, which is costly
+        # wherever many browsers get built.
         self.mne.data_precomputed = False
         if all([hasattr(self.mne, st) for st in ["global_data", "global_times"]]):
             del self.mne.global_data, self.mne.global_times
-        gc.collect()
 
         if self.mne.precompute == "auto":
             self.mne.enable_precompute = self._check_space_for_precompute()
