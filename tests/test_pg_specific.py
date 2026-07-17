@@ -754,3 +754,59 @@ def test_zscore_rgba(raw_orig, pg_backend):
     assert_allclose(zrgba[0], expected)
     # NaN channels are fully transparent
     assert_allclose(zrgba[1], 0)
+
+
+def test_qsettings_string_bools(raw_orig, pg_backend):
+    """Test that boolean settings round-trip through their string form."""
+    from mne_qt_browser import _pg_figure
+
+    # On some platforms QSettings returns booleans as "true"/"false" strings
+    qsettings = _pg_figure.QSettings()
+    qsettings.setValue("antialiasing", "false")
+    qsettings.setValue("overview_visible", "true")
+    qsettings.sync()
+    fig = raw_orig.plot()
+    assert fig.mne.antialiasing is False
+    assert fig.mne.overview_visible is True
+
+
+def test_message_box_reset(raw_orig, pg_backend):
+    """Test that message_box state does not leak into the next message."""
+    from qtpy.QtWidgets import QMessageBox
+
+    fig = raw_orig.plot()
+    fig.test_mode = True
+    fig.message_box(
+        "first",
+        info_text="details",
+        buttons=QMessageBox.Yes | QMessageBox.No,
+        icon=QMessageBox.Critical,
+    )
+    fig.message_box("second")
+    assert fig.msg_box.informativeText() == ""
+    assert fig.msg_box.standardButtons() == QMessageBox.Ok
+    assert fig.msg_box.icon() == QMessageBox.NoIcon
+
+
+def test_overview_bad_epochs_dropped(raw_orig, pg_backend):
+    """Test bad-epoch rect positions after resize when epochs were dropped."""
+    import mne
+
+    epochs = mne.make_fixed_length_epochs(
+        raw_orig.copy().crop(tmax=20.0), duration=2.0, preload=True
+    )
+    epochs.drop([0, 2])  # make selection non-contiguous
+    fig = epochs.plot()
+    fig.test_mode = True
+    epo_num = epochs.selection[-1]
+    fig.mne.bad_epochs.append(epo_num)
+    overview_bar = fig.mne.overview_bar
+    overview_bar.update_bad_epochs()
+    assert epo_num in overview_bar.bad_epoch_rect_dict
+    # Resizing must reposition the rect via the epoch index, not its number
+    fig.resize(fig.width() + 30, fig.height())
+    QTest.qWait(100)
+    rect = overview_bar.bad_epoch_rect_dict[epo_num].rect()
+    epo_idx = epochs.selection.tolist().index(epo_num)
+    expected_left = overview_bar._mapFromData(fig.mne.boundary_times[epo_idx], 0).x()
+    assert_allclose(rect.left(), expected_left)

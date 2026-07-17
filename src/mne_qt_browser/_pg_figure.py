@@ -349,7 +349,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                     qvalue = literal_eval(qvalue)
                 except (SyntaxError, ValueError):
                     if qvalue in ["true", "false"]:
-                        qvalue = bool(qvalue)
+                        qvalue = qvalue == "true"
                     else:
                         qvalue = default
             setattr(self.mne, qparam, qvalue)
@@ -1197,7 +1197,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                     epo_idx = np.clip(
                         np.searchsorted(self.mne.boundary_times, xt) - 1,
                         0,
-                        len(self.mne.inst),
+                        len(self.mne.inst) - 1,
                     )
                     bmin, bmax = self.mne.boundary_times[epo_idx : epo_idx + 2]
                     # Avoid off-by-one-error at bmax for VlineLabel
@@ -1240,7 +1240,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                     ]
                     if len(trace) == 1:
                         trace = trace[0]
-                        idx = np.searchsorted(self.mne.times, x)
+                        # The cursor can sit between the last sample and the
+                        # right edge of the view, where searchsorted returns
+                        # len(times)
+                        idx = min(
+                            np.searchsorted(self.mne.times, x),
+                            len(self.mne.times) - 1,
+                        )
                         if self.mne.data_precomputed:
                             data = self.mne.data[trace.order_idx]
                         else:
@@ -1338,13 +1344,14 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         # Update scalebars
         self._update_scalebar_y_positions()
 
-        off_traces = [tr for tr in self.mne.traces if tr.ch_idx not in self.mne.picks]
-        add_idxs = [
-            p for p in self.mne.picks if p not in [tr.ch_idx for tr in self.mne.traces]
-        ]
+        picks_set = set(self.mne.picks)
+        trace_idxs = {tr.ch_idx for tr in self.mne.traces}
+        off_traces = [tr for tr in self.mne.traces if tr.ch_idx not in picks_set]
+        add_idxs = [p for p in self.mne.picks if p not in trace_idxs]
 
         # Update range_idx for traces which just shifted in y-position
-        for trace in [tr for tr in self.mne.traces if tr not in off_traces]:
+        off_set = set(off_traces)
+        for trace in [tr for tr in self.mne.traces if tr not in off_set]:
             trace.update_range_idx()
 
         # Update number of traces
@@ -1858,9 +1865,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
             # Always activate applied projections
             new_state[applied] = True
             self.mne.projs_on = new_state
+        projector_before = self.mne.projector
         self._update_projector()
-        # If data was precomputed it needs to be precomputed again
-        self._rerun_precompute()
+        # If the projector changed, precomputed data needs to be precomputed
+        # again (this is also called on every bad-channel toggle, which only
+        # affects the projector when e.g. an average reference is present)
+        if not np.array_equal(projector_before, self.mne.projector):
+            self._rerun_precompute()
         self._redraw()
 
     def _toggle_proj_fig(self):
@@ -2066,14 +2077,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         modal=True,
     ):  # noqa: D102
         self.msg_box.setText(f'<font size="+2"><b>{text}</b></font>')
-        if info_text is not None:
-            self.msg_box.setInformativeText(info_text)
-        if buttons is not None:
-            self.msg_box.setStandardButtons(buttons)
+        # The single msg_box instance is reused for all messages, so reset
+        # everything a previous call may have set
+        self.msg_box.setInformativeText("" if info_text is None else info_text)
+        self.msg_box.setStandardButtons(QMessageBox.Ok if buttons is None else buttons)
         if default_button is not None:
             self.msg_box.setDefaultButton(default_button)
-        if icon is not None:
-            self.msg_box.setIcon(icon)
+        self.msg_box.setIcon(QMessageBox.NoIcon if icon is None else icon)
 
         # Allow interacting with message_box in test mode.
         # Set modal=False only if no return value is expected.

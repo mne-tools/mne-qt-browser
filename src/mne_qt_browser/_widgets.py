@@ -523,11 +523,8 @@ class ChannelAxis(AxisItem):
         """Customize mouse click events."""
         # Clean up channel texts
         if not self.mne.butterfly:
-            self.ch_texts = {
-                k: v
-                for k, v in self.ch_texts.items()
-                if k in [tr.ch_name for tr in self.mne.traces]
-            }
+            trace_names = {tr.ch_name for tr in self.mne.traces}
+            self.ch_texts = {k: v for k, v in self.ch_texts.items() if k in trace_names}
             # Get channel name from position of channel description
             ypos = event.scenePos().y()
             y_values = list(self.ch_texts.values())
@@ -858,6 +855,12 @@ class OverviewBar(QGraphicsView):
     def update_annotations(self):
         """Update representation of annotations."""
         annotations = self.mne.inst.annotations
+        # Map onsets to annotation indices once (this method runs on every
+        # horizontal scroll, so avoid a full scan per rect below); for
+        # duplicate onsets keep the first index as np.where(...)[0][0] would
+        onset_to_idx = dict()
+        for annot_idx, onset in enumerate(annotations.onset):
+            onset_to_idx.setdefault(onset, annot_idx)
         # Exclude non-visible annotations
         annot_set = set(
             [
@@ -874,7 +877,7 @@ class OverviewBar(QGraphicsView):
         # Add missing onsets
         for add_onset in add_onsets:
             plot_onset = _sync_onset(self.mne.inst, add_onset)
-            annot_idx = np.argwhere(self.mne.inst.annotations.onset == add_onset)[0][0]
+            annot_idx = onset_to_idx[add_onset]
             duration = annotations.duration[annot_idx]
             description = annotations.description[annot_idx]
             color_name = self.mne.annotation_segment_colors[description]
@@ -903,7 +906,7 @@ class OverviewBar(QGraphicsView):
         # Changes
         for edit_onset in self.annotations_rect_dict:
             plot_onset = _sync_onset(self.mne.inst, edit_onset)
-            annot_idx = np.where(annotations.onset == edit_onset)[0][0]
+            annot_idx = onset_to_idx[edit_onset]
             duration = annotations.duration[annot_idx]
             rect_duration = self.annotations_rect_dict[edit_onset]["duration"]
             rect = self.annotations_rect_dict[edit_onset]["rect"]
@@ -1070,8 +1073,11 @@ class OverviewBar(QGraphicsView):
                 top_left = self._mapFromData(epo_t, 0)
                 bottom_right = self._mapFromData(epo_t, len(self.mne.ch_order))
                 epoch_line.setLine(QLineF(top_left, bottom_right))
-            # Resize bad rects
-            for epo_idx, epoch_rect in self.bad_epoch_rect_dict.items():
+            # Resize bad rects (keyed by epoch number, which only matches the
+            # position in boundary_times when no epochs were dropped)
+            selection = self.mne.inst.selection.tolist()
+            for epo_num, epoch_rect in self.bad_epoch_rect_dict.items():
+                epo_idx = selection.index(epo_num)
                 start, stop = self.mne.boundary_times[epo_idx : epo_idx + 2]
                 top_left = self._mapFromData(start, 0)
                 bottom_right = self._mapFromData(stop, len(self.mne.ch_order))
