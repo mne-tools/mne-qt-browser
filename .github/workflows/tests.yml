@@ -16,40 +16,27 @@ jobs:
       matrix:
         os: [ubuntu, windows, macos]
         mne: [main, maint/1.12]
-        opengl: ['opengl']
-        python: ['3.12']
-        name: [matrix]
-        pip: ['']
+        python: ['3.14']
+        name: [PySide6]
         include:
           - os: ubuntu
             mne: main
-            opengl: ''
-            python: '3.12'
-            name: no opengl
+            python: '3.11'
+            qt: PyQt6
+            name: PyQt6
           - os: ubuntu
-            mne: maint/1.7
-            opengl: ''
-            python: '3.12'
-            name: no opengl
-          - os: ubuntu
-            mne: maint/1.7  # 2 years back as of 2026/06/23
-            opengl: 'opengl'
+            mne: maint/1.8  # released 2024/08/18
             python: '3.10'
             name: old
           - os: ubuntu
             mne: main
-            opengl: 'opengl'
-            python: '3.12'
-            pip: pre
+            python: '3.14'
             name: pip-pre
     name: pytest ${{ matrix.name }} / ${{ matrix.os }} / MNE ${{ matrix.mne }}
     runs-on: ${{ matrix.os }}-latest
     env:
       MNE_LOGGING_LEVEL: 'warning'
-      MKL_NUM_THREADS: '1'
-      PYTHONUNBUFFERED: '1'
-      MNE_BRANCH: ${{ matrix.mne }}
-      PYTHON_VERSION: ${{ matrix.python }}
+      OMP_NUM_THREADS: '1'
     defaults:
       run:
         shell: bash
@@ -57,27 +44,28 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          repository: mne-tools/mne-python
+          path: mne-python
+          ref: ${{ matrix.mne }}
       - uses: actions/setup-python@v6
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: Install dependencies
-        run: |  # use MNE main to ensure test files are available
-          set -eo pipefail
+          python-version: ${{ matrix.python }}
+      - run: |
           python -m pip install --upgrade pip
-          git clone -b ${MNE_BRANCH} --single-branch --branch main https://github.com/mne-tools/mne-python.git ../mne-python
-          python -m pip install -qe ../mne-python
-          if [[ "${{ matrix.opengl }}" == "opengl" ]]; then
-            PIP_OPTION="[opengl,tests]"
-          else
-            PIP_OPTION="[tests]"
-          fi
-          python -m pip install -ve .${PIP_OPTION} "PyQt6!=6.6.1" "PyQt6-Qt6!=6.6.1,!=6.6.2,!=6.6.3"
-          if [[ "${{ matrix.pip }}" == "pre" ]]; then
-            echo "Upgrading to pre-release NumPy, SciPy, matplotlib, and pyqtgraph"
-            python -m pip install --upgrade --pre --only-binary ":all:" --default-timeout=60 --extra-index-url "https://pypi.anaconda.org/scientific-python-nightly-wheels/simple" "numpy>=2.6.0.dev0" "scipy>=1.19.0.dev0" "matplotlib>=3.12.0.dev0" "git+https://github.com/pyqtgraph/pyqtgraph.git"
-          fi
+          test "$(git branch --show-current)" == "${{ matrix.mne }}"
+          python -m pip install -e .
+        name: Install MNE-Python
+        working-directory: mne-python
+      - name: Install
+        run: python -m pip install -ve .[tests] "${{ matrix.qt || 'PySide6' }}"
+      - name: Install pip-pre deps
+        run: python -m pip install --upgrade --pre --only-binary ":all:" --default-timeout=60 --extra-index-url "https://pypi.anaconda.org/scientific-python-nightly-wheels/simple" "numpy>=2.6.0.dev0" "scipy>=1.19.0.dev0" "matplotlib>=3.12.0.dev0" "git+https://github.com/pyqtgraph/pyqtgraph.git"
+        if: matrix.name == 'pip-pre'
       - run: ./tools/get_testing_version.sh
-        working-directory: ../mne-python
+        working-directory: mne-python
       - uses: actions/cache@v6
         with:
           key: ${{ env.TESTING_VERSION }}
@@ -87,12 +75,8 @@ jobs:
       - uses: pyvista/setup-headless-display-action@main
         with:
           qt: true
-      - run: glxinfo | grep enderer
-        name: Check OpenGL
-        working-directory: ../mne-python
-        if: runner.os == 'Linux' && contains(matrix.opengl, 'opengl')
       - run: mne sys_info
-      - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/report ../mne-python/mne/viz
+      - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml mne-python/mne/report mne-python/mne/viz
         name: Run MNE-Tests
       - run: pytest --error-for-skips tests/test_pg_specific.py --cov-report=xml --cov-append
         name: Run pyqtgraph-specific tests
@@ -100,100 +84,6 @@ jobs:
       - run: pytest tests/test_speed.py --cov-report=xml --cov-append
         name: Run benchmarks
         if: runner.os != 'macOS'
-      - uses: codecov/codecov-action@v7
-        if: always()
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-  qt:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu]
-        mne: [main]
-        opengl: [opengl]
-        qt: [PyQt6, PySide6]
-        python: ['3.14']
-        name: [matrix]
-        include:
-          - os: macos
-            mne: main
-            opengl: 'opengl'
-            qt: PySide6
-            python: '3.11'
-          - os: windows
-            mne: main
-            opengl: 'opengl'
-            qt: PySide6
-            python: '3.11'
-    name: ${{ matrix.qt }} / ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}-latest
-    env:
-      MNE_LOGGING_LEVEL: 'warning'
-      MKL_NUM_THREADS: '1'
-      PYTHONUNBUFFERED: '1'
-      MNE_BRANCH: ${{ matrix.mne }}
-      PYTHON_VERSION: ${{ matrix.python }}
-      QT_LIB: ${{ matrix.qt }}
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v6
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: Install dependencies
-        run: |  # use MNE main to ensure test files are available
-          set -eo pipefail
-          python -m pip install --upgrade pip
-          git clone -b ${MNE_BRANCH} --single-branch --branch main https://github.com/mne-tools/mne-python.git ../mne-python
-          python -m pip install -qe ../mne-python
-          # Avoid a problematic versions of PySide6
-          # https://wiki.qt.io/Qt_for_Python_Development_Notes#1._Juni_2023
-          if [[ "$QT_LIB" == "PySide6" ]]; then
-            if [[ "$RUNNER_OS" == "macOS" ]]; then
-              QT_LIB_INSTALL="PySide6!=6.5.1,!=6.7.0,!=6.7.1,!=6.8.0,!=6.8.0.1,!=6.9.1,!=6.10.0"
-            else
-              QT_LIB_INSTALL="PySide6!=6.5.1,!=6.7.0,!=6.7.1,!=6.8.0,!=6.8.0.1,!=6.9.1"
-            fi
-          else
-            QT_LIB_INSTALL="$QT_LIB"
-          fi
-          if [[ "${{ matrix.opengl }}" == "opengl" ]]; then
-            PIP_OPTION="[opengl,tests]"
-          else
-            PIP_OPTION="[tests]"
-          fi
-          set -x
-          python -m pip install -ve .${PIP_OPTION} ${QT_LIB_INSTALL}
-      - run: bash ./tools/get_testing_version.sh
-        working-directory: ../mne-python
-      - uses: actions/cache@v6
-        with:
-          key: ${{ env.TESTING_VERSION }}
-          path: ~/mne_data
-      - run: python -c 'import mne; print(mne.datasets.testing.data_path(verbose=True))'
-        name: 'Download testing data'
-      - uses: pyvista/setup-headless-display-action@main
-        with:
-          qt: true
-      - name: Start Qt on its own
-        run: LD_DEBUG=libs python -c "from ${QT_LIB}.QtWidgets import QApplication, QWidget; app = QApplication([]); import matplotlib; matplotlib.use('QtAgg'); import matplotlib.pyplot as plt; plt.figure()"
-      - name: Check Qt
-        run: |
-          mne sys_info -pd
-          echo ${QT_LIB}:
-          mne sys_info -pd | grep "^.*qtpy.*${QT_LIB}=.*$"
-      - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml ../mne-python/mne/report ../mne-python/mne/viz
-        name: Run MNE-Tests
-      - run: pytest --error-for-skips tests/test_pg_specific.py --cov-report=xml --cov-append
-        name: Run pyqtgraph-specific tests
-      # For some reason this dies on Linux PySide2. We can live without this
-      # case given our primary target moving forward is Qt6+
-      - run: pytest tests/test_speed.py --cov-report=xml --cov-append
-        name: Run benchmarks
       - uses: codecov/codecov-action@v7
         if: always()
         with:
