@@ -1,6 +1,8 @@
 # License: BSD-3-Clause
 # Copyright the MNE Qt Browser contributors.
 
+import warnings
+
 import numpy as np
 import pytest
 from mne import Annotations
@@ -10,6 +12,7 @@ from qtpy.QtCore import Qt
 from qtpy.QtTest import QTest
 
 from mne_qt_browser._colors import _lab_to_rgb, _rgb_to_lab
+from mne_qt_browser._utils import _disconnect
 
 LESS_TIME = "Show fewer time points"
 MORE_TIME = "Show more time points"
@@ -19,6 +22,26 @@ REDUCE_AMPLITUDE = "Reduce amplitude"
 INCREASE_AMPLITUDE = "Increase amplitude"
 TOGGLE_ANNOTATIONS = "Toggle annotations mode"
 SHOW_PROJECTORS = "Show projectors"
+
+
+def test_disconnect_warning_filter():
+    """Test that only known PySide disconnect warnings are suppressed."""
+
+    class Signal:
+        def __init__(self, message):
+            self.message = message
+
+        def disconnect(self):
+            warnings.warn(self.message, RuntimeWarning)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        _disconnect(
+            Signal('libpyside: Failed to disconnect (None) from signal "triggered()".')
+        )
+
+    with pytest.warns(RuntimeWarning, match="unrelated warning"):
+        _disconnect(Signal("unrelated warning"))
 
 
 def test_annotations_single_sample(raw_orig, pg_backend):
