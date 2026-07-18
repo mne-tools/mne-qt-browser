@@ -25,7 +25,7 @@ jobs:
             qt: PyQt6
             name: PyQt6
           - os: ubuntu
-            mne: maint/1.7  # 2 years back as of 2026/06/23
+            mne: maint/1.8  # released 2024/08/18
             python: '3.10'
             name: old
           - os: ubuntu
