@@ -738,12 +738,17 @@ def test_zscore_rgba(raw_orig, pg_backend):
     """Test the z-score overview RGBA mapping."""
     fig = raw_orig.plot()
     fig.test_mode = True
-    # One symmetric ramp channel and one all-NaN channel
-    data = np.array([np.linspace(-2, 2, 5), [np.nan] * 5])
+    # One symmetric ramp channel, one all-NaN channel, and one near-constant
+    # channel; the latter triggers SciPy's catastrophic-cancellation
+    # RuntimeWarning, which must not escape (it would kill the load thread
+    # under warnings-as-errors; gh-428)
+    near_constant = np.ones(5)
+    near_constant[0] += 1e-15
+    data = np.array([np.linspace(-2, 2, 5), [np.nan] * 5, near_constant])
     fig._get_zscore(data, max_pixel_width=5)
     zrgba = fig.mne.zscore_rgba
     assert zrgba.dtype == np.uint8
-    assert zrgba.shape == (2, 5, 4)
+    assert zrgba.shape == (3, 5, 4)
     # Negative z-scores fade to blue, positive to red, extrema fully opaque
     expected = np.array(
         [
