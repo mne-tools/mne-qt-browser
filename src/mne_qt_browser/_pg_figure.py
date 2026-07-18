@@ -1664,7 +1664,18 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         if collapse_by > 0:
             data = data.reshape(data.shape[0], max_pixel_width, collapse_by)
             data = data.mean(axis=2)
-        z = zscore(data, axis=1)
+        with warnings.catch_warnings():
+            # Near-constant channels (e.g., flat or reference channels) are
+            # expected, and SciPy warns about the resulting precision loss.
+            # This runs in the load thread, so callers cannot filter it
+            # themselves (and the z-scores are only used for a color gradient
+            # anyway).
+            warnings.filterwarnings(
+                "ignore",
+                ".*Precision loss occurred in moment calculation.*",
+                RuntimeWarning,
+            )
+            z = zscore(data, axis=1)
         if z.size > 0:
             zmin = np.min(z, axis=1, keepdims=True)
             zmax = np.max(z, axis=1, keepdims=True)
