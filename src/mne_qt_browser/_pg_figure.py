@@ -95,6 +95,7 @@ from mne_qt_browser._utils import (
     _safe_splash,
     _screen_geometry,
     _set_window_flags,
+    _unique_ordered_ch_types,
     qsettings_params,
 )
 from mne_qt_browser._widgets import (
@@ -944,13 +945,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         The scene handles showing them in when in view range.
         """
         self.mne.scalebars.clear()
-        # To keep order (np.unique sorts)
-        ordered_types = self.mne.ch_types[self.mne.ch_order]
-        unique_type_idxs = np.unique(ordered_types, return_index=True)[1]
-        ch_types_ordered = [ordered_types[idx] for idx in sorted(unique_type_idxs)]
         for ch_type in [
             ct
-            for ct in ch_types_ordered
+            for ct in _unique_ordered_ch_types(self.mne)
             if ct != "stim"
             and ct in self.mne.scalings
             and ct in getattr(self.mne, "units", {})
