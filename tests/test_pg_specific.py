@@ -754,3 +754,60 @@ def test_zscore_rgba(raw_orig, pg_backend):
     assert_allclose(zrgba[0], expected)
     # NaN channels are fully transparent
     assert_allclose(zrgba[1], 0)
+
+
+def test_overview_bad_epochs_dropped(raw_orig, pg_backend):
+    """Test bad-epoch rect positions after resize when epochs were dropped."""
+    import mne
+
+    epochs = mne.make_fixed_length_epochs(
+        raw_orig.copy().crop(tmax=20.0), duration=2.0, preload=True
+    )
+    epochs.drop([0, 2])  # make selection non-contiguous
+    fig = epochs.plot()
+    fig.test_mode = True
+    epo_num = epochs.selection[-1]
+    fig.mne.bad_epochs.append(epo_num)
+    overview_bar = fig.mne.overview_bar
+    overview_bar.update_bad_epochs()
+    assert epo_num in overview_bar.bad_epoch_rect_dict
+    # Resizing must reposition the rect via the epoch index, not its number
+    fig.resize(fig.width() + 30, fig.height())
+    QTest.qWait(100)
+    rect = overview_bar.bad_epoch_rect_dict[epo_num].rect()
+    epo_idx = epochs.selection.tolist().index(epo_num)
+    expected_left = overview_bar._mapFromData(fig.mne.boundary_times[epo_idx], 0).x()
+    assert_allclose(rect.left(), expected_left)
+
+
+def test_description_cmbx_preserves_selection(raw_orig, pg_backend):
+    """Test that rebuilding the description combobox keeps the selection."""
+    raw_orig = raw_orig.copy().crop(tmax=5.0)
+    first_time = raw_orig.first_time
+    raw_orig.annotations.append(1 + first_time, 1, "A")
+    raw_orig.annotations.append(3 + first_time, 1, "B")
+    fig = raw_orig.plot()
+    fig.test_mode = True
+    dock = fig.mne.fig_annotation
+    dock.description_cmbx.setCurrentText("B")
+    assert fig.mne.current_description == "B"
+    # Rebuilding emits currentIndexChanged(-1) then (0), which used to clobber
+    # the current description with the first item
+    dock._update_description_cmbx()
+    assert dock.description_cmbx.currentText() == "B"
+    assert fig.mne.current_description == "B"
+    # A no-longer-existing description falls back to the first item
+    fig.mne.current_description = "gone"
+    dock._update_description_cmbx()
+    assert dock.description_cmbx.currentText() == "A"
+    assert fig.mne.current_description == "A"
+
+
+def test_time_scrollbar_page_step(raw_orig, pg_backend):
+    """Test that the scrollbar slider represents the visible fraction."""
+    fig = raw_orig.plot(duration=10.0)
+    fig.test_mode = True
+    ax_hscroll = fig.mne.ax_hscroll
+    # One page in scrollbar units is the visible duration times step_factor
+    assert ax_hscroll.pageStep() == int(fig.mne.duration * ax_hscroll.step_factor)
+    assert ax_hscroll.pageStep() == int(fig.mne.scroll_sensitivity)
