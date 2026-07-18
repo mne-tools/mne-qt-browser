@@ -51,13 +51,13 @@ jobs:
           fetch-depth: 0
           repository: mne-tools/mne-python
           path: mne-python
+          ref: ${{ matrix.mne }}
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
       - run: |
-          set -x
           python -m pip install --upgrade pip
-          git checkout -b "${{ matrix.mne }}" origin/"${{ matrix.mne }}"
+          test "$(git branch --show-curent)" == "${{ matrix.mne }}"
           python -m pip install -e .
         name: Install MNE-Python
         working-directory: mne-python
