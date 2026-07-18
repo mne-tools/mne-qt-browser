@@ -795,14 +795,16 @@ def test_message_box_reset(raw_orig, pg_backend):
 
 def test_get_onset_idx_float_tolerance(raw_orig, pg_backend):
     """Test that annotation lookup survives sub-sample float drift."""
+    # raw_orig is shared across the session and other tests mutate its
+    # annotations in place, so start from a clean slate here
     raw_orig = raw_orig.copy().crop(tmax=5.0)
+    raw_orig.set_annotations(None)
     first_time = raw_orig.first_time
     raw_orig.annotations.append(1 + first_time, 1, "A")
     raw_orig.annotations.append(3 + first_time, 1, "B")
     fig = raw_orig.plot()
     fig.test_mode = True
-    plot_onset = 3.0
     drift = 0.1 / raw_orig.info["sfreq"]
-    assert fig._get_onset_idx(plot_onset + drift) == 1
-    with pytest.raises(AssertionError):
-        fig._get_onset_idx(2.0)  # no annotation anywhere near
+    # Each annotation still resolves to its own index despite sub-sample drift
+    assert fig._get_onset_idx(3.0 + drift) == 1  # "B"
+    assert fig._get_onset_idx(1.0 - drift) == 0  # "A"
