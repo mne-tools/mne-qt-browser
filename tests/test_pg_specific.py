@@ -32,7 +32,8 @@ def test_annotations_single_sample(raw_orig, pg_backend):
     description = "A"
     first_time = raw_orig.first_time
     raw_orig.annotations.append(onset + first_time, duration, description)
-    fig = raw_orig.plot(duration=raw_orig.duration)
+    duration = raw_orig.n_times / raw_orig.info["sfreq"]
+    fig = raw_orig.plot(duration=duration)
     fig.test_mode = True
     # Activate annotation_mode
     fig._fake_keypress("a")
@@ -87,7 +88,8 @@ def test_annotations_recording_end(raw_orig, pg_backend):
     first_time = raw_orig.first_time
     raw_orig.annotations.append(onset + first_time, duration, description)
     n_anns = len(raw_orig.annotations)
-    fig = raw_orig.plot(duration=raw_orig.duration)
+    duration = raw_orig.n_times / raw_orig.info["sfreq"]
+    fig = raw_orig.plot(duration=duration)
     fig.test_mode = True
     # Activate annotation_mode
     fig._fake_keypress("a")
