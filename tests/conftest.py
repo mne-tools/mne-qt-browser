@@ -6,10 +6,70 @@ from pathlib import Path
 
 import mne
 import pytest
-from mne.conftest import garbage_collect, pg_backend  # noqa: F401
+from mne.conftest import _check_pyqtgraph
+from mne.viz._figure import use_browser_backend
+from pytest import StashKey
 from qtpy.QtCore import QSettings
+from refleak.testing import Snapshot, gc_collect_once
 
 _store = {"Raw": {}, "Epochs_unicolor": {}, "Epochs_multicolor": {}}
+
+# Stash each test's phase reports so fixtures can tell whether the test itself
+# passed (see https://docs.pytest.org/en/stable/how-to/fixtures.html
+# #using-markers-to-pass-data-to-fixtures).
+_phase_report_key = StashKey()
+
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """Stash the status of each test phase."""
+    outcome = yield
+    rep = outcome.get_result()
+    item.stash.setdefault(_phase_report_key, {})[rep.when] = rep
+
+
+def _test_passed(request):
+    """Return whether the test body (the "call" phase) passed."""
+    if _phase_report_key not in request.node.stash:
+        return True
+    report = request.node.stash[_phase_report_key]
+    return "call" in report and report["call"].outcome == "passed"
+
+
+@pytest.fixture
+def garbage_collect(request):
+    """Garbage collect on exit."""
+    yield
+    gc_collect_once(request)
+
+
+@pytest.fixture
+def pg_backend(request, garbage_collect):
+    """Use for pyqtgraph-specific test-functions.
+
+    This overrides ``mne.conftest.pg_backend`` so that the leak check only runs
+    when the test itself passed. When a test fails, pytest keeps its traceback
+    (for reporting), which keeps that test's frame and hence its browser alive;
+    checking for leaked browsers then would blame the failing test (or cascade
+    into the next test using this fixture) for something the real failure caused.
+    """
+    _check_pyqtgraph(request)
+    from mne_qt_browser._pg_figure import MNEQtBrowser
+
+    with use_browser_backend("qt") as backend:
+        backend._close_all()
+        # Snapshot stores only ids, so it pins nothing alive; it lets us report
+        # only browsers that this test itself leaked.
+        snap = Snapshot(MNEQtBrowser, collect=False)
+        yield backend
+        backend._close_all()
+        # This shouldn't be necessary, but let's make sure nothing is stale
+        import mne_qt_browser
+
+        mne_qt_browser._browser_instances.clear()
+        if not _test_passed(request):
+            return
+        snap.assert_no_new(f"Closure of {request.node.name}", request=request)
 
 
 @pytest.fixture(autouse=True, scope="session")
