@@ -50,7 +50,7 @@ jobs:
         with:
           fetch-depth: 0
           repository: mne-tools/mne-python
-          path: ..
+          path: ../mne-python
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
