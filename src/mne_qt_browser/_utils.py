@@ -31,7 +31,9 @@ def _disconnect(sig, *, allow_error=False):
     try:
         with warnings.catch_warnings():
             warnings.filterwarnings(
-                "ignore", "Failed to disconnect", category=RuntimeWarning
+                "ignore",
+                "(?:libpyside: )?Failed to disconnect",
+                category=RuntimeWarning,
             )
             sig.disconnect()
     except (TypeError, RuntimeError, SystemError):  # if are no connections, ignore
