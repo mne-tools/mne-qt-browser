@@ -138,6 +138,8 @@ def test_annotations_recording_end(raw_orig, pg_backend):
 
 def test_annotations_interactions(raw_orig, pg_backend):
     """Test interactions specific to pyqtgraph-backend."""
+    # Copy to avoid mutating the session-scoped fixture
+    raw_orig = raw_orig.copy()
     # Add test-annotations
     onsets = np.arange(2, 8, 2) + raw_orig.first_time
     durations = np.repeat(1, len(onsets))
@@ -238,6 +240,8 @@ def test_annotations_interactions(raw_orig, pg_backend):
 
 def test_ch_specific_annot(raw_orig, pg_backend):
     """Test plotting channel specific annotations."""
+    # Copy to avoid mutating the session-scoped fixture
+    raw_orig = raw_orig.copy()
     ch_names = ["MEG 0133", "MEG 0142", "MEG 0143", "MEG 0423"]
     annot_onset, annot_dur = 1, 2
     annots = Annotations([annot_onset], [annot_dur], "some_chs", ch_names=[ch_names])
