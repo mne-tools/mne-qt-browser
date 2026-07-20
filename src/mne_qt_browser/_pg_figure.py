@@ -94,7 +94,6 @@ from mne_qt_browser._utils import (
     _methpartial,
     _safe_splash,
     _screen_geometry,
-    _set_window_flags,
     _unique_ordered_ch_types,
     qsettings_params,
 )
@@ -2015,7 +2014,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         canvas = FigureCanvasQTAgg(fig)
         canvas.setFocusPolicy(Qt.FocusPolicy(Qt.StrongFocus | Qt.WheelFocus))
         canvas.setFocus()
-        _set_window_flags(canvas)
         # Pass window title and fig_name on
         if hasattr(fig, "fig_name"):
             canvas.fig_name = fig.fig_name

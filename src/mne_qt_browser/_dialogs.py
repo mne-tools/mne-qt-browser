@@ -1,6 +1,7 @@
 # License: BSD-3-Clause
 # Copyright the MNE Qt Browser contributors.
 
+import os
 import weakref
 from collections import OrderedDict
 
@@ -46,7 +47,6 @@ from mne_qt_browser._utils import (
     _q_font,
     _screen,
     _screen_geometry,
-    _set_window_flags,
     _unique_ordered_ch_types,
 )
 
@@ -62,7 +62,6 @@ class _BaseDialog(QDialog):
         flags=Qt.Window | Qt.Tool,
     ):
         super().__init__(main, flags)
-        _set_window_flags(self)
         self.weakmain = weakref.ref(main)
         self.widget = widget
         self.mne = main.mne
@@ -118,7 +117,6 @@ class _ChannelFig(FigureCanvasQTAgg):
         self.figure = figure
         self.mne = mne
         super().__init__(figure)
-        _set_window_flags(self)
         self.setFocusPolicy(Qt.FocusPolicy(Qt.StrongFocus | Qt.WheelFocus))
         self.setFocus()
         self._lasso_path = None
@@ -707,7 +705,10 @@ class ProjDialog(_BaseDialog):
         self.setLayout(layout)
         self.toggle_all_bt.setFocus()
         self.show()
-        self.activateWindow()  # bring to top so can interact immediately
+        if os.getenv("_MNE_BROWSER_BACK", "").lower() != "true":
+            self.activateWindow()  # bring to top so can interact immediately
+        else:
+            self.lower()  # keep out of the way instead (during tests)
 
     def _proj_changed(self, state=None, idx=None):
         # Only change if proj wasn't already applied

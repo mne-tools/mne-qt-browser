@@ -2,13 +2,12 @@
 # Copyright the MNE Qt Browser contributors.
 
 import functools
-import os
 import warnings
 import weakref
 
 import numpy as np
 from mne.io.pick import _DATA_CH_TYPES_ORDER_DEFAULT
-from qtpy.QtCore import QPoint, Qt
+from qtpy.QtCore import QPoint
 from qtpy.QtGui import QFont, QGuiApplication
 
 # MNE's butterfly plots traditionally default to the channel ordering of mag, grad, ...,
@@ -103,11 +102,6 @@ def _unique_ordered_ch_types(mne):
     ordered_types = mne.ch_types[mne.ch_order]
     unique_type_idxs = np.unique(ordered_types, return_index=True)[1]
     return [ordered_types[idx] for idx in sorted(unique_type_idxs)]
-
-
-def _set_window_flags(widget):
-    if os.getenv("_MNE_BROWSER_BACK", "").lower() == "true":
-        widget.setWindowFlags(widget.windowFlags() | Qt.WindowStaysOnBottomHint)
 
 
 def _calc_chan_type_to_physical(widget, ch_type, units="mm"):

@@ -4,6 +4,7 @@
 import os
 from pathlib import Path
 
+import matplotlib
 import mne
 import pytest
 from mne.conftest import _check_pyqtgraph
@@ -93,6 +94,9 @@ def pytest_configure(config):
         config.addinivalue_line("markers", marker)
     if "_MNE_BROWSER_BACK" not in os.environ:
         os.environ["_MNE_BROWSER_BACK"] = "true"
+    # Browsers call mne.viz.backends._utils._qt_raise_window on show, which activates
+    # and raises the window unless this is set
+    matplotlib.rcParams["figure.raise_window"] = False
     warning_lines = r"""
     error::
     # PySide6
