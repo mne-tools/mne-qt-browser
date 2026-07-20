@@ -69,7 +69,7 @@ from qtpy.QtWidgets import (
 from scipy.stats import zscore
 
 from mne_qt_browser import _browser_instances
-from mne_qt_browser._colors import _get_color, _rgb_to_lab
+from mne_qt_browser._colors import _get_color, _rgb_to_oklab
 from mne_qt_browser._dialogs import (
     HelpDialog,
     ProjDialog,
@@ -285,7 +285,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         self.mne.mkPen = _methpartial(self._hidpi_mkPen)
 
         bgcolor = self.palette().color(self.backgroundRole()).getRgbF()[:3]
-        self.mne.dark = _rgb_to_lab(bgcolor)[0] < 50
+        self.mne.dark = _rgb_to_oklab(bgcolor)[0] < 0.5
 
         # Prepend our icon search path and set fallback name
         icons_path = f"{Path(__file__).parent}/icons"
@@ -472,7 +472,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
 
         # Initialize epochs grid
         if self.mne.is_epochs:
-            grid_pen = self.mne.mkPen(color="k", width=2, style=Qt.DashLine)
+            grid_pen = self.mne.mkPen(
+                color=_get_color("k", self.mne.dark), width=2, style=Qt.DashLine
+            )
             for x_grid in self.mne.boundary_times[1:-1]:
                 grid_line = InfiniteLine(pos=x_grid, pen=grid_pen, movable=False)
                 self.mne.plt.addItem(grid_line)
