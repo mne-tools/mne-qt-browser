@@ -4,6 +4,7 @@
 import os
 from pathlib import Path
 
+import matplotlib
 import mne
 import pytest
 from mne.conftest import _check_pyqtgraph
@@ -73,6 +74,22 @@ def pg_backend(request, garbage_collect):
 
 
 @pytest.fixture(autouse=True, scope="session")
+def _isolated_mne_config(tmp_path_factory):
+    """Isolate the MNE config file for the test session.
+
+    Closing a browser writes e.g. MNE_BROWSE_RAW_SIZE via mne.set_config, which
+    would otherwise both trash the user's real config and make test behavior
+    depend on whatever earlier runs left there (window sizes change pixel->data
+    rounding in interaction tests).
+    """
+    config_dir = tmp_path_factory.mktemp("mne_config")
+    mp = pytest.MonkeyPatch()
+    mp.setenv("_MNE_FAKE_HOME_DIR", str(config_dir))
+    yield
+    mp.undo()
+
+
+@pytest.fixture(autouse=True, scope="session")
 def _isolated_qsettings(tmp_path_factory):
     """Isolate QSettings to a temporary file for the test session."""
     ini_path = tmp_path_factory.mktemp("qsettings") / "mne-qt-browser-test.ini"
@@ -93,6 +110,9 @@ def pytest_configure(config):
         config.addinivalue_line("markers", marker)
     if "_MNE_BROWSER_BACK" not in os.environ:
         os.environ["_MNE_BROWSER_BACK"] = "true"
+    # Browsers call mne.viz.backends._utils._qt_raise_window on show, which activates
+    # and raises the window unless this is set
+    matplotlib.rcParams["figure.raise_window"] = False
     warning_lines = r"""
     error::
     # PySide6
