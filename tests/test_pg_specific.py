@@ -3,9 +3,9 @@
 
 import warnings
 
+import mne
 import numpy as np
 import pytest
-import mne
 from mne.utils import check_version
 from numpy.testing import assert_allclose
 from qtpy.QtCore import Qt
