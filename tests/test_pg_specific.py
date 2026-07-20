@@ -1,9 +1,9 @@
 # License: BSD-3-Clause
 # Copyright the MNE Qt Browser contributors.
 
+import mne
 import numpy as np
 import pytest
-import mne
 from mne.utils import check_version
 from numpy.testing import assert_allclose
 from qtpy.QtCore import Qt
@@ -217,7 +217,9 @@ def test_ch_specific_annot(raw_orig, pg_backend):
     """Test plotting channel specific annotations."""
     ch_names = ["MEG 0133", "MEG 0142", "MEG 0143", "MEG 0423"]
     annot_onset, annot_dur = 1, 2
-    annots = mne.Annotations([annot_onset], [annot_dur], "some_chs", ch_names=[ch_names])
+    annots = mne.Annotations(
+        [annot_onset], [annot_dur], "some_chs", ch_names=[ch_names]
+    )
     raw_orig.set_annotations(annots)
 
     ch_names.pop(-1)  # don't plot the last one!
