@@ -3,7 +3,7 @@
 
 import numpy as np
 import pytest
-from mne import Annotations
+import mne
 from mne.utils import check_version
 from numpy.testing import assert_allclose
 from qtpy.QtCore import Qt
@@ -217,7 +217,7 @@ def test_ch_specific_annot(raw_orig, pg_backend):
     """Test plotting channel specific annotations."""
     ch_names = ["MEG 0133", "MEG 0142", "MEG 0143", "MEG 0423"]
     annot_onset, annot_dur = 1, 2
-    annots = Annotations([annot_onset], [annot_dur], "some_chs", ch_names=[ch_names])
+    annots = mne.Annotations([annot_onset], [annot_dur], "some_chs", ch_names=[ch_names])
     raw_orig.set_annotations(annots)
 
     ch_names.pop(-1)  # don't plot the last one!
@@ -760,8 +760,6 @@ def test_zscore_rgba(raw_orig, pg_backend):
 
 def test_overview_bad_epochs_dropped(raw_orig, pg_backend):
     """Test bad-epoch rect positions after resize when epochs were dropped."""
-    import mne
-
     epochs = mne.make_fixed_length_epochs(
         raw_orig.copy().crop(tmax=20.0), duration=2.0, preload=True
     )
