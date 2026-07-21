@@ -1451,6 +1451,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                 y2 = data[:, : n * ds].reshape((n_ch, n, ds))
                 y1[:, :, 0] = y2.max(axis=2)
                 y1[:, :, 1] = y2.min(axis=2)
+                # Alternate (max, min) / (min, max) per bin: triangle, not sawtooth
+                y1[:, 1::2] = y1[:, 1::2, ::-1]
                 data = y1.reshape((n_ch, n * 2))
 
             self.mne.times, self.mne.data = times, data
