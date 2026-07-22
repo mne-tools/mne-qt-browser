@@ -783,7 +783,9 @@ class OverviewBar(QGraphicsView):
 
     def update_epoch_lines(self):
         """Update representation of epoch lines."""
-        epoch_line_pen = self.mne.mkPen(color="k", width=1)
+        # Drawn over the channel colors rather than the theme background, and those are
+        # themselves inverted, so this needs the opposite polarity of the theme
+        epoch_line_pen = self.mne.mkPen(color=_get_color("w", self.mne.dark), width=1)
         for t in self.mne.boundary_times[1:-1]:
             top_left = self._mapFromData(t, 0)
             bottom_right = self._mapFromData(t, len(self.mne.ch_order))

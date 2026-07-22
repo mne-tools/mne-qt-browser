@@ -11,7 +11,7 @@ from numpy.testing import assert_allclose
 from qtpy.QtCore import Qt
 from qtpy.QtTest import QTest
 
-from mne_qt_browser._colors import _lab_to_rgb, _rgb_to_lab
+from mne_qt_browser._colors import _oklab_to_rgb, _rgb_to_oklab
 from mne_qt_browser._utils import _disconnect
 
 LESS_TIME = "Show fewer time points"
@@ -727,50 +727,55 @@ def test_pg_toolbar_actions(raw_orig, pg_backend):
     assert pg_backend._get_n_figs() == 1
 
 
-# LAB values taken from colorspacious on 2024/06/10
+# Oklab values taken from coloraide on 2026/07/20
 @pytest.mark.parametrize(
     "rgb, lab",
     [
-        [(0, 0, 1), (32.30269787, 79.19228008, -107.86329661)],  # green
-        [(1, 1, 1), (100, 0, 0)],  # white
+        [(0, 0, 1), (0.45201372, -0.03245698, -0.31152817)],  # blue
+        [(1, 1, 1), (1, 0, 0)],  # white
         [(0, 0, 0), (0, 0, 0)],  # black
         # np.random.default_rng(0).uniform(0, 1, (4, 3))
         [
             (0.63696169, 0.26978671, 0.04097352),
-            (41.18329695, 36.11095837, 48.52748511),
+            (0.50652981, 0.09724356, 0.09878626),
         ],
         [
             (0.01652764, 0.81327024, 0.91275558),
-            (76.50078586, -33.20150417, -24.47911354),
+            (0.78437508, -0.11689532, -0.06835410),
         ],
         [
             (0.60663578, 0.72949656, 0.54362499),
-            (72.17250521, -19.45430481, 20.62037424),
+            (0.75317526, -0.05269919, 0.05236921),
         ],
         [
             (0.93507242, 0.81585355, 0.0027385),
-            (83.64455095, -5.45852637, 84.04513029),
+            (0.85722598, -0.02622580, 0.17537609),
         ],
     ],
 )
 def test_color_conversion(rgb, lab):
     """Test color conversions against manually run ones."""
-    our_lab = _rgb_to_lab(rgb)
-    assert_allclose(our_lab, lab, atol=2e-2)
-    rgb_2 = _lab_to_rgb(lab)
-    assert_allclose(rgb, rgb_2, atol=2e-2)
+    our_lab = _rgb_to_oklab(rgb)
+    assert_allclose(our_lab, lab, atol=1e-5)
+    rgb_2 = _oklab_to_rgb(lab)
+    assert_allclose(rgb, rgb_2, atol=1e-5)
 
 
 def test_zscore_rgba(raw_orig, pg_backend):
     """Test the z-score overview RGBA mapping."""
     fig = raw_orig.plot()
     fig.test_mode = True
-    # One symmetric ramp channel and one all-NaN channel
-    data = np.array([np.linspace(-2, 2, 5), [np.nan] * 5])
+    # One symmetric ramp channel, one all-NaN channel, and one near-constant
+    # channel; the latter triggers SciPy's catastrophic-cancellation
+    # RuntimeWarning, which must not escape (it would kill the load thread
+    # under warnings-as-errors; gh-428)
+    near_constant = np.ones(5)
+    near_constant[0] += 1e-15
+    data = np.array([np.linspace(-2, 2, 5), [np.nan] * 5, near_constant])
     fig._get_zscore(data, max_pixel_width=5)
     zrgba = fig.mne.zscore_rgba
     assert zrgba.dtype == np.uint8
-    assert zrgba.shape == (2, 5, 4)
+    assert zrgba.shape == (3, 5, 4)
     # Negative z-scores fade to blue, positive to red, extrema fully opaque
     expected = np.array(
         [
@@ -840,3 +845,52 @@ def test_time_scrollbar_page_step(raw_orig, pg_backend):
     # One page in scrollbar units is the visible duration times step_factor
     assert ax_hscroll.pageStep() == int(fig.mne.duration * ax_hscroll.step_factor)
     assert ax_hscroll.pageStep() == int(fig.mne.scroll_sensitivity)
+
+
+def test_qsettings_string_bools(raw_orig, pg_backend):
+    """Test that boolean settings round-trip through their string form."""
+    from mne_qt_browser import _pg_figure
+
+    # On some platforms QSettings returns booleans as "true"/"false" strings
+    qsettings = _pg_figure.QSettings()
+    qsettings.setValue("antialiasing", "false")
+    qsettings.setValue("overview_visible", "true")
+    qsettings.sync()
+    fig = raw_orig.plot()
+    assert fig.mne.antialiasing is False
+    assert fig.mne.overview_visible is True
+
+
+def test_message_box_reset(raw_orig, pg_backend):
+    """Test that message_box state does not leak into the next message."""
+    from qtpy.QtWidgets import QMessageBox
+
+    fig = raw_orig.plot()
+    fig.test_mode = True
+    fig.message_box(
+        "first",
+        info_text="details",
+        buttons=QMessageBox.Yes | QMessageBox.No,
+        icon=QMessageBox.Critical,
+    )
+    fig.message_box("second")
+    assert fig.msg_box.informativeText() == ""
+    assert fig.msg_box.standardButtons() == QMessageBox.Ok
+    assert fig.msg_box.icon() == QMessageBox.NoIcon
+
+
+def test_get_onset_idx_float_tolerance(raw_orig, pg_backend):
+    """Test that annotation lookup survives sub-sample float drift."""
+    # raw_orig is shared across the session and other tests mutate its
+    # annotations in place, so start from a clean slate here
+    raw_orig = raw_orig.copy().crop(tmax=5.0)
+    raw_orig.set_annotations(None)
+    first_time = raw_orig.first_time
+    raw_orig.annotations.append(1 + first_time, 1, "A")
+    raw_orig.annotations.append(3 + first_time, 1, "B")
+    fig = raw_orig.plot()
+    fig.test_mode = True
+    drift = 0.1 / raw_orig.info["sfreq"]
+    # Each annotation still resolves to its own index despite sub-sample drift
+    assert fig._get_onset_idx(3.0 + drift) == 1  # "B"
+    assert fig._get_onset_idx(1.0 - drift) == 0  # "A"
