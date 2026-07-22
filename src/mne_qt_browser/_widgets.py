@@ -175,8 +175,8 @@ class AnnotationDock(QDockWidget):
         # Update related widgets
         self.weakmain()._setup_annotation_colors()
         self._update_regions_colors()
-        self._update_description_cmbx()
         self.mne.current_description = new_des
+        self._update_description_cmbx()
         self.mne.overview_bar.update_annotations()
 
     def _edit_description_selected(self, new_des):
@@ -233,11 +233,6 @@ class AnnotationDock(QDockWidget):
             # Remove from color mapping
             if rm_description in self.mne.annotation_segment_colors:
                 self.mne.annotation_segment_colors.pop(rm_description)
-
-            # Set first description in combobox to current description
-            if self.description_cmbx.count() > 0:
-                self.description_cmbx.setCurrentIndex(0)
-                self.mne.current_description = self.description_cmbx.currentText()
 
     def _remove_description_dlg(self):
         rm_description = self.description_cmbx.currentText()
@@ -387,11 +382,20 @@ class AnnotationDock(QDockWidget):
             self.stop_bx.setValue(rgn[1])
 
     def _update_description_cmbx(self):
-        self.description_cmbx.clear()
-        descriptions = self.weakmain()._get_annotation_labels()
-        for description in descriptions:
-            self._add_description_to_cmbx(description)
-        self.description_cmbx.setCurrentText(self.mne.current_description)
+        # Rebuilding emits currentIndexChanged (-1 on clear, 0 on the first
+        # addItem), which would clobber mne.current_description through
+        # _description_changed, so block signals and restore the selection
+        # explicitly afterwards
+        with QSignalBlocker(self.description_cmbx):
+            self.description_cmbx.clear()
+            descriptions = self.weakmain()._get_annotation_labels()
+            for description in descriptions:
+                self._add_description_to_cmbx(description)
+            self.description_cmbx.setCurrentText(self.mne.current_description)
+        if self.description_cmbx.count() > 0:
+            # Sync mne.current_description (it may no longer exist, in which
+            # case the combobox settled on the first item) and region z-values
+            self._description_changed(self.description_cmbx.currentIndex())
 
     def _update_regions_colors(self):
         for region in self.mne.regions:
@@ -523,11 +527,8 @@ class ChannelAxis(AxisItem):
         """Customize mouse click events."""
         # Clean up channel texts
         if not self.mne.butterfly:
-            self.ch_texts = {
-                k: v
-                for k, v in self.ch_texts.items()
-                if k in [tr.ch_name for tr in self.mne.traces]
-            }
+            trace_names = {tr.ch_name for tr in self.mne.traces}
+            self.ch_texts = {k: v for k, v in self.ch_texts.items() if k in trace_names}
             # Get channel name from position of channel description
             ypos = event.scenePos().y()
             y_values = list(self.ch_texts.values())
@@ -860,6 +861,12 @@ class OverviewBar(QGraphicsView):
     def update_annotations(self):
         """Update representation of annotations."""
         annotations = self.mne.inst.annotations
+        # Map onsets to annotation indices once (this method runs on every
+        # horizontal scroll, so avoid a full scan per rect below); for
+        # duplicate onsets keep the first index as np.where(...)[0][0] would
+        onset_to_idx = dict()
+        for annot_idx, onset in enumerate(annotations.onset):
+            onset_to_idx.setdefault(onset, annot_idx)
         # Exclude non-visible annotations
         annot_set = set(
             [
@@ -876,7 +883,7 @@ class OverviewBar(QGraphicsView):
         # Add missing onsets
         for add_onset in add_onsets:
             plot_onset = _sync_onset(self.mne.inst, add_onset)
-            annot_idx = np.argwhere(self.mne.inst.annotations.onset == add_onset)[0][0]
+            annot_idx = onset_to_idx[add_onset]
             duration = annotations.duration[annot_idx]
             description = annotations.description[annot_idx]
             color_name = self.mne.annotation_segment_colors[description]
@@ -905,7 +912,7 @@ class OverviewBar(QGraphicsView):
         # Changes
         for edit_onset in self.annotations_rect_dict:
             plot_onset = _sync_onset(self.mne.inst, edit_onset)
-            annot_idx = np.where(annotations.onset == edit_onset)[0][0]
+            annot_idx = onset_to_idx[edit_onset]
             duration = annotations.duration[annot_idx]
             rect_duration = self.annotations_rect_dict[edit_onset]["duration"]
             rect = self.annotations_rect_dict[edit_onset]["rect"]
@@ -1072,8 +1079,11 @@ class OverviewBar(QGraphicsView):
                 top_left = self._mapFromData(epo_t, 0)
                 bottom_right = self._mapFromData(epo_t, len(self.mne.ch_order))
                 epoch_line.setLine(QLineF(top_left, bottom_right))
-            # Resize bad rects
-            for epo_idx, epoch_rect in self.bad_epoch_rect_dict.items():
+            # Resize bad rects (keyed by epoch number, which only matches the
+            # position in boundary_times when no epochs were dropped)
+            selection = self.mne.inst.selection.tolist()
+            for epo_num, epoch_rect in self.bad_epoch_rect_dict.items():
+                epo_idx = selection.index(epo_num)
                 start, stop = self.mne.boundary_times[epo_idx : epo_idx + 2]
                 top_left = self._mapFromData(start, 0)
                 bottom_right = self._mapFromData(stop, len(self.mne.ch_order))
@@ -1276,8 +1286,10 @@ class TimeScrollBar(BaseScrollBar):
             self.setPageStep(self.mne.n_epochs)
             self.setMaximum(len(self.mne.inst) - self.mne.n_epochs)
         else:
-            self.setPageStep(int(self.mne.duration))
             self.step_factor = self.mne.scroll_sensitivity / self.mne.duration
+            # One page (the visible duration) in scrollbar units, so that the
+            # slider length matches the visible fraction of the recording
+            self.setPageStep(int(self.mne.duration * self.step_factor))
             self.setMaximum(int((self.mne.xmax - self.mne.duration) * self.step_factor))
 
     def _update_scroll_sensitivity(self):
