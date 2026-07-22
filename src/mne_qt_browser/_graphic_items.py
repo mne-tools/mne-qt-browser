@@ -30,6 +30,15 @@ from mne_qt_browser._utils import _get_channel_scaling, _q_font
 # so it must stay light in both themes. Clears 3:1 on either background
 _vline_color = (0, 152, 0)
 
+# Z-values of the items in the trace plot (higher values are drawn on top). In butterfly
+# mode good traces get an additional offset (up to _Z_TRACE_MAX) so that the channel
+# types shown at the top of the plot are drawn over the ones below them.
+_Z_BAD_TRACE = 0
+_Z_TRACE = 1
+_Z_TRACE_MAX = 100
+_Z_SCALEBAR = 101
+_Z_SCALEBAR_TEXT = 102
+
 
 def propagate_to_children(method):  # noqa: D103
     @functools.wraps(method)
@@ -404,8 +413,8 @@ class DataTrace(PlotCurveItem):
         # Set clickable with small area around trace to make clicking easier
         self.setClickable(True, 12)
 
-        # Set default z-value to 1 to be before other items in scene
-        self.setZValue(1)
+        # Draw before annotations, events and zero lines (which sit at zero)
+        self.setZValue(_Z_TRACE)
 
         # General attributes
         # The ch_idx is the index of the channel represented by this trace in the
@@ -516,13 +525,23 @@ class DataTrace(PlotCurveItem):
         # Raw/ICA
         else:
             if self.isbad:
-                self.setZValue(0)
+                self.setZValue(_Z_BAD_TRACE)
                 self.color = self.mne.ch_color_bad
             else:
-                self.setZValue(1)
+                self.setZValue(self._get_zvalue())
                 self.color = self.mne.ch_color_ref[self.ch_name]
 
         self.setPen(self.mne.mkPen(_get_color(self.color, self.mne.dark)))
+
+    def _get_zvalue(self):
+        """Get the z-value of a good trace."""
+        if not self.mne.butterfly or self.mne.fig_selection is not None:
+            return _Z_TRACE
+        # Channel types plotted higher up come first in the data order, so they should
+        # be drawn over the ones below them
+        order = self.mne.butterfly_type_order
+        zvalue = _Z_TRACE + len(order) - order.index(self.ch_type)
+        return min(zvalue, _Z_TRACE_MAX)
 
     @propagate_to_children
     def update_range_idx(self):  # noqa: D401
@@ -741,7 +760,10 @@ class DataTrace(PlotCurveItem):
 
     def get_ydata(self):
         """Get ydata for testing."""
-        return self.yData + self.ypos
+        # self.yData is drawn through the item transform (which applies scale_factor,
+        # halved in butterfly mode), then offset by ypos -- mirror that here so the
+        # returned values match what is shown on screen
+        return self.transform().m22() * self.yData + self.ypos
 
 
 class EventLine(InfiniteLine):
@@ -771,14 +793,17 @@ class ScaleBar(BaseScaleBar, QGraphicsLineItem):  # noqa: D101
         BaseScaleBar.__init__(self, mne, ch_type)
         QGraphicsLineItem.__init__(self)
 
-        self.setZValue(1)
+        self.setZValue(_Z_SCALEBAR)
         pen = self.mne.mkPen(color=_get_color("#AA3377", self.mne.dark), width=5)
         pen.setCapStyle(Qt.FlatCap)
         self.setPen(pen)
         self.update_y_position()
 
     def _set_position(self, x, y):
-        self.setLine(QLineF(x, y - 0.5, x, y + 0.5))
+        # In butterfly mode traces are drawn at half amplitude, so the bar spans
+        # half a y-unit instead of a full one (like the matplotlib backend)
+        half = 0.25 if self.mne.butterfly else 0.5
+        self.setLine(QLineF(x, y - half, x, y + half))
 
     def get_ydata(self):
         """Get y-data for tests."""
@@ -792,7 +817,7 @@ class ScaleBarText(BaseScaleBar, TextItem):  # noqa: D101
         TextItem.__init__(self, color=_get_color("#AA3377", self.mne.dark))
 
         self.setFont(_q_font(10))
-        self.setZValue(2)  # To draw over RawTraceItems
+        self.setZValue(_Z_SCALEBAR_TEXT)  # To draw over RawTraceItems
 
         self.update_value()
         self.update_y_position()
