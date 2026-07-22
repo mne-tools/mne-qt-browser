@@ -26,7 +26,9 @@ from qtpy.QtWidgets import QGraphicsLineItem
 from mne_qt_browser._colors import _get_color
 from mne_qt_browser._utils import _get_channel_scaling, _methpartial, _q_font
 
-_vline_color = (0, 191, 0)
+# Not run through _get_color: this doubles as the VLineLabel fill, whose text is black,
+# so it must stay light in both themes. Clears 3:1 on either background
+_vline_color = (0, 152, 0)
 
 
 def propagate_to_children(method):  # noqa: D103
@@ -775,7 +777,7 @@ class ScaleBar(BaseScaleBar, QGraphicsLineItem):  # noqa: D101
         QGraphicsLineItem.__init__(self)
 
         self.setZValue(1)
-        pen = self.mne.mkPen(color="#AA3377", width=5)
+        pen = self.mne.mkPen(color=_get_color("#AA3377", self.mne.dark), width=5)
         pen.setCapStyle(Qt.FlatCap)
         self.setPen(pen)
         self.update_y_position()
@@ -792,7 +794,7 @@ class ScaleBar(BaseScaleBar, QGraphicsLineItem):  # noqa: D101
 class ScaleBarText(BaseScaleBar, TextItem):  # noqa: D101
     def __init__(self, mne, ch_type):
         BaseScaleBar.__init__(self, mne, ch_type)
-        TextItem.__init__(self, color="#AA3377")
+        TextItem.__init__(self, color=_get_color("#AA3377", self.mne.dark))
 
         self.setFont(_q_font(10))
         self.setZValue(2)  # To draw over RawTraceItems

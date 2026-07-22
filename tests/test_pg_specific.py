@@ -11,7 +11,7 @@ from numpy.testing import assert_allclose
 from qtpy.QtCore import Qt
 from qtpy.QtTest import QTest
 
-from mne_qt_browser._colors import _lab_to_rgb, _rgb_to_lab
+from mne_qt_browser._colors import _oklab_to_rgb, _rgb_to_oklab
 from mne_qt_browser._utils import _disconnect
 
 LESS_TIME = "Show fewer time points"
@@ -725,38 +725,38 @@ def test_pg_toolbar_actions(raw_orig, pg_backend):
     assert pg_backend._get_n_figs() == 1
 
 
-# LAB values taken from colorspacious on 2024/06/10
+# Oklab values taken from coloraide on 2026/07/20
 @pytest.mark.parametrize(
     "rgb, lab",
     [
-        [(0, 0, 1), (32.30269787, 79.19228008, -107.86329661)],  # green
-        [(1, 1, 1), (100, 0, 0)],  # white
+        [(0, 0, 1), (0.45201372, -0.03245698, -0.31152817)],  # blue
+        [(1, 1, 1), (1, 0, 0)],  # white
         [(0, 0, 0), (0, 0, 0)],  # black
         # np.random.default_rng(0).uniform(0, 1, (4, 3))
         [
             (0.63696169, 0.26978671, 0.04097352),
-            (41.18329695, 36.11095837, 48.52748511),
+            (0.50652981, 0.09724356, 0.09878626),
         ],
         [
             (0.01652764, 0.81327024, 0.91275558),
-            (76.50078586, -33.20150417, -24.47911354),
+            (0.78437508, -0.11689532, -0.06835410),
         ],
         [
             (0.60663578, 0.72949656, 0.54362499),
-            (72.17250521, -19.45430481, 20.62037424),
+            (0.75317526, -0.05269919, 0.05236921),
         ],
         [
             (0.93507242, 0.81585355, 0.0027385),
-            (83.64455095, -5.45852637, 84.04513029),
+            (0.85722598, -0.02622580, 0.17537609),
         ],
     ],
 )
 def test_color_conversion(rgb, lab):
     """Test color conversions against manually run ones."""
-    our_lab = _rgb_to_lab(rgb)
-    assert_allclose(our_lab, lab, atol=2e-2)
-    rgb_2 = _lab_to_rgb(lab)
-    assert_allclose(rgb, rgb_2, atol=2e-2)
+    our_lab = _rgb_to_oklab(rgb)
+    assert_allclose(our_lab, lab, atol=1e-5)
+    rgb_2 = _oklab_to_rgb(lab)
+    assert_allclose(rgb, rgb_2, atol=1e-5)
 
 
 def test_zscore_rgba(raw_orig, pg_backend):
