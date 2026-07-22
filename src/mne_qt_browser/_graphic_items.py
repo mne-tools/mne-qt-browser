@@ -24,7 +24,7 @@ from qtpy.QtGui import QTransform
 from qtpy.QtWidgets import QGraphicsLineItem
 
 from mne_qt_browser._colors import _get_color
-from mne_qt_browser._utils import _get_channel_scaling, _methpartial, _q_font
+from mne_qt_browser._utils import _get_channel_scaling, _q_font
 
 # Not run through _get_color: this doubles as the VLineLabel fill, whose text is black,
 # so it must stay light in both themes. Clears 3:1 on either background
@@ -952,4 +952,4 @@ class VLineLabel(InfLineLabel):
         self.updatePosition()
 
     def hoverEvent(self, ev):
-        _methpartial(self.line.hoverEvent)(ev)
+        self.line.hoverEvent(ev)

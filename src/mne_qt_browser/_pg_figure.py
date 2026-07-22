@@ -5,7 +5,6 @@
 
 import inspect
 import platform
-import sys
 import warnings
 import weakref
 from ast import literal_eval
@@ -111,6 +110,12 @@ from mne_qt_browser._widgets import (
 name = "pyqtgraph"  # Backend name, used by MNE-Python
 
 
+def _qsettings():
+    """Get the persistent settings for this application."""
+    # The tests monkeypatch the module-level QSettings name, so keep using it
+    return QSettings("mne-tools", "mne-qt-browser")
+
+
 class LoadThread(QThread):
     """A worker object for precomputing in a separate QThread."""
 
@@ -122,6 +127,8 @@ class LoadThread(QThread):
         super().__init__()
         self.weakbrowser = weakref.ref(browser)
         self.mne = browser.mne
+        # Correct number of chunks
+        self.n_chunks = min(10, len(self.mne.inst))
         # Set on the GUI thread before start() (screen access is not
         # thread-safe, so run() must not query it itself)
         self.max_pixel_width = None
@@ -131,11 +138,6 @@ class LoadThread(QThread):
 
     def run(self):
         """Load and process data in a separate QThread."""
-        # Split data loading into 10 chunks to show user progress.
-        # Testing showed that e.g. n_chunks=100 extends loading time
-        # (at least for the sample dataset)
-        # because of the frequent gui-update-calls.
-        # Thus n_chunks = 10 should suffice.
         if self.mne.is_epochs:
             times = (
                 np.arange(len(self.mne.inst) * len(self.mne.inst.times))
@@ -143,7 +145,7 @@ class LoadThread(QThread):
             )
         else:
             times = None
-        n_chunks = min(10, len(self.mne.inst))
+        n_chunks = self.n_chunks
         chunk_size = len(self.mne.inst) // n_chunks
         browser = self.weakbrowser()
         if browser is None:
@@ -340,16 +342,14 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         # Load from QSettings if available
         for qparam in qsettings_params:
             default = qsettings_params[qparam]
-            qvalue = QSettings("mne-tools", "mne-qt-browser").value(
-                qparam, defaultValue=default
-            )
+            qvalue = _qsettings().value(qparam, defaultValue=default)
             # QSettings may alter types depending on OS
             if not isinstance(qvalue, type(default)):
                 try:
                     qvalue = literal_eval(qvalue)
                 except (SyntaxError, ValueError):
                     if qvalue in ["true", "false"]:
-                        qvalue = bool(qvalue)
+                        qvalue = qvalue == "true"
                     else:
                         qvalue = default
             setattr(self.mne, qparam, qvalue)
@@ -390,8 +390,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         self.statusBar().addWidget(self.mne.load_prog_label)
         self.mne.load_prog_label.hide()
         self.mne.load_progressbar = QProgressBar()
-        # Set to n_chunks of LoadRunner
-        self.mne.load_progressbar.setMaximum(10)
+        # Maximum is set to LoadThread.n_chunks in _init_precompute
         self.statusBar().addWidget(self.mne.load_progressbar, stretch=1)
         self.mne.load_progressbar.hide()
 
@@ -690,7 +689,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                 _methpartial(self._overview_radio_clicked, menu=menu, new_mode=key)
             )
         menu.addSeparator()
-        visible = QAction("Visible", parent=menu)
+        visible = self.mne.overview_visible_action = QAction("Visible", parent=menu)
         menu.addAction(visible)
         visible.setCheckable(True)
         visible.setChecked(self.mne.overview_visible)
@@ -931,7 +930,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
 
     def _save_setting(self, key, value):
         """Save a setting to QSettings."""
-        QSettings("mne-tools", "mne-qt-browser").setValue(key, value)
+        _qsettings().setValue(key, value)
 
     def _hidpi_mkPen(self, *args, **kwargs):
         kwargs["width"] = self._pixel_ratio * kwargs.get("width", 1.0)
@@ -1195,7 +1194,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                     epo_idx = np.clip(
                         np.searchsorted(self.mne.boundary_times, xt) - 1,
                         0,
-                        len(self.mne.inst),
+                        len(self.mne.inst) - 1,
                     )
                     bmin, bmax = self.mne.boundary_times[epo_idx : epo_idx + 2]
                     # Avoid off-by-one-error at bmax for VlineLabel
@@ -1238,7 +1237,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                     ]
                     if len(trace) == 1:
                         trace = trace[0]
-                        idx = np.searchsorted(self.mne.times, x)
+                        # The cursor can sit between the last sample and the
+                        # right edge of the view, where searchsorted returns
+                        # len(times)
+                        idx = min(
+                            np.searchsorted(self.mne.times, x),
+                            len(self.mne.times) - 1,
+                        )
                         if self.mne.data_precomputed:
                             data = self.mne.data[trace.order_idx]
                         else:
@@ -1336,13 +1341,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         # Update scalebars
         self._update_scalebar_y_positions()
 
+        trace_idxs = {tr.ch_idx for tr in self.mne.traces}
         off_traces = [tr for tr in self.mne.traces if tr.ch_idx not in self.mne.picks]
-        add_idxs = [
-            p for p in self.mne.picks if p not in [tr.ch_idx for tr in self.mne.traces]
-        ]
+        add_idxs = [p for p in self.mne.picks if p not in trace_idxs]
 
         # Update range_idx for traces which just shifted in y-position
-        for trace in [tr for tr in self.mne.traces if tr not in off_traces]:
+        off_set = set(off_traces)
+        for trace in [tr for tr in self.mne.traces if tr not in off_set]:
             trace.update_range_idx()
 
         # Update number of traces
@@ -1444,6 +1449,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                 y2 = data[:, : n * ds].reshape((n_ch, n, ds))
                 y1[:, :, 0] = y2.max(axis=2)
                 y1[:, :, 1] = y2.min(axis=2)
+                # Alternate (max, min) / (min, max) per bin: triangle, not sawtooth
+                y1[:, 1::2] = y1[:, 1::2, ::-1]
                 data = y1.reshape((n_ch, n * 2))
 
             self.mne.times, self.mne.data = times, data
@@ -1512,6 +1519,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
 
         if self.mne.enable_precompute:
             # Start precompute thread
+            self.mne.load_progressbar.setMaximum(self.load_thread.n_chunks)
             self.mne.load_progressbar.show()
             self.mne.load_prog_label.show()
             screen_geometry = _screen_geometry(self)
@@ -1555,8 +1563,15 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                 # data will be loaded into a copy of self.mne.inst._data to apply
                 # processing.
                 expected_ram = disk_space * fmt_multipliers[fmt] * 2
+            elif self.mne.inst.preload:
+                expected_ram = self.mne.inst._data.nbytes
             else:
-                expected_ram = sys.getsizeof(self.mne.inst._data)
+                # No file and not preloaded (e.g., epochs constructed from a
+                # non-preloaded raw): estimate the float64 size once loaded
+                n_samples = len(self.mne.inst)
+                if self.mne.is_epochs:
+                    n_samples *= len(self.mne.inst.times)
+                expected_ram = 8 * n_samples * len(self.mne.inst.ch_names)
 
             # Get available RAM
             free_ram = psutil.virtual_memory().free
@@ -1648,7 +1663,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         if collapse_by > 0:
             data = data.reshape(data.shape[0], max_pixel_width, collapse_by)
             data = data.mean(axis=2)
-        z = zscore(data, axis=1)
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                ".*Precision loss occurred in moment calculation.*",
+                RuntimeWarning,
+            )
+            z = zscore(data, axis=1)
         if z.size > 0:
             zmin = np.min(z, axis=1, keepdims=True)
             zmax = np.max(z, axis=1, keepdims=True)
@@ -1735,7 +1756,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
 
     def _get_onset_idx(self, plot_onset):
         onset = _sync_onset(self.mne.inst, plot_onset, inverse=True)
-        idx = np.where(self.mne.inst.annotations.onset == onset)[0][0]
+        # Exact float equality could fail after round-trips through _sync_onset
+        dist = np.abs(self.mne.inst.annotations.onset - onset)
+        idx = int(np.argmin(dist))
         return idx
 
     def _region_changed(self, region):
@@ -1851,14 +1874,17 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         if toggle_all:
             on = self.mne.projs_on
             applied = self.mne.projs_active
-            value = False if all(on) else True
-            new_state = np.full_like(on, value)
+            new_state = np.full_like(on, not all(on))
             # Always activate applied projections
             new_state[applied] = True
             self.mne.projs_on = new_state
+        projector_before = self.mne.projector
         self._update_projector()
-        # If data was precomputed it needs to be precomputed again
-        self._rerun_precompute()
+        # If the projector changed, precomputed data needs to be precomputed
+        # again (this is also called on every bad-channel toggle, which only
+        # affects the projector when e.g. an average reference is present)
+        if not np.array_equal(projector_before, self.mne.projector):
+            self._rerun_precompute()
         self._redraw()
 
     def _toggle_proj_fig(self):
@@ -1986,10 +2012,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
 
     def _toggle_overview_bar(self):
         visible = not self.mne.overview_bar.isVisible()
-        for item in self.mne.overview_menu.actions():
-            if item.text() == "Visible":
-                item.setChecked(visible)
-                break
+        self.mne.overview_visible_action.setChecked(visible)
         self.mne.overview_bar.setVisible(visible)
         self.mne.overview_visible = visible
         self._save_setting("overview_visible", visible)
@@ -2063,14 +2086,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         modal=True,
     ):  # noqa: D102
         self.msg_box.setText(f'<font size="+2"><b>{text}</b></font>')
-        if info_text is not None:
-            self.msg_box.setInformativeText(info_text)
-        if buttons is not None:
-            self.msg_box.setStandardButtons(buttons)
+        # The single msg_box instance is reused for all messages, so reset
+        # everything a previous call may have set
+        self.msg_box.setInformativeText("" if info_text is None else info_text)
+        self.msg_box.setStandardButtons(QMessageBox.Ok if buttons is None else buttons)
         if default_button is not None:
             self.msg_box.setDefaultButton(default_button)
-        if icon is not None:
-            self.msg_box.setIcon(icon)
+        self.msg_box.setIcon(QMessageBox.NoIcon if icon is None else icon)
 
         # Allow interacting with message_box in test mode.
         # Set modal=False only if no return value is expected.
@@ -2083,14 +2105,14 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
     def keyPressEvent(self, event):
         """Customize key press events."""
         # On macOS additionally KeypadModifier is set when arrow keys are pressed
-        mods = event.modifiers()
+        event_mods = event.modifiers()
         try:
-            mods = int(mods)  # PyQt < 5.13
+            event_mods = int(event_mods)  # PyQt < 5.13
         except Exception:
             pass
         modifiers = {
-            "Shift": bool(Qt.ShiftModifier & mods),
-            "Ctrl": bool(Qt.ControlModifier & mods),
+            "Shift": bool(Qt.ShiftModifier & event_mods),
+            "Ctrl": bool(Qt.ControlModifier & event_mods),
         }
         for key_name in self.mne.keyboard_shortcuts:
             key_dict = self.mne.keyboard_shortcuts[key_name]
@@ -2098,12 +2120,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                 mod_idx = 0
                 # Get modifier
                 if "modifier" in key_dict:
-                    mods = [modifiers[mod] for mod in modifiers]
-                    if any(mods):
+                    pressed = [mod for mod in modifiers if modifiers[mod]]
+                    if pressed:
                         # No multiple modifiers supported yet
-                        mod = [mod for mod in modifiers if modifiers[mod]][0]
-                        if mod in key_dict["modifier"]:
-                            mod_idx = key_dict["modifier"].index(mod)
+                        if pressed[0] in key_dict["modifier"]:
+                            mod_idx = key_dict["modifier"].index(pressed[0])
 
                 slot_idx = mod_idx if mod_idx < len(key_dict["slot"]) else 0
                 slot = key_dict["slot"][slot_idx]
@@ -2119,6 +2140,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                     slot()
 
                 break
+        else:
+            # Let Qt handle keys we don't (e.g., for ambient shortcuts)
+            super().keyPressEvent(event)
 
     def _draw_traces(self):
         # Update data in traces (=drawing traces)
@@ -2165,7 +2189,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         kind="press",
         modifier=None,
     ):
-        add_points = add_points or list()
+        # Copy so the transformations below don't mutate the caller's list
+        add_points = list(add_points) if add_points is not None else list()
         # Wait until window is fully shown
         QTest.qWaitForWindowExposed(self)
         # Scene dimensions still seem to change to final state when waiting for a short
@@ -2361,6 +2386,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                 "ax_vscroll",
                 "overview_bar",
                 "overview_menu",
+                "overview_visible_action",
                 "crosshair_action",
                 "load_progressbar",
                 "load_prog_label",
@@ -2486,13 +2512,11 @@ def _setup_ipython(ipython=None):
 
 def _init_browser(**kwargs):
     _setup_ipython()
-    # Don't enable experimental on PySide6 6.10+ and pyqtgraph<0.13.7 as it segfaults
-    if check_version("pyqtgraph", "0.13.7") or (
+    # Experimental mode is needed for fast code paths on pyqtgraph < 0.13.7,
+    # but on PySide6 6.10+ the combination segfaults
+    if not check_version("pyqtgraph", "0.13.7") and not (
         API_NAME == "PySide6" and check_version("PySide6", "6.10.0")
     ):
-        pass
-    else:
-        # Needed for fast code paths
         setConfigOption("enableExperimental", True)
     app_kwargs = dict()
     if kwargs.get("splash", False):

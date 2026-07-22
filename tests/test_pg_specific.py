@@ -763,12 +763,17 @@ def test_zscore_rgba(raw_orig, pg_backend):
     """Test the z-score overview RGBA mapping."""
     fig = raw_orig.plot()
     fig.test_mode = True
-    # One symmetric ramp channel and one all-NaN channel
-    data = np.array([np.linspace(-2, 2, 5), [np.nan] * 5])
+    # One symmetric ramp channel, one all-NaN channel, and one near-constant
+    # channel; the latter triggers SciPy's catastrophic-cancellation
+    # RuntimeWarning, which must not escape (it would kill the load thread
+    # under warnings-as-errors; gh-428)
+    near_constant = np.ones(5)
+    near_constant[0] += 1e-15
+    data = np.array([np.linspace(-2, 2, 5), [np.nan] * 5, near_constant])
     fig._get_zscore(data, max_pixel_width=5)
     zrgba = fig.mne.zscore_rgba
     assert zrgba.dtype == np.uint8
-    assert zrgba.shape == (2, 5, 4)
+    assert zrgba.shape == (3, 5, 4)
     # Negative z-scores fade to blue, positive to red, extrema fully opaque
     expected = np.array(
         [
@@ -783,3 +788,52 @@ def test_zscore_rgba(raw_orig, pg_backend):
     assert_allclose(zrgba[0], expected)
     # NaN channels are fully transparent
     assert_allclose(zrgba[1], 0)
+
+
+def test_qsettings_string_bools(raw_orig, pg_backend):
+    """Test that boolean settings round-trip through their string form."""
+    from mne_qt_browser import _pg_figure
+
+    # On some platforms QSettings returns booleans as "true"/"false" strings
+    qsettings = _pg_figure.QSettings()
+    qsettings.setValue("antialiasing", "false")
+    qsettings.setValue("overview_visible", "true")
+    qsettings.sync()
+    fig = raw_orig.plot()
+    assert fig.mne.antialiasing is False
+    assert fig.mne.overview_visible is True
+
+
+def test_message_box_reset(raw_orig, pg_backend):
+    """Test that message_box state does not leak into the next message."""
+    from qtpy.QtWidgets import QMessageBox
+
+    fig = raw_orig.plot()
+    fig.test_mode = True
+    fig.message_box(
+        "first",
+        info_text="details",
+        buttons=QMessageBox.Yes | QMessageBox.No,
+        icon=QMessageBox.Critical,
+    )
+    fig.message_box("second")
+    assert fig.msg_box.informativeText() == ""
+    assert fig.msg_box.standardButtons() == QMessageBox.Ok
+    assert fig.msg_box.icon() == QMessageBox.NoIcon
+
+
+def test_get_onset_idx_float_tolerance(raw_orig, pg_backend):
+    """Test that annotation lookup survives sub-sample float drift."""
+    # raw_orig is shared across the session and other tests mutate its
+    # annotations in place, so start from a clean slate here
+    raw_orig = raw_orig.copy().crop(tmax=5.0)
+    raw_orig.set_annotations(None)
+    first_time = raw_orig.first_time
+    raw_orig.annotations.append(1 + first_time, 1, "A")
+    raw_orig.annotations.append(3 + first_time, 1, "B")
+    fig = raw_orig.plot()
+    fig.test_mode = True
+    drift = 0.1 / raw_orig.info["sfreq"]
+    # Each annotation still resolves to its own index despite sub-sample drift
+    assert fig._get_onset_idx(3.0 + drift) == 1  # "B"
+    assert fig._get_onset_idx(1.0 - drift) == 0  # "A"
