@@ -115,8 +115,6 @@ def pytest_configure(config):
     matplotlib.rcParams["figure.raise_window"] = False
     warning_lines = r"""
     error::
-    # PySide6
-    ignore:Function.*is marked as deprecated, please check the .*:DeprecationWarning
     """
     for warning_line in warning_lines.split("\n"):
         warning_line = warning_line.strip()

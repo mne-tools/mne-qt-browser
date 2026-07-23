@@ -42,6 +42,7 @@ from pyqtgraph import (
 from qtpy import API_NAME, QT_VERSION
 from qtpy.QtCore import (
     QEvent,
+    QPointF,
     QSettings,
     QSignalBlocker,
     QThread,
@@ -2451,11 +2452,19 @@ def _close_all():
 
 
 # mouse testing functions adapted from pyqtgraph (pyqtgraph.tests.ui_testing.py)
+# The QMouseEvent overloads that omit the global position are deprecated, so pass one
+# explicitly. It must not vary with ``pos``, as pyqtgraph infers drags from screenPos
+# deltas and would then read our synthetic clicks as drags.
 def _mousePress(widget, pos, button, modifier=None):
     if modifier is None:
         modifier = Qt.KeyboardModifier.NoModifier
     event = QMouseEvent(
-        QEvent.Type.MouseButtonPress, pos, button, Qt.MouseButton.NoButton, modifier
+        QEvent.Type.MouseButtonPress,
+        QPointF(pos),
+        QPointF(0, 0),
+        button,
+        Qt.MouseButton.NoButton,
+        modifier,
     )
     QApplication.sendEvent(widget, event)
 
@@ -2464,7 +2473,12 @@ def _mouseRelease(widget, pos, button, modifier=None):
     if modifier is None:
         modifier = Qt.KeyboardModifier.NoModifier
     event = QMouseEvent(
-        QEvent.Type.MouseButtonRelease, pos, button, Qt.MouseButton.NoButton, modifier
+        QEvent.Type.MouseButtonRelease,
+        QPointF(pos),
+        QPointF(0, 0),
+        button,
+        Qt.MouseButton.NoButton,
+        modifier,
     )
     QApplication.sendEvent(widget, event)
 
@@ -2475,7 +2489,12 @@ def _mouseMove(widget, pos, buttons=None, modifier=None):
     if modifier is None:
         modifier = Qt.KeyboardModifier.NoModifier
     event = QMouseEvent(
-        QEvent.Type.MouseMove, pos, Qt.MouseButton.NoButton, buttons, modifier
+        QEvent.Type.MouseMove,
+        QPointF(pos),
+        QPointF(0, 0),
+        Qt.MouseButton.NoButton,
+        buttons,
+        modifier,
     )
     QApplication.sendEvent(widget, event)
 
