@@ -7,7 +7,7 @@ import mne
 import numpy as np
 import pytest
 from mne.utils import check_version
-from numpy.testing import assert_allclose
+from numpy.testing import assert_allclose, assert_array_equal
 from qtpy.QtCore import Qt
 from qtpy.QtTest import QTest
 
@@ -894,3 +894,72 @@ def test_get_onset_idx_float_tolerance(raw_orig, pg_backend):
     # Each annotation still resolves to its own index despite sub-sample drift
     assert fig._get_onset_idx(3.0 + drift) == 1  # "B"
     assert fig._get_onset_idx(1.0 - drift) == 0  # "A"
+
+
+def _wait_precompute(fig):
+    for _ in range(600):
+        if fig.mne.data_precomputed:
+            return
+        QTest.qWait(100)
+    raise AssertionError("Precomputation did not finish")
+
+
+def _traces_drawn(fig):
+    """Get what each trace draws plus its zero line, relative to its own baseline."""
+    # Relative to the baseline (rather than in data coordinates) so that assert_allclose
+    # is not dominated by ypos, which is the same in both modes anyway
+    out = dict()
+    for trace in fig.mne.traces:
+        traces = [trace] + list(getattr(trace, "child_traces", []))
+        # Child traces (epochs) each draw one color and NaN out the rest
+        drawn = np.full(len(trace.xData) + 1, np.nan)
+        for this in traces:
+            y = this.transform().m22() * np.asarray(this.yData)
+            drawn[:-1][np.isfinite(y)] = y[np.isfinite(y)]
+        drawn[-1] = trace._true_zero_ypos() - trace.ypos  # zero_line_offset
+        out[trace.ch_name] = drawn
+    return out
+
+
+@pytest.mark.parametrize("clipping", ("transparent", "clamp", None))
+def test_precompute_matches_on_the_fly(raw_orig, pg_backend, clipping):
+    """Test that precomputed data is displayed like data processed on the fly."""
+    # A window that has stim events but whose stim maxima differ from the maxima over
+    # the whole recording (gh-270), and all channel types visible
+    raw_orig = raw_orig.copy().crop(tmax=10.0)
+    kwargs = dict(
+        clipping=clipping,
+        n_channels=len(raw_orig.ch_names),
+        duration=2.0,
+        start=3.0,
+    )
+    drawn = dict()
+    for precompute in (False, True):
+        fig = raw_orig.plot(precompute=precompute, **kwargs)
+        fig.test_mode = True
+        if precompute:
+            _wait_precompute(fig)
+        drawn[precompute] = [_traces_drawn(fig)]
+        # Each of these has at some point been broken by precomputation only
+        for action in (
+            lambda: fig._toggle_all_projs(),  # projectors
+            lambda: fig._click_ch_name(0, 0),  # bad channel (changes projector)
+            lambda: fig._fake_keypress("="),  # scale_factor
+            lambda: fig.mne.scalings.__setitem__("grad", 1e-10) or fig._redraw(),
+            lambda: fig._fake_keypress("d"),  # DC removal
+            lambda: fig._fake_keypress("right"),  # scroll
+        ):
+            action()
+            QTest.qWait(50)
+            if precompute:
+                _wait_precompute(fig)
+            drawn[precompute].append(_traces_drawn(fig))
+        fig.close()
+
+    for on_the_fly, precomputed in zip(drawn[False], drawn[True]):
+        assert set(on_the_fly) == set(precomputed)
+        for ch_name, expected in on_the_fly.items():
+            got = precomputed[ch_name]
+            # Clipping must kick in for the same samples in both modes
+            assert_array_equal(np.isnan(got), np.isnan(expected), err_msg=ch_name)
+            assert_allclose(got, expected, atol=1e-10, err_msg=ch_name)
