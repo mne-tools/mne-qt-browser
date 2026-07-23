@@ -8,20 +8,26 @@ from time import perf_counter
 import mne
 import numpy as np
 import pytest
+from mne.utils import check_version
 from qtpy.QtCore import QTimer
 
 from mne_qt_browser._pg_figure import _methpartial
 from mne_qt_browser.figure import MNEQtBrowser
 
-try:
-    import OpenGL  # noqa
-except Exception as exc:
-    has_gl = False
-    reason = str(exc)
+# pyqtgraph 0.14 dropped the PyOpenGL requirement for OpenGL rendering, so it is only
+# needed on older versions (see the check in _pg_figure.py).
+if check_version("pyqtgraph", "0.14"):
+    has_gl, reason = True, ""
 else:
-    has_gl = True
-    reason = ""
-gl_mark = pytest.mark.skipif(not has_gl, reason=f"Requires PyOpengl (got {reason})")
+    try:
+        import OpenGL  # noqa
+    except Exception as exc:
+        has_gl, reason = False, str(exc)
+    else:
+        has_gl, reason = True, ""
+gl_mark = pytest.mark.skipif(
+    not has_gl, reason=f"pyqtgraph < 0.14 requires PyOpenGL (got {reason})"
+)
 
 
 class _Benchmark:

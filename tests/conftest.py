@@ -115,10 +115,6 @@ def pytest_configure(config):
     matplotlib.rcParams["figure.raise_window"] = False
     warning_lines = r"""
     error::
-    # PySide6
-    ignore:Enum value .* is marked as deprecated:DeprecationWarning
-    ignore:Function.*is marked as deprecated, please check the .*:DeprecationWarning
-    ignore:Failed to disconnect.*:RuntimeWarning
     """
     for warning_line in warning_lines.split("\n"):
         warning_line = warning_line.strip()
