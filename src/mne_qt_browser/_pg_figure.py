@@ -48,7 +48,7 @@ from qtpy.QtCore import (
     QThread,
     Signal,
 )
-from qtpy.QtGui import QIcon, QMouseEvent
+from qtpy.QtGui import QCursor, QIcon, QMouseEvent
 from qtpy.QtTest import QTest
 from qtpy.QtWidgets import (
     QAction,
@@ -2453,15 +2453,16 @@ def _close_all():
 
 # mouse testing functions adapted from pyqtgraph (pyqtgraph.tests.ui_testing.py)
 # The QMouseEvent overloads that omit the global position are deprecated, so pass one
-# explicitly. It must not vary with ``pos``, as pyqtgraph infers drags from screenPos
-# deltas and would then read our synthetic clicks as drags.
+# explicitly. Use exactly what those overloads used, QCursor.pos(): deriving it from
+# ``pos`` (or using a fixed origin) instead reliably segfaults macOS CI in pyqtgraph's
+# curve painting.
 def _mousePress(widget, pos, button, modifier=None):
     if modifier is None:
         modifier = Qt.KeyboardModifier.NoModifier
     event = QMouseEvent(
         QEvent.Type.MouseButtonPress,
         QPointF(pos),
-        QPointF(0, 0),
+        QPointF(QCursor.pos()),
         button,
         Qt.MouseButton.NoButton,
         modifier,
@@ -2475,7 +2476,7 @@ def _mouseRelease(widget, pos, button, modifier=None):
     event = QMouseEvent(
         QEvent.Type.MouseButtonRelease,
         QPointF(pos),
-        QPointF(0, 0),
+        QPointF(QCursor.pos()),
         button,
         Qt.MouseButton.NoButton,
         modifier,
@@ -2491,7 +2492,7 @@ def _mouseMove(widget, pos, buttons=None, modifier=None):
     event = QMouseEvent(
         QEvent.Type.MouseMove,
         QPointF(pos),
-        QPointF(0, 0),
+        QPointF(QCursor.pos()),
         Qt.MouseButton.NoButton,
         buttons,
         modifier,
