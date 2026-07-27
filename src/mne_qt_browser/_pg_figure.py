@@ -178,6 +178,11 @@ class LoadThread(QThread):
             # Load raw
             else:
                 data_chunk, times_chunk = browser._load_data(start, stop)
+                if stop is not None:
+                    # mne < 1.10 pads with two extra samples, which would be
+                    # duplicated into global_data at every chunk boundary
+                    data_chunk = data_chunk[:, : stop - start]
+                    times_chunk = times_chunk[: stop - start]
                 data_chunks.append(data_chunk)
                 times_chunks.append(times_chunk)
 
@@ -196,20 +201,19 @@ class LoadThread(QThread):
         if self.isInterruptionRequested():
             return
         picks = self.mne.ch_order
-        # Deactivate remove_dc because DC is removed for the visible range instead
-        stashed_remove_dc = self.mne.remove_dc
-        self.mne.remove_dc = False
-        data = browser._process_data(data, 0, data.shape[-1], picks, self)
-        # The GUI thread may have toggled remove_dc while we were processing;
-        # only restore the stashed value if it did not (so we never clobber a
-        # user toggle)
-        if self.mne.remove_dc is False:
-            self.mne.remove_dc = stashed_remove_dc
-
-        ch_type_ordered = self.mne.ch_types[self.mne.ch_order]
-        for chii in range(data.shape[0]):
-            ch_type = ch_type_ordered[chii]
-            data[chii, :] *= self.mne.scalings[ch_type]
+        # This is _process_data (plus the sign inversion of our override of it)
+        # minus the two steps that depend on the shown range, which _update_data
+        # does per view instead: DC removal, and scaling each channel into its
+        # 1-vertical-unit slot (stim channels are divided by their maximum over
+        # the shown range, and self.mne.scalings can change after precomputing)
+        if self.mne.projector is not None:
+            self.processText.emit("Applying Projectors...")
+            data = self.mne.projector @ data
+        data = data[picks]
+        if self.mne.filter_coefs is not None:
+            self.processText.emit("Apply Filter...")
+            browser._apply_filter(data, 0, data.shape[-1], picks)
+        data *= -1  # displayed from the top on an inverted y-axis
 
         if self.isInterruptionRequested():
             return
@@ -1607,12 +1611,33 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
 
         return data
 
+    def _get_display_norms(self, picks, data):
+        """Get the divisors that scale each channel into its 1-unit slot.
+
+        This mirrors the scaling step of ``BrowserBase._process_data``, which the
+        precompute path has to do itself for the shown range (see ``_update_data``).
+        ``data`` is that range, sign-inverted and unscaled.
+        """
+        this_names = self.mne.ch_names[picks]
+        this_types = self.mne.ch_types[picks]
+        norms = np.array([self.mne.scalings[t] for t in this_types], float)
+        stims = this_types == "stim"
+        norms[stims] = -data[stims].min(axis=-1)  # data is inverted
+        # Whitened channels are already in units of standard deviation, unless
+        # they are bad (those are not whitened)
+        norms[
+            np.isin(this_names, self.mne.whitened_ch_names)
+            & np.isin(this_names, self.mne.info["bads"], invert=True)
+        ] = self.mne.scalings["whitened"]
+        norms[norms == 0] = 1
+        return 2 * norms
+
     def _update_data(self):
         if self.mne.data_precomputed:
             # get start/stop samples
             start, stop = self._get_start_stop()
             self.mne.times = self.mne.global_times[start:stop]
-            self.mne.data = self.mne.global_data[:, start:stop]
+            data = self.mne.global_data[:, start:stop]
 
             # remove DC locally but keep track of the offset
             if self.mne.remove_dc:
@@ -1624,11 +1649,18 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                     warnings.filterwarnings(
                         "ignore", "Mean of empty slice", RuntimeWarning
                     )
-                    dc_offset = np.nanmean(self.mne.data, axis=1, keepdims=True)
-                self.mne.zero_line_offset = -dc_offset[:, 0]
-                self.mne.data = self.mne.data - dc_offset
+                    dc_offset = np.nanmean(data, axis=1, keepdims=True)
+                data = data - dc_offset
             else:
-                self.mne.zero_line_offset = None
+                dc_offset = None
+
+            # Scale here rather than in LoadThread so that stim channels and
+            # self.mne.scalings changes behave as they do without precomputation
+            norms = self._get_display_norms(self.mne.ch_order, data)[:, np.newaxis]
+            self.mne.data = data / norms
+            self.mne.zero_line_offset = (
+                None if dc_offset is None else -(dc_offset / norms)[:, 0]
+            )
         else:
             # While data is not precomputed get data only from shown range and process
             # only those

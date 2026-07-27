@@ -567,12 +567,7 @@ class DataTrace(PlotCurveItem):
 
     def _apply_transform(self):
         transform = QTransform()
-        if self.mne.data_precomputed:
-            transform.scale(
-                1.0, self.mne.scale_factor / self.mne.scalings[self.ch_type]
-            )
-        else:
-            transform.scale(1.0, self.mne.scale_factor)
+        transform.scale(1.0, self.mne.scale_factor)
         self.setTransform(transform)
 
     @propagate_to_children
