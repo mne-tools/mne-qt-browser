@@ -2,6 +2,7 @@
 # Copyright the MNE Qt Browser contributors.
 
 import os
+import re
 from pathlib import Path
 
 import matplotlib
@@ -27,6 +28,43 @@ def pytest_runtest_makereport(item, call):
     outcome = yield
     rep = outcome.get_result()
     item.stash.setdefault(_phase_report_key, {})[rep.when] = rep
+
+
+# Unset means "allow every skip". Set it to e.g. "^$" to turn all skips into errors,
+# or to a pattern matching the reasons that are expected on this configuration.
+MNE_TEST_ALLOW_SKIP = os.getenv("MNE_TEST_ALLOW_SKIP", None)
+_valid_skips_re = re.compile(MNE_TEST_ALLOW_SKIP or ".*", re.DOTALL)
+
+
+def pytest_report_header(config):
+    """Add the allowed skips to the pytest run header."""
+    if MNE_TEST_ALLOW_SKIP is None:
+        return []
+    return [f"Allowed skips: {MNE_TEST_ALLOW_SKIP!r}"]
+
+
+def pytest_report_teststatus(report, config):
+    """Turn unexpected skips into errors (adapted from mne-python's conftest)."""
+    # Both report types matter: CollectReport covers skipif marks, TestReport covers
+    # skips raised from a test body (e.g. importorskip)
+    if MNE_TEST_ALLOW_SKIP is None or report.outcome != "skipped":
+        return
+    if isinstance(report.longrepr, tuple):
+        file, lineno, reason = report.longrepr
+    else:
+        file, lineno, reason = "<unknown>", 1, str(report.longrepr)
+    if _valid_skips_re.match(reason):
+        return
+    # xfails are not skips, but are reported as such (by mark, or by traceback)
+    if (
+        getattr(report, "keywords", {}).get("xfail", False)
+        or " pytest.xfail( " in reason
+    ):
+        return
+    reason = reason.removeprefix("Skipped: ")
+    report.longrepr = f"{file}:{lineno}: UNEXPECTED SKIP: {reason!r}"
+    report.outcome = "error" if isinstance(report, pytest.TestReport) else "failed"
+    return report.outcome, report.outcome[0].upper(), "UNEXPECTED SKIP"
 
 
 def _test_passed(request):
