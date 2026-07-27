@@ -177,6 +177,11 @@ class LoadThread(QThread):
             # Load raw
             else:
                 data_chunk, times_chunk = browser._load_data(start, stop)
+                if stop is not None:
+                    # mne < 1.10 pads with two extra samples, which would be
+                    # duplicated into global_data at every chunk boundary
+                    data_chunk = data_chunk[:, : stop - start]
+                    times_chunk = times_chunk[: stop - start]
                 data_chunks.append(data_chunk)
                 times_chunks.append(times_chunk)
 

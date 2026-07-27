@@ -912,15 +912,27 @@ def _traces_drawn(fig):
     for trace in fig.mne.traces:
         traces = [trace] + list(getattr(trace, "child_traces", []))
         # Child traces (epochs) each draw one color and NaN out the rest
-        drawn = np.full(len(trace.xData) + 1, np.nan)
+        drawn = np.full(len(trace.xData), np.nan)
         for this in traces:
             y = this.transform().m22() * np.asarray(this.yData)
-            drawn[:-1][np.isfinite(y)] = y[np.isfinite(y)]
-        drawn[-1] = trace._true_zero_ypos() - trace.ypos  # zero_line_offset
+            drawn[np.isfinite(y)] = y[np.isfinite(y)]
+        if _HAS_ZERO_LINE_OFFSET:
+            zero = trace._true_zero_ypos() - trace.ypos
+            drawn = np.concatenate([drawn, [zero]])
         out[trace.ch_name] = drawn
     return out
 
 
+# BrowserBase only tracks the DC offset of the shown range (and thus places the zero
+# line at the true zero) as of mne 1.13
+_HAS_ZERO_LINE_OFFSET = check_version("mne", "1.13")
+
+
+@pytest.mark.skipif(
+    not check_version("mne", "1.10"),
+    # ... which the precompute path never did, so the two modes cannot match there
+    reason="mne < 1.10 pads the shown range with two extra samples",
+)
 @pytest.mark.parametrize("clipping", ("transparent", "clamp", None))
 def test_precompute_matches_on_the_fly(raw_orig, pg_backend, clipping):
     """Test that precomputed data is displayed like data processed on the fly."""
