@@ -79,7 +79,16 @@ jobs:
         with:
           qt: true
       - run: mne sys_info
-      - run: pytest -m pgtest --cov=mne_qt_browser --cov-report=xml mne-python/mne/report mne-python/mne/viz
+      - run: |
+          # On MNE < 1.13 (i.e. not main) test_plotting_scalebars still asserts the
+          # pre-#276 butterfly scalebar geometry (bars spanning a full y-unit), which
+          # the fix here intentionally changes. The updated test only lives on MNE
+          # main (via the companion PR), so deselect it on the older release branches.
+          deselect=()
+          if [[ "${{ matrix.mne }}" != "main" ]]; then
+            deselect=(--deselect mne-python/mne/viz/tests/test_raw.py::test_plotting_scalebars)
+          fi
+          pytest -m pgtest --cov=mne_qt_browser --cov-report=xml "${deselect[@]}" mne-python/mne/report mne-python/mne/viz
         name: Run MNE-Tests
       - run: pytest tests/test_pg_specific.py --cov-report=xml --cov-append
         name: Run pyqtgraph-specific tests
