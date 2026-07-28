@@ -2325,17 +2325,22 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         self.vscroll(step)
 
     def _click_ch_name(self, ch_index, button):
-        self.mne.channel_axis.repaint()
-        # Wait because channel axis may need time
-        # (came up with test_epochs::test_plot_epochs_clicks)
-        QTest.qWait(100)
-        if not self.mne.butterfly:
-            ch_name = str(self.mne.ch_names[self.mne.picks[ch_index]])
-            xrange, yrange = self.mne.channel_axis.ch_texts[ch_name]
-            x = np.mean(xrange)
-            y = np.mean(yrange)
-
-            self._fake_click((x, y), fig=self.mne.view, button=button, xform="none")
+        if self.mne.butterfly:
+            return
+        ch_name = str(self.mne.ch_names[self.mne.picks[ch_index]])
+        # channel_axis.ch_texts is populated lazily when the axis repaints, which the
+        # event loop only does once its queued layout/view-range updates and the
+        # deferred paint have been delivered. A single fixed wait flaked on macOS CI
+        # (gh-276, test_epochs::test_plot_epochs_clicks), so poll until it appears.
+        for _ in range(100):
+            self.mne.channel_axis.repaint()
+            QTest.qWait(10)
+            if ch_name in self.mne.channel_axis.ch_texts:
+                break
+        xrange, yrange = self.mne.channel_axis.ch_texts[ch_name]
+        x = np.mean(xrange)
+        y = np.mean(yrange)
+        self._fake_click((x, y), fig=self.mne.view, button=button, xform="none")
 
     def _resize_by_factor(self, factor):
         pass
