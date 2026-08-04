@@ -48,7 +48,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          repository: 'mne-tools/mne-python'
+          repository: mne-tools/mne-python
           path: mne-python
           ref: ${{ matrix.mne }}
       - uses: actions/setup-python@v7
