@@ -478,7 +478,9 @@ class ChannelAxis(AxisItem):
     def tickValues(self, minVal, maxVal, size):
         """Customize creation of axis values from visible axis range."""
         minVal, maxVal = sorted((minVal, maxVal))
-        values = list(range(round(minVal) + 1, round(maxVal)))
+        # One tick per integer y-position strictly inside the visible range (channels
+        # start at y=1, and in butterfly mode the range ends on a half unit)
+        values = list(range(int(np.floor(minVal)) + 1, int(np.ceil(maxVal))))
         tick_values = [(1, values)]
         return tick_values
 
@@ -961,9 +963,10 @@ class OverviewBar(QGraphicsView):
     def update_viewrange(self):
         """Update representation of viewrange."""
         if self.mne.butterfly:
+            # all channels are shown, and the overview bar is scaled by channel count
             top_left = self._mapFromData(self.mne.t_start, 0)
             bottom_right = self._mapFromData(
-                self.mne.t_start + self.mne.duration, self.mne.ymax
+                self.mne.t_start + self.mne.duration, len(self.mne.ch_order)
             )
         else:
             top_left = self._mapFromData(self.mne.t_start, self.mne.ch_start)

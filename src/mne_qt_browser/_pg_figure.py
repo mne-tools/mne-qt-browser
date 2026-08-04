@@ -325,6 +325,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         self.mne.traces = list()
         # Scale factor
         self.mne.scale_factor = 1
+        # Factor of the scale factor that is due to butterfly mode
+        self.mne.butterfly_scale = 1.0
         # DPI
         screen = QApplication.primaryScreen()
         self.mne.dpi = screen.physicalDotsPerInch()
@@ -1956,27 +1958,38 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
 
     def _set_butterfly(self, butterfly):
         self.mne.butterfly = butterfly
+        # Butterfly mode draws the traces at half amplitude (like the matplotlib
+        # backend). Track what we applied so that repeated calls don't compound.
+        butterfly_scale = 0.5 if butterfly else 1.0
+        if butterfly_scale != self.mne.butterfly_scale:
+            self.mne.scale_factor *= butterfly_scale / self.mne.butterfly_scale
+            self.mne.butterfly_scale = butterfly_scale
+            for line in self.mne.traces:
+                line.update_scale()
         self._update_picks()
         self._update_data()
 
+        # Each row (channel type or selection) gets exactly one y-unit, so that
+        # the first and last rows are half a unit away from the edges.
         if butterfly and self.mne.fig_selection is not None:
             self.mne.selection_ypos_dict.clear()
             selections_dict = self._make_butterfly_selections_dict()
             for idx, picks in enumerate(selections_dict.values()):
                 for pick in picks:
                     self.mne.selection_ypos_dict[pick] = idx + 1
-            ymax = len(selections_dict) + 1
-            self.mne.ymax = ymax
-            self.mne.plt.setLimits(yMax=ymax)
-            self.mne.plt.setYRange(0, ymax, padding=0)
+            n_rows = len(selections_dict)
         elif butterfly:
-            ymax = len(self.mne.butterfly_type_order) + 1
-            self.mne.ymax = ymax
-            self.mne.plt.setLimits(yMax=ymax)
-            self.mne.plt.setYRange(0, ymax, padding=0)
+            n_rows = len(self.mne.butterfly_type_order)
+        else:
+            n_rows = None
+
+        if butterfly:
+            self.mne.ymax = n_rows + 0.5
+            self.mne.plt.setLimits(yMin=0.5, yMax=self.mne.ymax)
+            self.mne.plt.setYRange(0.5, self.mne.ymax, padding=0)
         else:
             self.mne.ymax = len(self.mne.ch_order) + 1
-            self.mne.plt.setLimits(yMax=self.mne.ymax)
+            self.mne.plt.setLimits(yMin=0, yMax=self.mne.ymax)
             self.mne.plt.setYRange(
                 self.mne.ch_start,
                 self.mne.ch_start + self.mne.n_channels + 1,
@@ -2001,6 +2014,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
             trace.update_ypos()
 
         self._draw_traces()
+
+        # Scalebar height and value both depend on butterfly mode
+        self._update_scalebar_values()
+        self._update_scalebar_y_positions()
 
         self._update_ch_spinbox_values()
 
@@ -2308,17 +2325,22 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         self.vscroll(step)
 
     def _click_ch_name(self, ch_index, button):
-        self.mne.channel_axis.repaint()
-        # Wait because channel axis may need time
-        # (came up with test_epochs::test_plot_epochs_clicks)
-        QTest.qWait(100)
-        if not self.mne.butterfly:
-            ch_name = str(self.mne.ch_names[self.mne.picks[ch_index]])
-            xrange, yrange = self.mne.channel_axis.ch_texts[ch_name]
-            x = np.mean(xrange)
-            y = np.mean(yrange)
-
-            self._fake_click((x, y), fig=self.mne.view, button=button, xform="none")
+        if self.mne.butterfly:
+            return
+        ch_name = str(self.mne.ch_names[self.mne.picks[ch_index]])
+        # channel_axis.ch_texts is populated lazily when the axis repaints, which the
+        # event loop only does once its queued layout/view-range updates and the
+        # deferred paint have been delivered. A single fixed wait flaked on macOS CI
+        # (gh-276, test_epochs::test_plot_epochs_clicks), so poll until it appears.
+        for _ in range(100):
+            self.mne.channel_axis.repaint()
+            QTest.qWait(10)
+            if ch_name in self.mne.channel_axis.ch_texts:
+                break
+        xrange, yrange = self.mne.channel_axis.ch_texts[ch_name]
+        x = np.mean(xrange)
+        y = np.mean(yrange)
+        self._fake_click((x, y), fig=self.mne.view, button=button, xform="none")
 
     def _resize_by_factor(self, factor):
         pass
@@ -2579,3 +2601,8 @@ def _init_browser(**kwargs):
     browser = MNEQtBrowser(**kwargs)
 
     return browser
+
+
+# TODO VERSION: signal to MNE-Python to use the newer scalebar checks. Can be removed
+# once MNE-Python requires mne-qt-browser >= 0.7.6
+_SCALEBARS_FIXED = True
