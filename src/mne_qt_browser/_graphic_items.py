@@ -39,6 +39,10 @@ _Z_TRACE_MAX = 100
 _Z_SCALEBAR = 101
 _Z_SCALEBAR_TEXT = 102
 
+# Annotation labels are stacked in this many rows (by description) so that the labels of
+# overlapping annotations do not land on top of each other
+_N_ANNOT_LABEL_ROWS = 3
+
 
 def propagate_to_children(method):  # noqa: D103
     @functools.wraps(method)
@@ -326,21 +330,30 @@ class AnnotRegion(LinearRegionItem):
         else:
             self.sigRegionChanged.emit(self)
 
+    def _label_row(self):
+        """Get the row this label is stacked in, based on its description."""
+        descriptions = sorted(self.mne.annotation_segment_colors)
+        if self.description not in descriptions:  # transient while renaming
+            return 0
+        return descriptions.index(self.description) % _N_ANNOT_LABEL_ROWS
+
     def update_label_pos(self):
         """Update position of description label from annotation region."""
         vb = self.mne.viewbox
         if not vb:
             return
         (xmin, xmax), (_, ymax) = vb.viewRange()
+        px, py = vb.viewPixelSize()
+        rect = self.label_item.boundingRect()
         rgn = self.getRegion()
         # center on the visible part so labels of long regions stay readable (gh-210)
         left, right = max(rgn[0], xmin), min(rgn[1], xmax)
         if left < right:
-            half = self.label_item.boundingRect().width() / 2 * vb.viewPixelSize()[0]
+            half = rect.width() / 2 * px
             x = min(max((left + right) / 2, xmin + half), xmax - half)
         else:
             x = sum(rgn) / 2
-        self.label_item.setPos(x, ymax - 0.3)
+        self.label_item.setPos(x, ymax - 0.3 - self._label_row() * rect.height() * py)
 
 
 class BaseScaleBar:  # noqa: D101
