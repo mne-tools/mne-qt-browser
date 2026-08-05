@@ -459,10 +459,11 @@ class SettingsDialog(_BaseDialog):
             new_value = self.dpi_spinbox.value()
             self.mne.dpi = new_value
             mon_units = self.current_monitor_units
-            dpr = screen.devicePixelRatio()
 
             with QSignalBlocker(self.mon_height_spinbox):
-                mon_height_inch = (px_height / dpr) / new_value
+                # px_height is already in the device-independent pixels that
+                # physicalDotsPerInch (and hence mne.dpi) counts, so no devicePixelRatio
+                mon_height_inch = px_height / new_value
                 self.mon_height_spinbox.setValue(
                     _convert_physical_units(
                         mon_height_inch, from_unit="inch", to_unit=mon_units
@@ -470,7 +471,7 @@ class SettingsDialog(_BaseDialog):
                 )
 
             with QSignalBlocker(self.mon_width_spinbox):
-                mon_width_inch = (px_width / dpr) / new_value
+                mon_width_inch = px_width / new_value
                 self.mon_width_spinbox.setValue(
                     _convert_physical_units(
                         mon_width_inch, from_unit="inch", to_unit=mon_units
@@ -541,12 +542,13 @@ class SettingsDialog(_BaseDialog):
                 if new_value == 0:
                     self.mne.scalings[ch_type] = 1e-12
                 else:
-                    scaler = 1 if self.mne.butterfly else 2
+                    # Inverse of _calc_chan_type_to_physical (the 2 is the one in
+                    # _get_y_unit_scaling)
                     self.mne.scalings[ch_type] = (
                         new_value
                         * self.mne.scale_factor
                         * _calc_data_unit_to_physical(self, units=current_units)
-                        / (scaler * self.mne.unit_scalings[ch_type])
+                        / (2 * self.mne.unit_scalings[ch_type])
                     )
 
                 with QSignalBlocker(self.ch_scaling_spinboxes[ch_type]):

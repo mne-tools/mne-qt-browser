@@ -24,7 +24,7 @@ from qtpy.QtGui import QTransform
 from qtpy.QtWidgets import QGraphicsLineItem
 
 from mne_qt_browser._colors import _get_color
-from mne_qt_browser._utils import _get_channel_scaling, _q_font
+from mne_qt_browser._utils import _butterfly_scale, _get_channel_scaling, _q_font
 
 # Not run through _get_color: this doubles as the VLineLabel fill, whose text is black,
 # so it must stay light in both themes. Clears 3:1 on either background
@@ -800,9 +800,7 @@ class ScaleBar(BaseScaleBar, QGraphicsLineItem):  # noqa: D101
         self.update_y_position()
 
     def _set_position(self, x, y):
-        # In butterfly mode traces are drawn at half amplitude, so the bar spans
-        # half a y-unit instead of a full one (like the matplotlib backend)
-        half = 0.25 if self.mne.butterfly else 0.5
+        half = _butterfly_scale(self.mne) / 2
         self.setLine(QLineF(x, y - half, x, y + half))
 
     def get_ydata(self):
