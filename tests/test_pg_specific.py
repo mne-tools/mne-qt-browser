@@ -136,6 +136,30 @@ def test_annotations_recording_end(raw_orig, pg_backend):
     )
 
 
+def test_annotation_label_position(raw_orig, pg_backend):
+    """Test that annotation labels follow the visible part of the region."""
+    raw_orig = raw_orig.copy().crop(tmax=20.0).resample(100)
+    onset, duration = 2.0, 15.0
+    raw_orig.annotations.append(onset + raw_orig.first_time, duration, "A")
+    fig = raw_orig.plot(duration=5)
+    fig.test_mode = True
+    region = fig.mne.regions[0]
+    assert region.toolTip() == "A"
+
+    # the region is longer than the shown time window, so the label should stay
+    # centered in what is on screen rather than at the (off-screen) region center
+    for t_start in (0, 5, 10, 15):
+        fig.mne.plt.setXRange(t_start, t_start + 5, padding=0)
+        xmin, xmax = fig.mne.viewbox.viewRange()[0]
+        left, right = max(onset, xmin), min(onset + duration, xmax)
+        assert region.label_item.isVisible()
+        assert_allclose(region.label_item.pos().x(), (left + right) / 2, atol=0.1)
+
+    # and the tooltip follows renaming
+    region.update_description("BAD_test")
+    assert region.toolTip() == "BAD_test"
+
+
 def test_annotations_interactions(raw_orig, pg_backend):
     """Test interactions specific to pyqtgraph-backend."""
     # Copy to avoid mutating the session-scoped fixture

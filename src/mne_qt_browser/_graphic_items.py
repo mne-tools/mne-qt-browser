@@ -85,6 +85,7 @@ class AnnotRegion(LinearRegionItem):
 
         self.label_item = TextItem(text=description, anchor=(0.5, 0.5))
         self.label_item.setFont(_q_font(10, bold=True))
+        self.setToolTip(description)
         self.sigRegionChanged.connect(self.update_label_pos)
 
         self.update_color(all_channels=(not ch_names))
@@ -217,6 +218,8 @@ class AnnotRegion(LinearRegionItem):
         self.description = description
         self.label_item.setText(description)
         self.label_item.update()
+        self.setToolTip(description)
+        self.update_label_pos()
 
     def update_visible(self, visible):
         """Update if annotation region is visible."""
@@ -325,11 +328,19 @@ class AnnotRegion(LinearRegionItem):
 
     def update_label_pos(self):
         """Update position of description label from annotation region."""
-        rgn = self.getRegion()
         vb = self.mne.viewbox
-        if vb:
-            ymax = vb.viewRange()[1][1]
-            self.label_item.setPos(sum(rgn) / 2, ymax - 0.3)
+        if not vb:
+            return
+        (xmin, xmax), (_, ymax) = vb.viewRange()
+        rgn = self.getRegion()
+        # center on the visible part so labels of long regions stay readable (gh-210)
+        left, right = max(rgn[0], xmin), min(rgn[1], xmax)
+        if left < right:
+            half = self.label_item.boundingRect().width() / 2 * vb.viewPixelSize()[0]
+            x = min(max((left + right) / 2, xmin + half), xmax - half)
+        else:
+            x = sum(rgn) / 2
+        self.label_item.setPos(x, ymax - 0.3)
 
 
 class BaseScaleBar:  # noqa: D101

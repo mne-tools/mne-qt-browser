@@ -1894,6 +1894,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
             else:
                 visible = False
             region.update_visible(visible)
+            if visible:
+                # the label follows the visible part of the region (gh-210)
+                region.update_label_pos()
         self.mne.overview_bar.update_annotations()
 
     def _set_annotations_visible(self, visible):
