@@ -30,6 +30,23 @@ gl_mark = pytest.mark.skipif(
 )
 
 
+# ``use_opengl=False`` and ``precompute=False`` are the same configuration, so one
+# run of it serves as the baseline that both comparisons are read against.
+BENCHMARK_PARAMS = [
+    pytest.param(
+        {"use_opengl": False, "precompute": False},
+        id="use_opengl=False,precompute=False",
+    ),
+    pytest.param(
+        {"use_opengl": True, "precompute": False},
+        id="use_opengl=True",
+        marks=gl_mark,
+    ),
+    pytest.param({"precompute": True, "use_opengl": False}, id="precompute=True"),
+    pytest.param({}, id="defaults"),
+]
+
+
 class _Benchmark:
     def __init__(self, pg_fig, app, store, request):
         self.bm_limit = 50
@@ -108,20 +125,7 @@ class _Benchmark:
 
 
 @pytest.mark.benchmark
-@pytest.mark.parametrize(
-    "benchmark_param",
-    [
-        pytest.param({"use_opengl": False, "precompute": False}, id="use_opengl=False"),
-        pytest.param(
-            {"use_opengl": True, "precompute": False},
-            id="use_opengl=True",
-            marks=gl_mark,
-        ),
-        pytest.param({"precompute": False, "use_opengl": False}, id="precompute=False"),
-        pytest.param({"precompute": True, "use_opengl": False}, id="precompute=True"),
-        pytest.param({}, id="defaults"),
-    ],
-)
+@pytest.mark.parametrize("benchmark_param", BENCHMARK_PARAMS)
 def test_scroll_speed_raw(raw_orig, benchmark_param, store, pg_backend, request, qapp):
     """Test the speed of a parameter."""
     # Remove spaces and get params with values
@@ -132,20 +136,7 @@ def test_scroll_speed_raw(raw_orig, benchmark_param, store, pg_backend, request,
 
 
 @pytest.mark.benchmark
-@pytest.mark.parametrize(
-    "benchmark_param",
-    [
-        pytest.param({"use_opengl": False, "precompute": False}, id="use_opengl=False"),
-        pytest.param(
-            {"use_opengl": True, "precompute": False},
-            id="use_opengl=True",
-            marks=gl_mark,
-        ),
-        pytest.param({"precompute": False, "use_opengl": False}, id="precompute=False"),
-        pytest.param({"precompute": True, "use_opengl": False}, id="precompute=True"),
-        pytest.param({}, id="defaults"),
-    ],
-)
+@pytest.mark.parametrize("benchmark_param", BENCHMARK_PARAMS)
 def test_scroll_speed_epochs_unicolor(
     raw_orig, benchmark_param, store, pg_backend, request, qapp
 ):
@@ -161,20 +152,7 @@ def test_scroll_speed_epochs_unicolor(
 
 
 @pytest.mark.benchmark
-@pytest.mark.parametrize(
-    "benchmark_param",
-    [
-        pytest.param({"use_opengl": False, "precompute": False}, id="use_opengl=False"),
-        pytest.param(
-            {"use_opengl": True, "precompute": False},
-            id="use_opengl=True",
-            marks=gl_mark,
-        ),
-        pytest.param({"precompute": False, "use_opengl": False}, id="precompute=False"),
-        pytest.param({"precompute": True, "use_opengl": False}, id="precompute=True"),
-        pytest.param({}, id="defaults"),
-    ],
-)
+@pytest.mark.parametrize("benchmark_param", BENCHMARK_PARAMS)
 def test_scroll_speed_epochs_multicolor(
     raw_orig, benchmark_param, store, pg_backend, request, qapp
 ):
