@@ -13,7 +13,7 @@ from qtpy.QtCore import Qt
 from qtpy.QtTest import QTest
 
 from mne_qt_browser._colors import _oklab_to_rgb, _rgb_to_oklab
-from mne_qt_browser._utils import _disconnect
+from mne_qt_browser._utils import _calc_data_unit_to_physical, _disconnect
 
 LESS_TIME = "Show fewer time points"
 MORE_TIME = "Show more time points"
@@ -489,9 +489,30 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
     orig_sens = ch_sens_spinbox.value()
     fig.mne.fig_settings.mon_height_spinbox.setValue(orig_mon_height / 2)
     QTest.keyPress(fig.mne.fig_settings.mon_height_spinbox.lineEdit(), Qt.Key_Return)
-    fig.mne.fig_settings.mon_width_spinbox.setValue(orig_mon_width / 2)
-    QTest.keyPress(fig.mne.fig_settings.mon_width_spinbox.lineEdit(), Qt.Key_Return)
+    assert_allclose(
+        fig.mne.fig_settings.dpi_spinbox.value(), orig_mon_dpi * 2, rtol=1e-3
+    )
+    assert_allclose(
+        fig.mne.fig_settings.mon_width_spinbox.value(), orig_mon_width / 2, rtol=1e-3
+    )
     assert ch_sens_spinbox.value() != orig_sens
+
+    # Reset leaves height, width and DPI mutually consistent -- pixels are square, even
+    # where the physical size Qt reports is not -- so re-entering any one of them is a
+    # no-op. rtol covers the spinboxes rounding to two decimals.
+    for box in ("mon_height_spinbox", "mon_width_spinbox", "dpi_spinbox"):
+        fig.mne.fig_settings._reset_monitor_spinboxes()
+        QTest.keyPress(getattr(fig.mne.fig_settings, box).lineEdit(), Qt.Key_Return)
+        assert_allclose(
+            fig.mne.fig_settings.mon_height_spinbox.value(), orig_mon_height, rtol=1e-3
+        )
+        assert_allclose(
+            fig.mne.fig_settings.mon_width_spinbox.value(), orig_mon_width, rtol=1e-3
+        )
+        assert_allclose(
+            fig.mne.fig_settings.dpi_spinbox.value(), orig_mon_dpi, rtol=1e-3
+        )
+        assert_allclose(ch_sens_spinbox.value(), orig_sens, rtol=1e-3)
 
     # Monitor settings reset button works
     fig.mne.fig_settings._reset_monitor_spinboxes()
@@ -996,3 +1017,34 @@ def test_butterfly_scalebars(raw_orig, pg_backend):
     fig = raw_orig.plot(butterfly=True)
     fig.test_mode = True
     _check_butterfly()
+
+
+def test_sensitivity_matches_scalebar(raw_orig, pg_backend):
+    """Test that the reported sensitivity is the one actually drawn on screen."""
+    fig = raw_orig.copy().crop(tmax=5.0).plot(splash=False)
+    fig.test_mode = True
+    QTest.qWaitForWindowExposed(fig)
+    fig._fake_click_on_toolbar_action("Settings", wait_after=0)
+    ch_type = "grad"  # the only type shown in the default (non-butterfly) view
+    assert set(fig.mne.ch_types[fig.mne.picks]) == {ch_type}
+
+    def _check_sensitivity():
+        # The scalebar spans a known number of y-units and is labeled with the
+        # value it represents, so it pins down the true units-per-mm on screen
+        y1, y2 = fig.mne.scalebars[ch_type].get_ydata()
+        mm = abs(y2 - y1) * _calc_data_unit_to_physical(fig, units="mm")
+        value = float(fig.mne.scalebar_texts[ch_type].toPlainText().split()[0])
+        spinbox = fig.mne.fig_settings.ch_sensitivity_spinboxes[ch_type]
+        # atol covers the spinbox rounding to one decimal
+        assert_allclose(spinbox.value(), value / mm, rtol=0.01, atol=0.05)
+
+    _check_sensitivity()
+    fig._fake_keypress("b")
+    _check_sensitivity()
+
+    # Entering a sensitivity gives that sensitivity, in butterfly mode too
+    for butterfly in (True, False):
+        assert fig.mne.butterfly is butterfly
+        fig.mne.fig_settings.ch_sensitivity_spinboxes[ch_type].setValue(12.5)
+        _check_sensitivity()
+        fig._fake_keypress("b")

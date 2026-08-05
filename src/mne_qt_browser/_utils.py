@@ -27,6 +27,16 @@ qsettings_params = {
 _unit_per_inch = dict(mm=25.4, cm=2.54, inch=1.0)
 
 
+# Butterfly mode draws traces at half amplitude (like the matplotlib backend, gh-276),
+# which equally shortens the scalebar and the value it stands for
+BUTTERFLY_SCALE = 0.5
+
+
+def _butterfly_scale(mne):
+    """Get the factor butterfly mode shrinks traces and scalebars by."""
+    return BUTTERFLY_SCALE if mne.butterfly else 1.0
+
+
 def _disconnect(sig, *, allow_error=False):
     try:
         with warnings.catch_warnings():
@@ -108,7 +118,9 @@ def _unique_ordered_ch_types(mne):
 
 def _calc_chan_type_to_physical(widget, ch_type, units="mm"):
     """Convert data to physical units."""
-    return _get_channel_scaling(widget, ch_type) / _calc_data_unit_to_physical(
+    # Butterfly mode needs no correction here: a shorter scalebar standing for a
+    # proportionally smaller value cancels out, leaving only its scale_factor effect
+    return _get_y_unit_scaling(widget, ch_type) / _calc_data_unit_to_physical(
         widget, units=units
     )
 
@@ -129,7 +141,6 @@ def _calc_data_unit_to_physical(widget, units="mm"):
         return 0
 
     # Get the screen DPI
-    # px_per_in = QApplication.primaryScreen().logicalDotsPerInch()
     px_per_in = widget.mne.dpi
 
     # Convert to inches
@@ -159,13 +170,17 @@ def _convert_physical_units(value, from_unit=None, to_unit=None):
     return converted_value
 
 
-def _get_channel_scaling(widget, ch_type):
-    """Get channel scaling."""
-    scaler = 1 if widget.mne.butterfly else 2
-    inv_norm = (
-        scaler
+def _get_y_unit_scaling(widget, ch_type):
+    """Get the data value spanned by one y-unit (i.e., by one channel's row)."""
+    # data are normalized to +/-0.5 of a y-unit (see _get_display_norms), hence the 2
+    return (
+        2
         * widget.mne.scalings[ch_type]
         * widget.mne.unit_scalings[ch_type]
         / widget.mne.scale_factor
     )
-    return inv_norm
+
+
+def _get_channel_scaling(widget, ch_type):
+    """Get the value a scalebar stands for."""
+    return _butterfly_scale(widget.mne) * _get_y_unit_scaling(widget, ch_type)
