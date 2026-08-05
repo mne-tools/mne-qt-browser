@@ -142,14 +142,17 @@ def test_annotation_label_position(raw_orig, pg_backend):
     onset, duration = 2.0, 15.0
     raw_orig.annotations.append(onset + raw_orig.first_time, duration, "A")
     raw_orig.annotations.append(3.0 + raw_orig.first_time, 1.0, "B")
+    raw_orig.annotations.append(3.5 + raw_orig.first_time, 1.0, "C")
     fig = raw_orig.plot(duration=5)
     fig.test_mode = True
-    region, other = fig.mne.regions
+    region = fig.mne.regions[0]
     assert region.toolTip() == "A"
 
-    # the two overlapping regions have different descriptions, so their labels are
-    # stacked in different rows
-    assert region.label_item.pos().y() != other.label_item.pos().y()
+    # the overlapping regions have different descriptions, so their labels are stacked
+    # in evenly spaced rows
+    ys = [r.label_item.pos().y() for r in fig.mne.regions]
+    assert_allclose(np.diff(ys, n=2), 0, atol=1e-7)
+    assert ys[0] - ys[1] > 0.01
 
     # the region is longer than the shown time window, so the label should stay
     # centered in what is on screen rather than at the (off-screen) region center

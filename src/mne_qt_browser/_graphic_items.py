@@ -20,7 +20,7 @@ from pyqtgraph import (
     mkBrush,
 )
 from qtpy.QtCore import QLineF, QSignalBlocker, Qt, Signal
-from qtpy.QtGui import QTransform
+from qtpy.QtGui import QFontMetrics, QTransform
 from qtpy.QtWidgets import QGraphicsLineItem
 
 from mne_qt_browser._colors import _get_color
@@ -38,6 +38,7 @@ _Z_TRACE = 1
 _Z_TRACE_MAX = 100
 _Z_SCALEBAR = 101
 _Z_SCALEBAR_TEXT = 102
+_Z_ANNOT_LABEL = 103
 
 # Annotation labels are stacked in this many rows (by description) so that the labels of
 # overlapping annotations do not land on top of each other
@@ -88,7 +89,9 @@ class AnnotRegion(LinearRegionItem):
         self.selected = False
 
         self.label_item = TextItem(text=description, anchor=(0.5, 0.5))
-        self.label_item.setFont(_q_font(10, bold=True))
+        self._label_font = _q_font(10, bold=True)
+        self.label_item.setFont(self._label_font)
+        self.label_item.setZValue(_Z_ANNOT_LABEL)  # stacked labels can sit over traces
         self.setToolTip(description)
         self.sigRegionChanged.connect(self.update_label_pos)
 
@@ -210,7 +213,12 @@ class AnnotRegion(LinearRegionItem):
         self.hover_pen = self.mne.mkPen(color=self.text_color, width=2)
         self.setBrush(self.base_color)
         self.setHoverBrush(self.hover_color)
+        # labels can land on traces once stacked, so back them with the plot background
+        self.label_fill = _get_color(getattr(self.mne, "bgcolor", "w"), self.mne.dark)
+        self.label_fill.setAlpha(180)
         self.label_item.setColor(self.text_color)
+        if not self.selected:
+            self.label_item.fill = mkBrush(self.label_fill)
         for line in self.lines:
             line.setPen(self.line_pen)
             line.setHoverPen(self.hover_pen)
@@ -248,7 +256,7 @@ class AnnotRegion(LinearRegionItem):
             self.gotSelected.emit(self)
         else:
             self.label_item.setColor(self.text_color)
-            self.label_item.fill = mkBrush(None)
+            self.label_item.fill = mkBrush(self.label_fill)
         logger.debug(
             f"{'Selected' if self.selected else 'Deselected'} annotation: "
             f"{self.description}"
@@ -344,16 +352,19 @@ class AnnotRegion(LinearRegionItem):
             return
         (xmin, xmax), (_, ymax) = vb.viewRange()
         px, py = vb.viewPixelSize()
-        rect = self.label_item.boundingRect()
+        # font metrics rather than label_item.boundingRect(), which stays stale until
+        # the item has been laid out and would give each label a different row height
+        metrics = QFontMetrics(self._label_font)
         rgn = self.getRegion()
         # center on the visible part so labels of long regions stay readable (gh-210)
         left, right = max(rgn[0], xmin), min(rgn[1], xmax)
         if left < right:
-            half = rect.width() / 2 * px
+            half = metrics.horizontalAdvance(self.description) / 2 * px
             x = min(max((left + right) / 2, xmin + half), xmax - half)
         else:
             x = sum(rgn) / 2
-        self.label_item.setPos(x, ymax - 0.3 - self._label_row() * rect.height() * py)
+        y = ymax - 0.3 - self._label_row() * metrics.height() * py
+        self.label_item.setPos(x, y)
 
 
 class BaseScaleBar:  # noqa: D101

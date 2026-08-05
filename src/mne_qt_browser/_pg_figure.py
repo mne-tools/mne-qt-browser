@@ -471,6 +471,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         # Connect signals from PlotItem
         self.mne.plt.sigXRangeChanged.connect(self._xrange_changed)
         self.mne.plt.sigYRangeChanged.connect(self._yrange_changed)
+        # annotation label rows are spaced in pixels, so they need a resize update
+        self.mne.viewbox.sigResized.connect(self._update_label_positions)
 
         # Add traces
         for ch_idx in self.mne.picks:
@@ -1894,10 +1896,15 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
             else:
                 visible = False
             region.update_visible(visible)
-            if visible:
-                # the label follows the visible part of the region (gh-210)
-                region.update_label_pos()
+        self._update_label_positions()
         self.mne.overview_bar.update_annotations()
+
+    def _update_label_positions(self, *args):
+        # the labels follow the visible part of their region (gh-210); regions only
+        # exist once annotation mode has been initialized (never for epochs)
+        for region in getattr(self.mne, "regions", []):
+            if region.label_item.isVisible():
+                region.update_label_pos()
 
     def _set_annotations_visible(self, visible):
         for descr in self.mne.visible_annotations:
@@ -2395,6 +2402,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
             if hasattr(self.mne, "plt"):
                 _disconnect(self.mne.plt.sigXRangeChanged)
                 _disconnect(self.mne.plt.sigYRangeChanged)
+                _disconnect(self.mne.viewbox.sigResized)
             if hasattr(self.mne, "toolbar"):
                 for action in self.mne.toolbar.actions():
                     allow_error = action.text() == ""
