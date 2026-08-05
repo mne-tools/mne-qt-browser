@@ -328,12 +328,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         self.mne.scale_factor = 1
         # Factor of the scale factor that is due to butterfly mode
         self.mne.butterfly_scale = 1.0
-        # DPI
+        # DPI (the X/Y average, see SettingsDialog._reset_monitor_spinboxes)
         screen = QApplication.primaryScreen()
         self.mne.dpi = screen.physicalDotsPerInch()
-
-        # Aspect ratio
-        self.mne.aspect_ratio = screen.geometry().width() / screen.geometry().height()
         # Stores channel types for butterfly mode
         self.mne.butterfly_type_order = [
             tp for tp in DATA_CH_TYPES_ORDER if tp in self.mne.ch_types

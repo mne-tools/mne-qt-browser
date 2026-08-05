@@ -489,17 +489,30 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
     orig_sens = ch_sens_spinbox.value()
     fig.mne.fig_settings.mon_height_spinbox.setValue(orig_mon_height / 2)
     QTest.keyPress(fig.mne.fig_settings.mon_height_spinbox.lineEdit(), Qt.Key_Return)
-    fig.mne.fig_settings.mon_width_spinbox.setValue(orig_mon_width / 2)
-    QTest.keyPress(fig.mne.fig_settings.mon_width_spinbox.lineEdit(), Qt.Key_Return)
+    assert_allclose(
+        fig.mne.fig_settings.dpi_spinbox.value(), orig_mon_dpi * 2, rtol=1e-3
+    )
+    assert_allclose(
+        fig.mne.fig_settings.mon_width_spinbox.value(), orig_mon_width / 2, rtol=1e-3
+    )
     assert ch_sens_spinbox.value() != orig_sens
 
-    # Re-entering the shown DPI is a no-op, i.e. it is the inverse of entering a
-    # monitor size
-    fig.mne.fig_settings._reset_monitor_spinboxes()
-    QTest.keyPress(fig.mne.fig_settings.dpi_spinbox.lineEdit(), Qt.Key_Return)
-    assert_allclose(fig.mne.fig_settings.mon_height_spinbox.value(), orig_mon_height)
-    assert_allclose(fig.mne.fig_settings.mon_width_spinbox.value(), orig_mon_width)
-    assert_allclose(fig.mne.fig_settings.dpi_spinbox.value(), orig_mon_dpi)
+    # Reset leaves height, width and DPI mutually consistent -- pixels are square, even
+    # where the physical size Qt reports is not -- so re-entering any one of them is a
+    # no-op. rtol covers the spinboxes rounding to two decimals.
+    for box in ("mon_height_spinbox", "mon_width_spinbox", "dpi_spinbox"):
+        fig.mne.fig_settings._reset_monitor_spinboxes()
+        QTest.keyPress(getattr(fig.mne.fig_settings, box).lineEdit(), Qt.Key_Return)
+        assert_allclose(
+            fig.mne.fig_settings.mon_height_spinbox.value(), orig_mon_height, rtol=1e-3
+        )
+        assert_allclose(
+            fig.mne.fig_settings.mon_width_spinbox.value(), orig_mon_width, rtol=1e-3
+        )
+        assert_allclose(
+            fig.mne.fig_settings.dpi_spinbox.value(), orig_mon_dpi, rtol=1e-3
+        )
+        assert_allclose(ch_sens_spinbox.value(), orig_sens, rtol=1e-3)
 
     # Monitor settings reset button works
     fig.mne.fig_settings._reset_monitor_spinboxes()

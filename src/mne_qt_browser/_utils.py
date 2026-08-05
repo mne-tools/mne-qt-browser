@@ -26,6 +26,7 @@ qsettings_params = {
 
 _unit_per_inch = dict(mm=25.4, cm=2.54, inch=1.0)
 
+
 # Butterfly mode draws traces at half amplitude (like the matplotlib backend, gh-276),
 # which equally shortens the scalebar and the value it stands for
 BUTTERFLY_SCALE = 0.5
@@ -140,7 +141,6 @@ def _calc_data_unit_to_physical(widget, units="mm"):
         return 0
 
     # Get the screen DPI
-    # px_per_in = QApplication.primaryScreen().logicalDotsPerInch()
     px_per_in = widget.mne.dpi
 
     # Convert to inches
