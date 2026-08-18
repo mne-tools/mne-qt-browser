@@ -88,6 +88,39 @@ Alternatively, enable Qt event loop integration in your IPython session by runni
 %gui qt
 ```
 
+### marimo
+
+[marimo](https://marimo.io) runs its own asyncio event loop rather than a Qt one, so nothing would service the browser window.
+`raw.plot()` detects marimo and starts a small event pump for you — no `%gui`-style setup needed.
+
+One thing to know: marimo runs cells reactively, and the pump only gets to run while the kernel is idle.
+Any cell that runs after your plot cell freezes the window for as long as it takes.
+The simplest way to inspect the data before the rest of the notebook runs is `raw.plot(block=True)`, which holds the kernel until you close the window.
+Nothing else runs while it does, so marimo's UI stops updating too.
+Before MNE-Python 1.13, `block=True` runs the *application's* event loop rather than blocking on the window, which the notebook cannot interrupt, and which does not block at all when something else already owns that loop.
+
+To keep the kernel alive instead, gate execution on a button:
+
+```python
+# cell 1
+fig = raw.plot()
+
+# cell 2
+go = mo.ui.run_button(label="Done inspecting")
+go
+
+# cell 3
+mo.stop(not go.value)
+```
+
+A runnable version of this is in [`examples/marimo_demo.py`](examples/marimo_demo.py).
+
+`mo.stop` gates that cell and every cell that depends on it, which marimo reports as `ancestor-stopped`; cells that depend on nothing from it still run, so holding the *whole* notebook this way means threading that dependency through it.
+The button needs its own cell, because marimo does not allow reading a UI element's value in the cell that created it.
+`raw.plot()` should stay out of the gate cell too, which re-runs on every click and would open a second window each time.
+
+Plot windows work in `marimo edit`; `marimo run` executes the notebook in a thread, where Qt windows are not supported.
+
 
 ## Development and testing
 

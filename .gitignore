@@ -136,3 +136,4 @@ junit-results.xml
 .vscode/
 .DS_Store
 /.claude
+__marimo__/
