@@ -3,8 +3,10 @@
 
 """Base classes and functions for 2D browser backends."""
 
+import asyncio
 import inspect
 import platform
+import sys
 import warnings
 import weakref
 from ast import literal_eval
@@ -2567,6 +2569,11 @@ def _mouseDrag(widget, positions, button, modifier=None):
     _mouseRelease(widget, positions[-1], button, modifier)
 
 
+_MARIMO_PUMP = None  # asyncio task that pumps Qt events under marimo
+_MARIMO_PUMP_GRACE = 10.0  # idle seconds to wait for a window before giving up
+_MARIMO_PUMP_DRAIN = 2.0  # idle seconds to keep pumping after the last one closes
+
+
 # modified from: https://github.com/pyvista/pyvistaqt
 def _setup_ipython(ipython=None):
     # IPython magic
@@ -2581,8 +2588,65 @@ def _setup_ipython(ipython=None):
     return ipython
 
 
+def _setup_marimo(interval=0.02):
+    """Keep Qt windows responsive in marimo, which runs asyncio instead of a Qt loop."""
+    if "marimo" not in sys.modules:
+        return None
+    import marimo
+
+    if not getattr(marimo, "running_in_notebook", lambda: False)():
+        return None
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:  # notebook executed as a plain script
+        return None
+    # A qasync loop (marimo's proposed runtime.gui_event_loop = "qt") already drives
+    # Qt itself; a pump task would only cause re-entrant task-step errors
+    if type(loop).__module__.partition(".")[0] == "qasync":
+        return None
+    global _MARIMO_PUMP
+    if (
+        _MARIMO_PUMP is not None
+        and not _MARIMO_PUMP.done()
+        and _MARIMO_PUMP.get_loop() is loop  # a restarted kernel gets a new loop
+    ):
+        return _MARIMO_PUMP
+
+    async def _pump():
+        # marimo only gets to run this between cells, which is exactly when a Qt loop
+        # would otherwise be idle; give Qt a slice of time to drain its event queue.
+        give_up_at = loop.time() + _MARIMO_PUMP_GRACE  # a window never showed up
+        stop_at = None
+        while True:
+            await asyncio.sleep(interval)
+            app = QApplication.instance()
+            if app is None:
+                break
+            app.processEvents()
+            if any(w.isVisible() for w in app.topLevelWidgets()):
+                give_up_at = stop_at = None
+                continue
+            # Closing a window takes more turns of the loop than it takes to become
+            # invisible: deferred deletes, then platform teardown. Stopping at the
+            # first invisible poll strands a half-closed window, which macOS shows as
+            # a beachball (gh-449), so keep pumping for a bit after the last one goes.
+            app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+            now = loop.time()
+            if give_up_at is not None:
+                if now > give_up_at:
+                    break
+            elif stop_at is None:
+                stop_at = now + _MARIMO_PUMP_DRAIN
+            elif now > stop_at:
+                break  # the next plot starts a new task
+
+    _MARIMO_PUMP = loop.create_task(_pump())
+    return _MARIMO_PUMP
+
+
 def _init_browser(**kwargs):
     _setup_ipython()
+    _setup_marimo()
     # Experimental mode is needed for fast code paths on pyqtgraph < 0.13.7,
     # but on PySide6 6.10+ the combination segfaults
     if not check_version("pyqtgraph", "0.13.7") and not (
