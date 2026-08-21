@@ -471,7 +471,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         # Connect signals from PlotItem
         self.mne.plt.sigXRangeChanged.connect(self._xrange_changed)
         self.mne.plt.sigYRangeChanged.connect(self._yrange_changed)
-        # annotation label rows are spaced in pixels, so they need a resize update
+        # annotation labels sit at the bottom of the view and their rows are spaced
+        # in pixels, so they need an update on vertical scroll and resize (horizontal
+        # scroll is handled by _update_regions_visible)
+        self.mne.viewbox.sigYRangeChanged.connect(self._update_label_positions)
         self.mne.viewbox.sigResized.connect(self._update_label_positions)
 
         # Add traces
@@ -1749,8 +1752,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         region.regionChangeFinished.connect(self._region_changed)
         region.gotSelected.connect(self._region_selected)
         region.removeRequested.connect(self._remove_region)
-        self.mne.viewbox.sigYRangeChanged.connect(region.update_label_pos)
-        region.update_label_pos()
+        self._update_label_positions()
         return region
 
     def _remove_region(self, region, from_annot=True):
@@ -1763,6 +1765,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         # Remove from all regions
         if region in self.mne.regions:
             self.mne.regions.remove(region)
+            # this can free up a label row
+            self._update_label_positions()
 
         # Reset selected region
         if region == self.mne.selected_region:
@@ -1900,11 +1904,58 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         self.mne.overview_bar.update_annotations()
 
     def _update_label_positions(self, *args):
-        # the labels follow the visible part of their region (gh-210); regions only
-        # exist once annotation mode has been initialized (never for epochs)
-        for region in getattr(self.mne, "regions", []):
-            if region.label_item.isVisible():
-                region.update_label_pos()
+        """Place the labels of the visible annotation regions.
+
+        Each label is centered on the visible part of its region (gh-210). Labels that
+        would overlap are stacked upward from the bottom of the plot: rows are assigned
+        first-fit in sorted-description order, which needs the minimum number of rows
+        and keeps a given description in the same row as long as only descriptions
+        sorting after it collide with it. Row heights are in pixels, so this needs to
+        run on resize and vertical scroll, not just on horizontal scroll.
+        """
+        # regions only exist once annotation mode has been initialized (never for
+        # epochs)
+        regions = [
+            region
+            for region in getattr(self.mne, "regions", [])
+            if region.label_item.isVisible()
+        ]
+        if not regions:
+            return
+        vb = self.mne.viewbox
+        (xmin, xmax), (ymin, ymax) = vb.viewRange()
+        px, py = vb.viewPixelSize()
+        priority = {
+            description: idx
+            for idx, description in enumerate(
+                sorted(self.mne.annotation_segment_colors)
+            )
+        }
+        # descriptions not (yet) in the color mapping are transient while renaming
+        regions.sort(
+            key=lambda region: (
+                priority.get(region.description, len(priority)),
+                region.getRegion()[0],
+            )
+        )
+        rows = list()  # the (left, right) extents of the labels placed in each row
+        gap = 2 * px  # minimum horizontal gap between labels
+        for region in regions:
+            x, half = region._label_extent(xmin, xmax, px)
+            left, right = x - half - gap, x + half + gap
+            for row, extents in enumerate(rows):
+                if all(right <= ext[0] or left >= ext[1] for ext in extents):
+                    break
+            else:
+                row = len(rows)
+                rows.append(list())
+            rows[row].append((left, right))
+            # the y axis is inverted, so the bottom is ymax; keep the rows on screen for
+            # small windows
+            height = region._label_metrics.height() * py
+            y = ymax - height / 2 - 2 * py - row * height
+            y = max(y, ymin + height / 2)
+            region.label_item.setPos(x, y)
 
     def _set_annotations_visible(self, visible):
         for descr in self.mne.visible_annotations:
@@ -2402,7 +2453,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
             if hasattr(self.mne, "plt"):
                 _disconnect(self.mne.plt.sigXRangeChanged)
                 _disconnect(self.mne.plt.sigYRangeChanged)
-                _disconnect(self.mne.viewbox.sigResized)
+                # pyqtgraph itself listens to these viewbox signals (e.g. the axis
+                # items), so only disconnect our slot
+                for sig in (
+                    self.mne.viewbox.sigYRangeChanged,
+                    self.mne.viewbox.sigResized,
+                ):
+                    sig.disconnect(self._update_label_positions)
             if hasattr(self.mne, "toolbar"):
                 for action in self.mne.toolbar.actions():
                     allow_error = action.text() == ""

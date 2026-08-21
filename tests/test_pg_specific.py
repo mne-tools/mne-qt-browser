@@ -148,11 +148,14 @@ def test_annotation_label_position(raw_orig, pg_backend):
     region = fig.mne.regions[0]
     assert region.toolTip() == "A"
 
-    # the overlapping regions have different descriptions, so their labels are stacked
-    # in evenly spaced rows
-    ys = [r.label_item.pos().y() for r in fig.mne.regions]
-    assert_allclose(np.diff(ys, n=2), 0, atol=1e-7)
-    assert ys[0] - ys[1] > 0.01
+    # the labels of A and B both sit at 3.5 s, so they are stacked (A at the bottom,
+    # which is ymax on the inverted axis); C's label at 4 s does not touch them
+    def rows():
+        ys = [r.label_item.pos().y() for r in fig.mne.regions]
+        height = region._label_metrics.height() * fig.mne.viewbox.viewPixelSize()[1]
+        return [round((max(ys) - y) / height) for y in ys]
+
+    assert rows() == [0, 1, 0]
 
     # the region is longer than the shown time window, so the label should stay
     # centered in what is on screen rather than at the (off-screen) region center
@@ -162,6 +165,43 @@ def test_annotation_label_position(raw_orig, pg_backend):
         left, right = max(onset, xmin), min(onset + duration, xmax)
         assert region.label_item.isVisible()
         assert_allclose(region.label_item.pos().x(), (left + right) / 2, atol=0.1)
+
+    # rows are only used while labels actually overlap: once B is moved away from
+    # A's label, it drops back down to the first row
+    fig.mne.plt.setXRange(0, 5, padding=0)
+    assert rows() == [0, 1, 0]
+    fig.mne.regions[1].setRegion((1.0, 1.5))
+    assert rows() == [0, 0, 0]
+    fig.mne.regions[1].setRegion((3.0, 4.0))
+    assert rows() == [0, 1, 0]
+    # and rows are assigned in sorted description order, so renaming B to sort
+    # before A swaps their rows (without waiting for the next scroll)
+    fig.mne.fig_annotation.description_cmbx.setCurrentText("B")
+    fig.mne.selected_region = fig.mne.regions[1]
+    fig.mne.fig_annotation._edit_description_selected("0")
+    assert [r.description for r in fig.mne.regions] == ["A", "0", "C"]
+    assert rows() == [1, 0, 0]
+
+    # a region that only touches the view edge, and a zero-duration annotation at
+    # the edge, still get a label clamped onto the screen
+    stop = onset + duration  # 17 s of the 20 s recording
+    fig.mne.plt.setXRange(stop, stop + 2, padding=0)
+    xmin, xmax = fig.mne.viewbox.viewRange()[0]
+    assert_allclose(xmin, stop)
+    assert region.label_item.isVisible()
+    px = fig.mne.viewbox.viewPixelSize()[0]
+    half = region._label_metrics.horizontalAdvance(region.description) / 2 * px
+    assert_allclose(region.label_item.pos().x(), stop + half)
+    point = fig._add_region(xmax, 0, "C")
+    point.update_visible(True)
+    half = point._label_metrics.horizontalAdvance("C") / 2 * px
+    assert_allclose(point.label_item.pos().x(), xmax - half)
+
+    # rows stay on screen in a short window
+    fig.resize(800, 200)
+    ys = [r.label_item.pos().y() for r in fig.mne.regions]
+    ymin, ymax = fig.mne.viewbox.viewRange()[1]
+    assert all(ymin < y < ymax for y in ys), (ys, ymin, ymax)
 
     # and the tooltip follows renaming
     region.update_description("BAD_test")

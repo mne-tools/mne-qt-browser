@@ -40,10 +40,6 @@ _Z_SCALEBAR = 101
 _Z_SCALEBAR_TEXT = 102
 _Z_ANNOT_LABEL = 103
 
-# Annotation labels are stacked in this many rows (by description) so that the labels of
-# overlapping annotations do not land on top of each other
-_N_ANNOT_LABEL_ROWS = 3
-
 
 def propagate_to_children(method):  # noqa: D103
     @functools.wraps(method)
@@ -90,10 +86,13 @@ class AnnotRegion(LinearRegionItem):
 
         self.label_item = TextItem(text=description, anchor=(0.5, 0.5))
         self._label_font = _q_font(10, bold=True)
+        # font metrics rather than label_item.boundingRect(), which stays stale until
+        # the item has been laid out and would give each label a different row height
+        self._label_metrics = QFontMetrics(self._label_font)
         self.label_item.setFont(self._label_font)
         self.label_item.setZValue(_Z_ANNOT_LABEL)  # stacked labels can sit over traces
         self.setToolTip(description)
-        self.sigRegionChanged.connect(self.update_label_pos)
+        self.sigRegionChanged.connect(self._update_label_positions)
 
         self.update_color(all_channels=(not ch_names))
 
@@ -150,7 +149,7 @@ class AnnotRegion(LinearRegionItem):
         with QSignalBlocker(self):
             self.setRegion((onset, offset))
 
-        self.update_label_pos()
+        self._update_label_positions()
 
     def _add_single_channel_annot(self, ch_name):
         self.single_channel_annots[ch_name] = SingleChannelAnnot(
@@ -215,7 +214,6 @@ class AnnotRegion(LinearRegionItem):
         self.setHoverBrush(self.hover_color)
         # labels can land on traces once stacked, so back them with the plot background
         self.label_fill = _get_color(getattr(self.mne, "bgcolor", "w"), self.mne.dark)
-        self.label_fill.setAlpha(180)
         self.label_item.setColor(self.text_color)
         if not self.selected:
             self.label_item.fill = mkBrush(self.label_fill)
@@ -231,7 +229,7 @@ class AnnotRegion(LinearRegionItem):
         self.label_item.setText(description)
         self.label_item.update()
         self.setToolTip(description)
-        self.update_label_pos()
+        self._update_label_positions()
 
     def update_visible(self, visible):
         """Update if annotation region is visible."""
@@ -338,33 +336,28 @@ class AnnotRegion(LinearRegionItem):
         else:
             self.sigRegionChanged.emit(self)
 
-    def _label_row(self):
-        """Get the row this label is stacked in, based on its description."""
-        descriptions = sorted(self.mne.annotation_segment_colors)
-        if self.description not in descriptions:  # transient while renaming
-            return 0
-        return descriptions.index(self.description) % _N_ANNOT_LABEL_ROWS
+    def _update_label_positions(self):
+        """Update the positions of all labels (ours might have changed)."""
+        main = self.weakmain()
+        if main is not None:
+            main._update_label_positions()
 
-    def update_label_pos(self):
-        """Update position of description label from annotation region."""
-        vb = self.mne.viewbox
-        if not vb:
-            return
-        (xmin, xmax), (_, ymax) = vb.viewRange()
-        px, py = vb.viewPixelSize()
-        # font metrics rather than label_item.boundingRect(), which stays stale until
-        # the item has been laid out and would give each label a different row height
-        metrics = QFontMetrics(self._label_font)
+    def _label_extent(self, xmin, xmax, px):
+        """Get the x position and half width (in data units) of the label.
+
+        The label is centered on the visible part of the region so that it stays
+        readable for regions longer than the shown time window (gh-210), and it is
+        kept on screen. The comparison is inclusive so that regions just touching the
+        view (and zero-duration ones) get clamped onto the screen, too.
+        """
         rgn = self.getRegion()
-        # center on the visible part so labels of long regions stay readable (gh-210)
+        half = self._label_metrics.horizontalAdvance(self.description) / 2 * px
         left, right = max(rgn[0], xmin), min(rgn[1], xmax)
-        if left < right:
-            half = metrics.horizontalAdvance(self.description) / 2 * px
+        if left <= right:
             x = min(max((left + right) / 2, xmin + half), xmax - half)
         else:
             x = sum(rgn) / 2
-        y = ymax - 0.3 - self._label_row() * metrics.height() * py
-        self.label_item.setPos(x, y)
+        return x, half
 
 
 class BaseScaleBar:  # noqa: D101

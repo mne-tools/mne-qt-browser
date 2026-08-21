@@ -400,6 +400,8 @@ class AnnotationDock(QDockWidget):
     def _update_regions_colors(self):
         for region in self.mne.regions:
             region.update_color()
+        # the label rows depend on the description order, which may have changed
+        self.weakmain()._update_label_positions()
 
     def reset(self):
         """Reset to default state."""
