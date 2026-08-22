@@ -342,6 +342,15 @@ class AnnotRegion(LinearRegionItem):
         if main is not None:
             main._update_label_positions()
 
+    def _label_size(self):
+        """Get the (width, height) of the painted label in pixels."""
+        # the painted box is the text plus the QTextDocument margin on each side
+        margin = 2 * self.label_item.textItem.document().documentMargin()
+        return (
+            self._label_metrics.horizontalAdvance(self.description) + margin,
+            self._label_metrics.height() + margin,
+        )
+
     def _label_extent(self, xmin, xmax, px):
         """Get the x position and half width (in data units) of the label.
 
@@ -351,7 +360,7 @@ class AnnotRegion(LinearRegionItem):
         view (and zero-duration ones) get clamped onto the screen, too.
         """
         rgn = self.getRegion()
-        half = self._label_metrics.horizontalAdvance(self.description) / 2 * px
+        half = self._label_size()[0] / 2 * px
         left, right = max(rgn[0], xmin), min(rgn[1], xmax)
         if left <= right:
             x = min(max((left + right) / 2, xmin + half), xmax - half)

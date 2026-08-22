@@ -1952,8 +1952,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
             rows[row].append((left, right))
             # the y axis is inverted, so the bottom is ymax; keep the rows on screen for
             # small windows
-            height = region._label_metrics.height() * py
-            y = ymax - height / 2 - 2 * py - row * height
+            height = region._label_size()[1] * py
+            y = ymax - height / 2 - row * height
             y = max(y, ymin + height / 2)
             region.label_item.setPos(x, y)
 

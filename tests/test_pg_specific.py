@@ -152,10 +152,20 @@ def test_annotation_label_position(raw_orig, pg_backend):
     # which is ymax on the inverted axis); C's label at 4 s does not touch them
     def rows():
         ys = [r.label_item.pos().y() for r in fig.mne.regions]
-        height = region._label_metrics.height() * fig.mne.viewbox.viewPixelSize()[1]
+        height = region._label_size()[1] * fig.mne.viewbox.viewPixelSize()[1]
         return [round((max(ys) - y) / height) for y in ys]
 
     assert rows() == [0, 1, 0]
+    # stacked labels must not overlap on screen: the painted box is larger than the
+    # font height because of the QTextDocument margins (visible on macOS, where the
+    # font is smaller relative to the margin)
+    ys = [
+        r.label_item.pos().y() / fig.mne.viewbox.viewPixelSize()[1]
+        for r in fig.mne.regions
+    ]
+    box = fig.mne.regions[0].label_item.textItem.boundingRect().height()
+    assert box > region._label_metrics.height()
+    assert ys[0] - ys[1] >= box, (ys, box)
 
     # the region is longer than the shown time window, so the label should stay
     # centered in what is on screen rather than at the (off-screen) region center
@@ -190,11 +200,11 @@ def test_annotation_label_position(raw_orig, pg_backend):
     assert_allclose(xmin, stop)
     assert region.label_item.isVisible()
     px = fig.mne.viewbox.viewPixelSize()[0]
-    half = region._label_metrics.horizontalAdvance(region.description) / 2 * px
+    half = region._label_size()[0] / 2 * px
     assert_allclose(region.label_item.pos().x(), stop + half)
     point = fig._add_region(xmax, 0, "C")
     point.update_visible(True)
-    half = point._label_metrics.horizontalAdvance("C") / 2 * px
+    half = point._label_size()[0] / 2 * px
     assert_allclose(point.label_item.pos().x(), xmax - half)
 
     # rows stay on screen in a short window
