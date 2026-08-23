@@ -10,6 +10,7 @@ import pytest
 from mne.utils import check_version
 from numpy.testing import assert_allclose, assert_array_equal
 from qtpy.QtCore import Qt
+from qtpy.QtGui import QFontMetrics
 from qtpy.QtTest import QTest
 
 from mne_qt_browser._colors import _oklab_to_rgb, _rgb_to_oklab
@@ -189,7 +190,7 @@ def test_annotation_label_position(raw_orig, pg_backend):
         for r in fig.mne.regions
     ]
     box = fig.mne.regions[0].label_item.textItem.boundingRect().height()
-    assert box > region._label_metrics.height()
+    assert box > QFontMetrics(region.label_item.textItem.font()).height()
     assert ys[0] - ys[1] >= box, (ys, box)
 
     # the region is longer than the shown time window, so the label should stay

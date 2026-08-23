@@ -20,7 +20,7 @@ from pyqtgraph import (
     mkBrush,
 )
 from qtpy.QtCore import QLineF, QSignalBlocker, Qt, Signal
-from qtpy.QtGui import QFontMetrics, QTransform
+from qtpy.QtGui import QTransform
 from qtpy.QtWidgets import QGraphicsLineItem
 
 from mne_qt_browser._colors import _get_color
@@ -85,11 +85,7 @@ class AnnotRegion(LinearRegionItem):
         self.selected = False
 
         self.label_item = TextItem(text=description, anchor=(0.5, 0.5))
-        self._label_font = _q_font(10, bold=True)
-        # font metrics rather than label_item.boundingRect(), which stays stale until
-        # the item has been laid out and would give each label a different row height
-        self._label_metrics = QFontMetrics(self._label_font)
-        self.label_item.setFont(self._label_font)
+        self.label_item.setFont(_q_font(10, bold=True))
         self.label_item.setZValue(_Z_ANNOT_LABEL)  # stacked labels can sit over traces
         self.setToolTip(description)
         self.sigRegionChanged.connect(self._update_label_positions)
@@ -344,12 +340,11 @@ class AnnotRegion(LinearRegionItem):
 
     def _label_size(self):
         """Get the (width, height) of the painted label in pixels."""
-        # the painted box is the text plus the QTextDocument margin on each side
-        margin = 2 * self.label_item.textItem.document().documentMargin()
-        return (
-            self._label_metrics.horizontalAdvance(self.description) + margin,
-            self._label_metrics.height() + margin,
-        )
+        # the inner QGraphicsTextItem (unlike TextItem.boundingRect(), which is stale
+        # until painted) lays out its document on demand, and includes the document
+        # margins that QFontMetrics would miss
+        rect = self.label_item.textItem.boundingRect()
+        return rect.width(), rect.height()
 
     def _label_extent(self, xmin, xmax, px):
         """Get the x position and half width (in data units) of the label.
