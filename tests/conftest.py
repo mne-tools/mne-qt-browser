@@ -111,26 +111,36 @@ def pg_backend(request, garbage_collect):
         snap.assert_no_new(f"Closure of {request.node.name}", request=request)
 
 
-@pytest.fixture(autouse=True, scope="session")
-def _isolated_mne_config(tmp_path_factory):
-    """Isolate the MNE config file for the test session.
+@pytest.fixture(autouse=True)
+def _isolated_mne_config(tmp_path):
+    """Isolate the MNE config file, one per test.
 
     Closing a browser writes e.g. MNE_BROWSE_RAW_SIZE via mne.set_config, which
     would otherwise both trash the user's real config and make test behavior
-    depend on whatever earlier runs left there (window sizes change pixel->data
-    rounding in interaction tests).
+    depend on whatever earlier runs left there. A directory per test (rather
+    than per session) also stops a test that resizes its window from changing
+    the size every later browser opens at, since window size feeds the
+    pixel->data rounding that interaction tests depend on.
     """
-    config_dir = tmp_path_factory.mktemp("mne_config")
+    config_dir = tmp_path / "mne_config"
+    config_dir.mkdir()
     mp = pytest.MonkeyPatch()
     mp.setenv("_MNE_FAKE_HOME_DIR", str(config_dir))
     yield
     mp.undo()
 
 
-@pytest.fixture(autouse=True, scope="session")
-def _isolated_qsettings(tmp_path_factory):
-    """Isolate QSettings to a temporary file for the test session."""
-    ini_path = tmp_path_factory.mktemp("qsettings") / "mne-qt-browser-test.ini"
+@pytest.fixture(autouse=True)
+def _isolated_qsettings(tmp_path):
+    """Isolate QSettings to a temporary file, one per test.
+
+    Closing a browser writes every entry of ``qsettings_params`` back out, so a
+    file shared across tests would let one test's settings (e.g. the
+    ``downsampling=17`` that ``test_pg_settings_dialog`` sets) silently change
+    how every later browser renders. A fresh file per test means each one starts
+    from the documented defaults.
+    """
+    ini_path = tmp_path / "mne-qt-browser-test.ini"
 
     def _fake_qsettings(*_args, **_kwargs):
         return QSettings(str(ini_path), QSettings.IniFormat)

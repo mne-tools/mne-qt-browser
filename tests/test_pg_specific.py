@@ -2,6 +2,7 @@
 # Copyright the MNE Qt Browser contributors.
 
 import warnings
+from time import perf_counter
 
 import mne
 import numpy as np
@@ -12,7 +13,7 @@ from qtpy.QtCore import Qt
 from qtpy.QtTest import QTest
 
 from mne_qt_browser._colors import _oklab_to_rgb, _rgb_to_oklab
-from mne_qt_browser._utils import _disconnect
+from mne_qt_browser._utils import _calc_data_unit_to_physical, _disconnect
 
 LESS_TIME = "Show fewer time points"
 MORE_TIME = "Show more time points"
@@ -22,6 +23,20 @@ REDUCE_AMPLITUDE = "Reduce amplitude"
 INCREASE_AMPLITUDE = "Increase amplitude"
 TOGGLE_ANNOTATIONS = "Toggle annotations mode"
 SHOW_PROJECTORS = "Show projectors"
+
+
+def _assert_n_figs(pg_backend, want, timeout=5.0):
+    """Assert the number of visible windows, waiting for Qt to get there.
+
+    Showing and destroying dialogs happens in the event loop, so the count only
+    settles some time after the triggering action. Polling until it matches
+    keeps the slow-machine headroom of a long fixed wait without paying for it
+    on a fast one (``_get_n_figs`` waits 100 ms per call).
+    """
+    t0 = perf_counter()
+    while (got := pg_backend._get_n_figs()) != want and perf_counter() - t0 < timeout:
+        pass
+    assert got == want
 
 
 def test_disconnect_warning_filter():
@@ -44,6 +59,16 @@ def test_disconnect_warning_filter():
         _disconnect(Signal("unrelated warning"))
 
 
+def test_splash(raw_orig, pg_backend):
+    """Test that the splash screen is torn down with the browser that owns it."""
+    # Every other test here passes splash=False: creating, showing and closing the
+    # splash costs about a second per browser, which is most of what plotting one
+    # takes. This test keeps that path (and _safe_splash) covered.
+    fig = raw_orig.plot(splash=True)
+    assert not hasattr(fig.mne, "splash")  # closed and dropped by _safe_splash
+    _assert_n_figs(pg_backend, 1)  # the browser, with no splash left behind
+
+
 def test_annotations_single_sample(raw_orig, pg_backend):
     """Test anotations with duration of 0 s."""
     # Crop and resample to avoid failing tests due to rounding in browser
@@ -56,7 +81,7 @@ def test_annotations_single_sample(raw_orig, pg_backend):
     first_time = raw_orig.first_time
     raw_orig.annotations.append(onset + first_time, duration, description)
     duration = raw_orig.n_times / raw_orig.info["sfreq"]
-    fig = raw_orig.plot(duration=duration)
+    fig = raw_orig.plot(duration=duration, splash=False)
     fig.test_mode = True
     # Activate annotation_mode
     fig._fake_keypress("a")
@@ -112,7 +137,7 @@ def test_annotations_recording_end(raw_orig, pg_backend):
     raw_orig.annotations.append(onset + first_time, duration, description)
     n_anns = len(raw_orig.annotations)
     duration = raw_orig.n_times / raw_orig.info["sfreq"]
-    fig = raw_orig.plot(duration=duration)
+    fig = raw_orig.plot(duration=duration, splash=False)
     fig.test_mode = True
     # Activate annotation_mode
     fig._fake_keypress("a")
@@ -229,7 +254,7 @@ def test_annotations_interactions(raw_orig, pg_backend):
     for onset, duration, description in zip(onsets, durations, descriptions):
         raw_orig.annotations.append(onset, duration, description)
     n_anns = len(raw_orig.annotations)
-    fig = raw_orig.plot()
+    fig = raw_orig.plot(splash=False)
     fig.test_mode = True
     annot_dock = fig.mne.fig_annotation
 
@@ -332,7 +357,7 @@ def test_ch_specific_annot(raw_orig, pg_backend):
     raw_orig.set_annotations(annots)
 
     ch_names.pop(-1)  # don't plot the last one!
-    fig = raw_orig.plot(picks=ch_names)  # omit the first one
+    fig = raw_orig.plot(picks=ch_names, splash=False)  # omit the first one
     fig_ch_names = list(fig.mne.ch_names[fig.mne.ch_order])
     fig.test_mode = True
     annot_dock = fig.mne.fig_annotation
@@ -417,33 +442,26 @@ def test_ch_specific_annot(raw_orig, pg_backend):
 
 def test_pg_settings_dialog(raw_orig, pg_backend):
     """Test Settings Dialog toggle on/off for pyqtgraph-backend."""
-    fig = raw_orig.plot()
+    fig = raw_orig.plot(splash=False)
     fig.test_mode = True
     QTest.qWaitForWindowExposed(fig)
-    QTest.qWait(50)
     assert fig.mne.fig_settings is None
     with pytest.raises(ValueError, match="FooAction"):
-        fig._fake_click_on_toolbar_action("FooAction")
-    fig._fake_click_on_toolbar_action("Settings", wait_after=500)
-    assert fig.mne.fig_settings is not None
-    assert pg_backend._get_n_figs() == 2
-    fig._fake_click_on_toolbar_action("Settings", wait_after=500)
-    assert pg_backend._get_n_figs() == 1
-    assert fig.mne.fig_settings is None
-    fig._fake_click_on_toolbar_action("Settings", wait_after=500)
-    assert pg_backend._get_n_figs() == 2
-    assert fig.mne.fig_settings is not None
-    fig._fake_click_on_toolbar_action("Settings", wait_after=500)
-    assert pg_backend._get_n_figs() == 1
-    assert fig.mne.fig_settings is None
+        fig._fake_click_on_toolbar_action("FooAction", wait_after=0)
+    for _ in range(2):
+        fig._fake_click_on_toolbar_action("Settings", wait_after=0)
+        assert fig.mne.fig_settings is not None
+        _assert_n_figs(pg_backend, 2)
+        fig._fake_click_on_toolbar_action("Settings", wait_after=0)
+        assert fig.mne.fig_settings is None
+        _assert_n_figs(pg_backend, 1)
 
-    fig._fake_click_on_toolbar_action("Settings", wait_after=500)
+    fig._fake_click_on_toolbar_action("Settings", wait_after=0)
     assert fig.mne.fig_settings is not None
     downsampling_control = fig.mne.fig_settings.downsampling_box
     assert downsampling_control.value() == fig.mne.downsampling
 
     downsampling_control.setValue(2)
-    QTest.qWait(100)
     assert downsampling_control.value() == 2
     assert downsampling_control.value() == fig.mne.downsampling
 
@@ -455,74 +473,45 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
     # does not evenly divide into the data length
     assert all(x % ds != 0 for x in allowed)
     downsampling_control.setValue(ds)
-    QTest.qWait(100)
     assert downsampling_control.value() == ds
     assert downsampling_control.value() == fig.mne.downsampling
 
-    QTest.qWait(100)
     downsampling_method_control = fig.mne.fig_settings.ds_method_cmbx
     assert fig.mne.ds_method == downsampling_method_control.currentText()
 
-    downsampling_method_control.setCurrentText("mean")
-    QTest.qWait(100)
-    assert downsampling_method_control.currentText() == "mean"
-    assert fig.mne.ds_method == "mean"
-    fig._redraw(update_data=True)  # make sure it works
-    assert fig.mne.data.shape[-1] == len(fig.mne.times)
-
-    downsampling_method_control.setCurrentText("subsample")
-    QTest.qWait(100)
-    assert downsampling_method_control.currentText() == "subsample"
-    assert fig.mne.ds_method == "subsample"
-    fig._redraw(update_data=True)  # make sure it works
-    assert fig.mne.data.shape[-1] == len(fig.mne.times)
-
-    downsampling_method_control.setCurrentText("peak")
-    QTest.qWait(100)
-    assert downsampling_method_control.currentText() == "peak"
-    assert fig.mne.ds_method == "peak"
-    fig._redraw(update_data=True)  # make sure it works
-    assert fig.mne.data.shape[-1] == len(fig.mne.times)
+    for ds_method in ("mean", "subsample", "peak"):
+        downsampling_method_control.setCurrentText(ds_method)
+        assert downsampling_method_control.currentText() == ds_method
+        assert fig.mne.ds_method == ds_method
+        fig._redraw(update_data=True)  # make sure it works
+        assert fig.mne.data.shape[-1] == len(fig.mne.times)
 
     downsampling_method_control.setCurrentText("invalid_method_name")
-    QTest.qWait(100)
     assert downsampling_method_control.currentText() != "invalid_method_name"
 
     sensitivity_control = fig.mne.fig_settings.scroll_sensitivity_slider
     assert fig.mne.scroll_sensitivity == sensitivity_control.value()
 
     sensitivity_control.setValue(100)
-    QTest.qWait(100)
     assert sensitivity_control.value() == 100
     assert fig.mne.scroll_sensitivity == 100
 
-    QTest.qWait(100)
     sensitivity_values = list(
         range(sensitivity_control.minimum(), sensitivity_control.maximum() + 1, 40)
     )
     if sensitivity_values[-1] != sensitivity_control.maximum():
         sensitivity_values.append(sensitivity_control.maximum())
 
-    sensitivities_mne = list()
-    sensitivities_control = list()
-    for val in sensitivity_values:
-        sensitivity_control.setValue(val)
-        QTest.qWait(50)
-        sensitivities_mne.append(fig.mne.scroll_sensitivity)
-        sensitivities_control.append(sensitivity_control.value())
-    assert sensitivities_mne == sensitivity_values
-    assert sensitivities_control == sensitivity_values
-
-    sensitivity_values = sensitivity_values[::-1]
-    sensitivities_mne = list()
-    sensitivities_control = list()
-    for val in sensitivity_values:
-        sensitivity_control.setValue(val)
-        QTest.qWait(50)
-        sensitivities_mne.append(fig.mne.scroll_sensitivity)
-        sensitivities_control.append(sensitivity_control.value())
-    assert sensitivities_mne == sensitivity_values
-    assert sensitivities_control == sensitivity_values
+    # Both sweep directions, since the slider and mne must stay in sync either way
+    for values in (sensitivity_values, sensitivity_values[::-1]):
+        sensitivities_mne = list()
+        sensitivities_control = list()
+        for val in values:
+            sensitivity_control.setValue(val)
+            sensitivities_mne.append(fig.mne.scroll_sensitivity)
+            sensitivities_control.append(sensitivity_control.value())
+        assert sensitivities_mne == values
+        assert sensitivities_control == values
 
     # Make sure there are correct number of scaling spinboxes
     ordered_types = fig.mne.ch_types[fig.mne.ch_order]
@@ -582,9 +571,30 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
     orig_sens = ch_sens_spinbox.value()
     fig.mne.fig_settings.mon_height_spinbox.setValue(orig_mon_height / 2)
     QTest.keyPress(fig.mne.fig_settings.mon_height_spinbox.lineEdit(), Qt.Key_Return)
-    fig.mne.fig_settings.mon_width_spinbox.setValue(orig_mon_width / 2)
-    QTest.keyPress(fig.mne.fig_settings.mon_width_spinbox.lineEdit(), Qt.Key_Return)
+    assert_allclose(
+        fig.mne.fig_settings.dpi_spinbox.value(), orig_mon_dpi * 2, rtol=1e-3
+    )
+    assert_allclose(
+        fig.mne.fig_settings.mon_width_spinbox.value(), orig_mon_width / 2, rtol=1e-3
+    )
     assert ch_sens_spinbox.value() != orig_sens
+
+    # Reset leaves height, width and DPI mutually consistent -- pixels are square, even
+    # where the physical size Qt reports is not -- so re-entering any one of them is a
+    # no-op. rtol covers the spinboxes rounding to two decimals.
+    for box in ("mon_height_spinbox", "mon_width_spinbox", "dpi_spinbox"):
+        fig.mne.fig_settings._reset_monitor_spinboxes()
+        QTest.keyPress(getattr(fig.mne.fig_settings, box).lineEdit(), Qt.Key_Return)
+        assert_allclose(
+            fig.mne.fig_settings.mon_height_spinbox.value(), orig_mon_height, rtol=1e-3
+        )
+        assert_allclose(
+            fig.mne.fig_settings.mon_width_spinbox.value(), orig_mon_width, rtol=1e-3
+        )
+        assert_allclose(
+            fig.mne.fig_settings.dpi_spinbox.value(), orig_mon_dpi, rtol=1e-3
+        )
+        assert_allclose(ch_sens_spinbox.value(), orig_sens, rtol=1e-3)
 
     # Monitor settings reset button works
     fig.mne.fig_settings._reset_monitor_spinboxes()
@@ -615,28 +625,22 @@ def test_pg_settings_dialog(raw_orig, pg_backend):
 
 def test_pg_help_dialog(raw_orig, pg_backend):
     """Test Settings Dialog toggle on/off for pyqtgraph-backend."""
-    fig = raw_orig.plot()
+    fig = raw_orig.plot(splash=False)
     fig.test_mode = True
     QTest.qWaitForWindowExposed(fig)
-    QTest.qWait(50)
     assert fig.mne.fig_help is None
-    fig._fake_click_on_toolbar_action("Help", wait_after=500)
-    assert fig.mne.fig_help is not None
-    assert pg_backend._get_n_figs() == 2
-    fig._fake_click_on_toolbar_action("Help", wait_after=500)
-    assert fig.mne.fig_help is None
-    assert pg_backend._get_n_figs() == 1
-    fig._fake_click_on_toolbar_action("Help", wait_after=500)
-    assert fig.mne.fig_help is not None
-    assert pg_backend._get_n_figs() == 2
-    fig._fake_click_on_toolbar_action("Help", wait_after=500)
-    assert fig.mne.fig_help is None
-    assert pg_backend._get_n_figs() == 1
+    for _ in range(2):
+        fig._fake_click_on_toolbar_action("Help", wait_after=0)
+        assert fig.mne.fig_help is not None
+        _assert_n_figs(pg_backend, 2)
+        fig._fake_click_on_toolbar_action("Help", wait_after=0)
+        assert fig.mne.fig_help is None
+        _assert_n_figs(pg_backend, 1)
 
 
 def test_pg_toolbar_time_plus_minus(raw_orig, pg_backend):
     """Test time controls."""
-    fig = raw_orig.plot()
+    fig = raw_orig.plot(splash=False)
     fig.test_mode = True
     QTest.qWaitForWindowExposed(fig)
     assert pg_backend._get_n_figs() == 1
@@ -646,13 +650,13 @@ def test_pg_toolbar_time_plus_minus(raw_orig, pg_backend):
     for _ in range(100):
         if xmax - xmin <= min_duration:
             break
-        fig._fake_click_on_toolbar_action(LESS_TIME, wait_after=20)
+        fig._fake_click_on_toolbar_action(LESS_TIME, wait_after=0)
         xmin, xmax = fig.mne.viewbox.viewRange()[0]
     assert xmax - xmin == min_duration
 
     eps = 0.01
     step = 0.25
-    fig._fake_click_on_toolbar_action(MORE_TIME, wait_after=100)
+    fig._fake_click_on_toolbar_action(MORE_TIME, wait_after=0)
     xmin_new, xmax_new = fig.mne.viewbox.viewRange()[0]
     assert xmax_new - (xmax + (xmax - xmin * step)) < eps
 
@@ -660,37 +664,37 @@ def test_pg_toolbar_time_plus_minus(raw_orig, pg_backend):
     for _ in range(100):
         if xmax + fig.mne.duration * step >= fig.mne.xmax:
             break
-        fig._fake_click_on_toolbar_action(MORE_TIME, wait_after=20)
+        fig._fake_click_on_toolbar_action(MORE_TIME, wait_after=0)
         xmin, xmax = fig.mne.viewbox.viewRange()[0]
 
-    fig._fake_click_on_toolbar_action(MORE_TIME, wait_after=200)
-    fig._fake_click_on_toolbar_action(MORE_TIME, wait_after=200)
+    fig._fake_click_on_toolbar_action(MORE_TIME, wait_after=0)
+    fig._fake_click_on_toolbar_action(MORE_TIME, wait_after=0)
 
     xmin, xmax = fig.mne.viewbox.viewRange()[0]
-    fig._fake_click_on_toolbar_action(MORE_TIME, wait_after=200)
+    fig._fake_click_on_toolbar_action(MORE_TIME, wait_after=0)
     xmin_new, xmax_new = fig.mne.viewbox.viewRange()[0]
     assert xmax_new == xmax  # no effect after span maxed
 
     step = -0.2
     xmin, xmax = fig.mne.viewbox.viewRange()[0]
-    fig._fake_click_on_toolbar_action(LESS_TIME, wait_after=200)
+    fig._fake_click_on_toolbar_action(LESS_TIME, wait_after=0)
     xmin_new, xmax_new = fig.mne.viewbox.viewRange()[0]
     assert xmax_new == xmax + ((xmax - xmin) * step)
 
     xmin, xmax = fig.mne.viewbox.viewRange()[0]
-    fig._fake_click_on_toolbar_action(LESS_TIME, wait_after=200)
+    fig._fake_click_on_toolbar_action(LESS_TIME, wait_after=0)
     xmin_new, xmax_new = fig.mne.viewbox.viewRange()[0]
     assert xmax_new == xmax + ((xmax - xmin) * step)
 
     for _ in range(7):
-        fig._fake_click_on_toolbar_action(LESS_TIME, wait_after=20)
+        fig._fake_click_on_toolbar_action(LESS_TIME, wait_after=0)
 
     assert pg_backend._get_n_figs() == 1  # still alive
 
 
 def test_pg_toolbar_channels_plus_minus(raw_orig, pg_backend):
     """Test channel controls."""
-    fig = raw_orig.plot()
+    fig = raw_orig.plot(splash=False)
     fig.test_mode = True
     QTest.qWaitForWindowExposed(fig)
     assert pg_backend._get_n_figs() == 1
@@ -698,36 +702,36 @@ def test_pg_toolbar_channels_plus_minus(raw_orig, pg_backend):
     # changing the number of channels should have no effect in butterfly mode
     if fig.mne.butterfly is not True:
         fig._fake_keypress("b")  # toggle butterfly mode
-    fig._fake_click_on_toolbar_action(FEWER_CHANNELS, wait_after=100)
+    fig._fake_click_on_toolbar_action(FEWER_CHANNELS, wait_after=0)
     ymin, ymax = fig.mne.viewbox.viewRange()[1]
-    fig._fake_click_on_toolbar_action(FEWER_CHANNELS, wait_after=100)
+    fig._fake_click_on_toolbar_action(FEWER_CHANNELS, wait_after=0)
     assert [ymin, ymax] == fig.mne.viewbox.viewRange()[1]
-    fig._fake_click_on_toolbar_action(MORE_CHANNELS, wait_after=100)
+    fig._fake_click_on_toolbar_action(MORE_CHANNELS, wait_after=0)
     assert [ymin, ymax] == fig.mne.viewbox.viewRange()[1]
 
     if fig.mne.butterfly is True:
         fig._fake_keypress("b")  # toggle butterfly off
 
     for _ in range(19):  # reduce number of channels from 20 to 1
-        fig._fake_click_on_toolbar_action(FEWER_CHANNELS, wait_after=40)
+        fig._fake_click_on_toolbar_action(FEWER_CHANNELS, wait_after=0)
         ymin, ymax = fig.mne.viewbox.viewRange()[1]
     assert ymax - ymin == 2  # exactly 1 channel visible
-    fig._fake_click_on_toolbar_action(FEWER_CHANNELS, wait_after=40)  # no effect
+    fig._fake_click_on_toolbar_action(FEWER_CHANNELS, wait_after=0)  # no effect
     ymin, ymax = fig.mne.viewbox.viewRange()[1]
     assert ymax - ymin == 2
 
     # show one more channel at a time
-    fig._fake_click_on_toolbar_action(MORE_CHANNELS, wait_after=100)
+    fig._fake_click_on_toolbar_action(MORE_CHANNELS, wait_after=0)
     _, ymax_new = fig.mne.viewbox.viewRange()[1]
     assert ymax_new == ymax + 1
 
     ymin, ymax = fig.mne.viewbox.viewRange()[1]
-    fig._fake_click_on_toolbar_action(MORE_CHANNELS, wait_after=100)
+    fig._fake_click_on_toolbar_action(MORE_CHANNELS, wait_after=0)
     _, ymax_new = fig.mne.viewbox.viewRange()[1]
     assert ymax_new == ymax + 1
 
     ymin, ymax = fig.mne.viewbox.viewRange()[1]
-    fig._fake_click_on_toolbar_action(MORE_CHANNELS, wait_after=100)
+    fig._fake_click_on_toolbar_action(MORE_CHANNELS, wait_after=0)
     _, ymax_new = fig.mne.viewbox.viewRange()[1]
     assert ymax_new == ymax + 1
 
@@ -736,48 +740,46 @@ def test_pg_toolbar_channels_plus_minus(raw_orig, pg_backend):
 
 def test_pg_toolbar_zoom(raw_orig, pg_backend):
     """Test zoom."""
-    fig = raw_orig.plot()
+    fig = raw_orig.plot(splash=False)
     fig.test_mode = True
     QTest.qWaitForWindowExposed(fig)
     assert pg_backend._get_n_figs() == 1
 
     step = 4 / 5
     scale_factor = fig.mne.scale_factor
-    fig._fake_click_on_toolbar_action(REDUCE_AMPLITUDE, wait_after=100)
+    fig._fake_click_on_toolbar_action(REDUCE_AMPLITUDE, wait_after=0)
     scale_factor_new = fig.mne.scale_factor
     assert scale_factor_new == scale_factor * step
 
     for _ in range(6):
-        fig._fake_click_on_toolbar_action(REDUCE_AMPLITUDE, wait_after=100)
+        fig._fake_click_on_toolbar_action(REDUCE_AMPLITUDE, wait_after=0)
 
     step = 5 / 4
     scale_factor = fig.mne.scale_factor
-    fig._fake_click_on_toolbar_action(INCREASE_AMPLITUDE, wait_after=100)
+    fig._fake_click_on_toolbar_action(INCREASE_AMPLITUDE, wait_after=0)
     scale_factor_new = fig.mne.scale_factor
     assert scale_factor_new == scale_factor * step
 
     for _ in range(6):
-        fig._fake_click_on_toolbar_action(INCREASE_AMPLITUDE, wait_after=100)
+        fig._fake_click_on_toolbar_action(INCREASE_AMPLITUDE, wait_after=0)
 
     assert pg_backend._get_n_figs() == 1  # still alive
 
 
 def test_pg_toolbar_annotations(raw_orig, pg_backend):
     """Test annotations mode."""
-    fig = raw_orig.plot()
+    fig = raw_orig.plot(splash=False)
     fig.test_mode = True
     QTest.qWaitForWindowExposed(fig)
     assert pg_backend._get_n_figs() == 1
 
     state_annotation_widget = fig.mne.annotation_mode
-    fig._fake_click_on_toolbar_action(TOGGLE_ANNOTATIONS, wait_after=100)
-    assert fig.mne.annotation_mode != state_annotation_widget
+    for _ in range(4):
+        fig._fake_click_on_toolbar_action(TOGGLE_ANNOTATIONS, wait_after=0)
+        assert fig.mne.annotation_mode != state_annotation_widget
+        state_annotation_widget = fig.mne.annotation_mode
 
-    fig._fake_click_on_toolbar_action(TOGGLE_ANNOTATIONS, wait_after=300)
-    fig._fake_click_on_toolbar_action(TOGGLE_ANNOTATIONS, wait_after=300)
-    fig._fake_click_on_toolbar_action(TOGGLE_ANNOTATIONS, wait_after=300)
-
-    assert pg_backend._get_n_figs() == 1  # still alive
+    _assert_n_figs(pg_backend, 1)  # still alive
 
 
 def test_pg_toolbar_actions(raw_orig, pg_backend):
@@ -786,27 +788,23 @@ def test_pg_toolbar_actions(raw_orig, pg_backend):
     Toolbar actions here create a separate QDialog window.
     We test the state machine for each window toggle button.
     """
-    fig = raw_orig.plot()
+    fig = raw_orig.plot(splash=False)
     fig.test_mode = True
     QTest.qWaitForWindowExposed(fig)
     assert pg_backend._get_n_figs() == 1
 
-    fig._fake_click_on_toolbar_action(SHOW_PROJECTORS, wait_after=200)
-    assert pg_backend._get_n_figs() == 2
-    fig._fake_click_on_toolbar_action("Settings", wait_after=200)
-    assert pg_backend._get_n_figs() == 3
-    fig._fake_click_on_toolbar_action("Settings", wait_after=100)
-    assert pg_backend._get_n_figs() == 2
-    fig._fake_click_on_toolbar_action("Help", wait_after=200)
-    assert pg_backend._get_n_figs() == 3
-    fig._fake_click_on_toolbar_action("Settings", wait_after=200)
-    assert pg_backend._get_n_figs() == 4
-    fig._fake_click_on_toolbar_action(SHOW_PROJECTORS, wait_after=200)
-    assert pg_backend._get_n_figs() == 3
-    fig._fake_click_on_toolbar_action("Settings", wait_after=100)
-    assert pg_backend._get_n_figs() == 2
-    fig._fake_click_on_toolbar_action("Help", wait_after=100)
-    assert pg_backend._get_n_figs() == 1
+    for action, n_figs in [
+        (SHOW_PROJECTORS, 2),
+        ("Settings", 3),
+        ("Settings", 2),
+        ("Help", 3),
+        ("Settings", 4),
+        (SHOW_PROJECTORS, 3),
+        ("Settings", 2),
+        ("Help", 1),
+    ]:
+        fig._fake_click_on_toolbar_action(action, wait_after=0)
+        _assert_n_figs(pg_backend, n_figs)
 
 
 # Oklab values taken from coloraide on 2026/07/20
@@ -845,7 +843,7 @@ def test_color_conversion(rgb, lab):
 
 def test_zscore_rgba(raw_orig, pg_backend):
     """Test the z-score overview RGBA mapping."""
-    fig = raw_orig.plot()
+    fig = raw_orig.plot(splash=False)
     fig.test_mode = True
     # One symmetric ramp channel, one all-NaN channel, and one near-constant
     # channel; the latter triggers SciPy's catastrophic-cancellation
@@ -880,7 +878,7 @@ def test_overview_bad_epochs_dropped(raw_orig, pg_backend):
         raw_orig.copy().crop(tmax=20.0), duration=2.0, preload=True
     )
     epochs.drop([0, 2])  # make selection non-contiguous
-    fig = epochs.plot()
+    fig = epochs.plot(splash=False)
     fig.test_mode = True
     epo_num = epochs.selection[-1]
     fig.mne.bad_epochs.append(epo_num)
@@ -902,7 +900,7 @@ def test_description_cmbx_preserves_selection(raw_orig, pg_backend):
     first_time = raw_orig.first_time
     raw_orig.annotations.append(1 + first_time, 1, "A")
     raw_orig.annotations.append(3 + first_time, 1, "B")
-    fig = raw_orig.plot()
+    fig = raw_orig.plot(splash=False)
     fig.test_mode = True
     dock = fig.mne.fig_annotation
     dock.description_cmbx.setCurrentText("B")
@@ -921,7 +919,7 @@ def test_description_cmbx_preserves_selection(raw_orig, pg_backend):
 
 def test_time_scrollbar_page_step(raw_orig, pg_backend):
     """Test that the scrollbar slider represents the visible fraction."""
-    fig = raw_orig.plot(duration=10.0)
+    fig = raw_orig.plot(duration=10.0, splash=False)
     fig.test_mode = True
     ax_hscroll = fig.mne.ax_hscroll
     # One page in scrollbar units is the visible duration times step_factor
@@ -938,7 +936,7 @@ def test_qsettings_string_bools(raw_orig, pg_backend):
     qsettings.setValue("antialiasing", "false")
     qsettings.setValue("overview_visible", "true")
     qsettings.sync()
-    fig = raw_orig.plot()
+    fig = raw_orig.plot(splash=False)
     assert fig.mne.antialiasing is False
     assert fig.mne.overview_visible is True
 
@@ -947,7 +945,7 @@ def test_message_box_reset(raw_orig, pg_backend):
     """Test that message_box state does not leak into the next message."""
     from qtpy.QtWidgets import QMessageBox
 
-    fig = raw_orig.plot()
+    fig = raw_orig.plot(splash=False)
     fig.test_mode = True
     fig.message_box(
         "first",
@@ -970,7 +968,7 @@ def test_get_onset_idx_float_tolerance(raw_orig, pg_backend):
     first_time = raw_orig.first_time
     raw_orig.annotations.append(1 + first_time, 1, "A")
     raw_orig.annotations.append(3 + first_time, 1, "B")
-    fig = raw_orig.plot()
+    fig = raw_orig.plot(splash=False)
     fig.test_mode = True
     drift = 0.1 / raw_orig.info["sfreq"]
     # Each annotation still resolves to its own index despite sub-sample drift
@@ -1016,6 +1014,8 @@ _HAS_ZERO_LINE_OFFSET = check_version("mne", "1.13")
     reason="mne < 1.10 pads the shown range with two extra samples",
 )
 @pytest.mark.parametrize("clipping", ("transparent", "clamp", None))
+# TODO: This test is flaky on macOS, where painting the curve can hit a bus error
+# inside pyqtgraph's PlotCurveItem.paint
 def test_precompute_matches_on_the_fly(raw_orig, pg_backend, clipping):
     """Test that precomputed data is displayed like data processed on the fly."""
     # A window that has stim events but whose stim maxima differ from the maxima over
@@ -1026,6 +1026,7 @@ def test_precompute_matches_on_the_fly(raw_orig, pg_backend, clipping):
         n_channels=len(raw_orig.ch_names),
         duration=2.0,
         start=3.0,
+        splash=False,
     )
     drawn = dict()
     for precompute in (False, True):
@@ -1100,3 +1101,34 @@ def test_butterfly_scalebars(raw_orig, pg_backend):
     fig = raw_orig.plot(butterfly=True)
     fig.test_mode = True
     _check_butterfly()
+
+
+def test_sensitivity_matches_scalebar(raw_orig, pg_backend):
+    """Test that the reported sensitivity is the one actually drawn on screen."""
+    fig = raw_orig.copy().crop(tmax=5.0).plot(splash=False)
+    fig.test_mode = True
+    QTest.qWaitForWindowExposed(fig)
+    fig._fake_click_on_toolbar_action("Settings", wait_after=0)
+    ch_type = "grad"  # the only type shown in the default (non-butterfly) view
+    assert set(fig.mne.ch_types[fig.mne.picks]) == {ch_type}
+
+    def _check_sensitivity():
+        # The scalebar spans a known number of y-units and is labeled with the
+        # value it represents, so it pins down the true units-per-mm on screen
+        y1, y2 = fig.mne.scalebars[ch_type].get_ydata()
+        mm = abs(y2 - y1) * _calc_data_unit_to_physical(fig, units="mm")
+        value = float(fig.mne.scalebar_texts[ch_type].toPlainText().split()[0])
+        spinbox = fig.mne.fig_settings.ch_sensitivity_spinboxes[ch_type]
+        # atol covers the spinbox rounding to one decimal
+        assert_allclose(spinbox.value(), value / mm, rtol=0.01, atol=0.05)
+
+    _check_sensitivity()
+    fig._fake_keypress("b")
+    _check_sensitivity()
+
+    # Entering a sensitivity gives that sensitivity, in butterfly mode too
+    for butterfly in (True, False):
+        assert fig.mne.butterfly is butterfly
+        fig.mne.fig_settings.ch_sensitivity_spinboxes[ch_type].setValue(12.5)
+        _check_sensitivity()
+        fig._fake_keypress("b")
