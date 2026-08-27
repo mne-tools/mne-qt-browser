@@ -151,6 +151,24 @@ def _isolated_qsettings(tmp_path):
     mp.undo()
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _no_window_raising():
+    """Keep test windows from stealing focus.
+
+    Showing a browser calls ``mne.viz.backends._utils._qt_raise_window``, which
+    activates and raises the window unless Matplotlib's ``figure.raise_window``
+    says otherwise. Over a test session that repeatedly pulls focus away from
+    whatever the developer is doing (and on macOS brings the whole Python
+    application forward). The windows still appear, just behind the active one.
+    """
+    import matplotlib
+
+    mp = pytest.MonkeyPatch()
+    mp.setitem(matplotlib.rcParams, "figure.raise_window", False)
+    yield
+    mp.undo()
+
+
 def pytest_configure(config):
     """Configure pytest options."""
     # Markers
