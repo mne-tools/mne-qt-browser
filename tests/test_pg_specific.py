@@ -1093,16 +1093,13 @@ def _make_variable_epochs():
 
 
 def _open_variable_browser(n_epochs=2, **kwargs):
-    """Return a browser showing epochs of unequal duration, or skip.
+    """Return a browser showing epochs of unequal duration.
 
     Not a fixture: the reference-leak check in conftest fails if a browser is
     still reachable from a fixture when the test closes.
     """
     epochs = _make_variable_epochs()
-    try:
-        fig = epochs.plot(n_epochs=n_epochs, show=False, **kwargs)
-    except NotImplementedError:  # MNE still refuses this backend
-        pytest.skip("This MNE-Python does not route variable-duration epochs here")
+    fig = epochs.plot(n_epochs=n_epochs, show=False, **kwargs)
     fig.test_mode = True
     return fig
 
@@ -1237,10 +1234,7 @@ def test_variable_duration_change_duration(pg_backend):
 def test_variable_duration_precompute(pg_backend):
     """Test that precompute concatenates the real samples, unpadded."""
     epochs = _make_variable_epochs()
-    try:
-        fig = epochs.plot(n_epochs=2, show=False, precompute=True)
-    except NotImplementedError:
-        pytest.skip("This MNE-Python does not route variable-duration epochs here")
+    fig = epochs.plot(n_epochs=2, show=False, precompute=True)
     fig.test_mode = True
     for _ in range(100):
         if getattr(fig.mne, "global_data", None) is not None:

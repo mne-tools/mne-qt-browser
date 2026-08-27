@@ -117,6 +117,10 @@ from mne_qt_browser._widgets import (
 )
 
 name = "pyqtgraph"  # Backend name, used by MNE-Python
+# Announces to MNE-Python that this backend reads the boundary model rather
+# than assuming every epoch has the same length; older versions lack it and
+# MNE-Python declines variable-duration epochs for them.
+_SUPPORTS_VARIABLE_DURATION = True
 
 
 def _qsettings():
@@ -1212,7 +1216,23 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         self.mne.vline_visible = False
         self.mne.overview_bar.update_vline()
 
-    def _epoch_vline_state(self, t):
+    def _epoch_vline_latency(self, t):
+        """Remember the latency a click or drag selected, and return it.
+
+        The latency has to live in state rather than be re-derived from a line
+        position: every line can be hidden at once, and then no position on
+        screen carries it any more.
+        """
+        latency = latency_at(
+            self.mne.boundary_times,
+            self.mne.epoch_tmins,
+            self.mne.info["sfreq"],
+            t,
+        )
+        self.mne.vline_latency = latency
+        return latency
+
+    def _epoch_vline_state(self, t=None, latency=None):
         """Return a position per visible epoch, and which ones really have it.
 
         A latency exists only in epochs long enough to reach it, so the mask
@@ -1220,7 +1240,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         list length never changes while a line is being dragged.
         """
         sfreq = self.mne.info["sfreq"]
-        latency = latency_at(self.mne.boundary_times, self.mne.epoch_tmins, sfreq, t)
+        if latency is None:
+            latency = self._epoch_vline_latency(t)
         ixs = np.atleast_1d(np.asarray(self.mne.epoch_idx, int))
         keep, xs_keep = latency_positions(
             self.mne.boundary_times,
@@ -1245,16 +1266,74 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
 
         return ts
 
-    def _set_epoch_vline_visibility(self, t):
+    def _set_epoch_vline_visibility(self, t=None, latency=None):
         """Hide the lines whose epoch never reaches the dragged latency."""
         if not is_variable_duration(self.mne) or self.mne.vline is None:
             return
-        _, mask = self._epoch_vline_state(t)
+        _, mask = self._epoch_vline_state(t=t, latency=latency)
         for vl, visible in zip(self.mne.vline, mask):
+            was_visible = vl.isVisible()
             vl.setVisible(bool(visible))
+            if visible and not was_visible:
+                # the label drops updates while hidden, so it would come back
+                # carrying the text from wherever the line used to be
+                vl.label.valueChanged()
+
+    def _new_epoch_vline(self, epo_idx, x):
+        """Build one epoch vline bounded to its own epoch."""
+        bmin, bmax = self.mne.boundary_times[epo_idx : epo_idx + 2]
+        # Avoid off-by-one-error at bmax for VlineLabel
+        # a one-sample epoch has bmax == bmin, and the subtraction alone can
+        # land a hair below it in float64, clamping the line out of its own
+        # epoch and reporting the previous epoch's latency
+        bmax = max(bmax - 1 / self.mne.info["sfreq"], bmin)
+        vl = VLine(self.mne, x, bounds=(bmin, bmax))
+        # Should only be emitted when dragged
+        vl.sigPositionChangeFinished.connect(self._vline_slot)
+        self.mne.plt.addItem(vl)
+        return vl
+
+    def _reposition_epoch_vlines(self):
+        """Put every visible epoch's line back at the remembered latency.
+
+        The window may now hold a different number of epochs than the list was
+        built for, so the list is resized first. Positions come from the
+        latency rather than from a seconds-offset, which is the whole point:
+        epochs need not share a duration or a tmin.
+        """
+        ixs = np.atleast_1d(np.asarray(self.mne.epoch_idx, int))
+        latency = getattr(self.mne, "vline_latency", None)
+        if latency is None:
+            # nothing has recorded one yet; fall back to the first line
+            latency = self._epoch_vline_latency(self.mne.vline[0].value())
+
+        # resize: the epoch count changes with `change_duration`
+        while len(self.mne.vline) > len(ixs):
+            vl = self.mne.vline.pop()
+            _disconnect(vl.sigPositionChangeFinished, allow_error=True)
+            self.mne.plt.removeItem(vl)
+        while len(self.mne.vline) < len(ixs):
+            idx = ixs[len(self.mne.vline)]
+            self.mne.vline.append(
+                self._new_epoch_vline(idx, self.mne.boundary_times[idx])
+            )
+
+        xs, mask = self._epoch_vline_state(latency=latency)
+        sfreq = self.mne.info["sfreq"]
+        for epo_idx, x, visible, vl in zip(ixs, xs, mask, self.mne.vline):
+            bmin, bmax = self.mne.boundary_times[epo_idx : epo_idx + 2]
+            bmax = max(bmax - 1 / sfreq, bmin)
+            vl.setBounds((bmin, bmax))
+            vl.setValue(x)
+            was_visible = vl.isVisible()
+            vl.setVisible(bool(visible))
+            if visible and not was_visible:
+                vl.label.valueChanged()
 
     def _vline_slot(self, orig_vline):
         if self.mne.is_epochs:
+            if is_variable_duration(self.mne):
+                self._epoch_vline_latency(orig_vline.value())
             ts = self._get_vline_times(orig_vline.value())
             for vl, xt in zip(self.mne.vline, ts):
                 if vl != orig_vline:
@@ -1264,6 +1343,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
 
     def _add_vline(self, t):
         if self.mne.is_epochs:
+            if is_variable_duration(self.mne):
+                self._epoch_vline_latency(t)
             ts = self._get_vline_times(t)
 
             # Add vline if None
@@ -1286,7 +1367,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                 for epo_idx, xt in zip(epo_idxs, ts):
                     bmin, bmax = self.mne.boundary_times[epo_idx : epo_idx + 2]
                     # Avoid off-by-one-error at bmax for VlineLabel
-                    bmax -= 1 / self.mne.info["sfreq"]
+                    bmax = max(bmax - 1 / self.mne.info["sfreq"], bmin)
                     vl = VLine(self.mne, xt, bounds=(bmin, bmax))
                     # Should only be emitted when dragged
                     vl.sigPositionChangeFinished.connect(self._vline_slot)
@@ -1346,11 +1427,14 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                             if is_variable_duration(self.mne):
                                 # epochs differ in length, so the offset into
                                 # one of them is not a remainder
+                                # report the latency of the sample whose y
+                                # value is shown, not of the raw cursor x,
+                                # which can sit past the last sample
                                 x = latency_at(
                                     self.mne.boundary_times,
                                     self.mne.epoch_tmins,
                                     self.mne.info["sfreq"],
-                                    x,
+                                    self.mne.times[idx],
                                 )
                             else:
                                 rel_idx = idx % len(self.mne.inst.times)
@@ -1378,7 +1462,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
     def _xrange_changed(self, _, xrange):
         # Update data
         if self.mne.is_epochs:
-            if self.mne.vline is not None:
+            variable = is_variable_duration(self.mne)
+            if self.mne.vline is not None and not variable:
                 rel_vl_t = (
                     self.mne.vline[0].value()
                     - self.mne.boundary_times[self.mne.epoch_idx][0]
@@ -1394,15 +1479,18 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
 
             # Update vlines
             if self.mne.vline is not None:
-                for bmin, bmax, vl in zip(
-                    self.mne.boundary_times[self.mne.epoch_idx],
-                    self.mne.boundary_times[self.mne.epoch_idx + 1],
-                    self.mne.vline,
-                ):
-                    # Avoid off-by-one-error at bmax for VlineLabel
-                    bmax -= 1 / self.mne.info["sfreq"]
-                    vl.setBounds((bmin, bmax))
-                    vl.setValue(bmin + rel_vl_t)
+                if variable:
+                    self._reposition_epoch_vlines()
+                else:
+                    for bmin, bmax, vl in zip(
+                        self.mne.boundary_times[self.mne.epoch_idx],
+                        self.mne.boundary_times[self.mne.epoch_idx + 1],
+                        self.mne.vline,
+                    ):
+                        # Avoid off-by-one-error at bmax for VlineLabel
+                        bmax = max(bmax - 1 / self.mne.info["sfreq"], bmin)
+                        vl.setBounds((bmin, bmax))
+                        vl.setValue(bmin + rel_vl_t)
 
         self.mne.t_start = xrange[0]
         self.mne.duration = xrange[1] - xrange[0]
