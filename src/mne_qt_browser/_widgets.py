@@ -678,7 +678,8 @@ class TimeAxis(AxisItem):
         if self.mne.is_epochs:
             value_idxs = np.searchsorted(self.mne.midpoints, [minVal, maxVal])
             values = self.mne.midpoints[slice(*value_idxs)]
-            spacing = len(self.mne.inst.times) / self.mne.info["sfreq"]
+            # the shortest epoch, so ticks stay legible when durations differ
+            spacing = float(np.diff(self.mne.boundary_times).min())
             tick_values = [(spacing, values)]
             return tick_values
         else:
@@ -807,7 +808,7 @@ class OverviewBar(QGraphicsView):
             ch_name = self.mne.ch_names[ch_idx]
             if ch_name in add_chs:
                 start = self._mapFromData(0, line_idx)
-                stop = self._mapFromData(self.mne.inst.times[-1], line_idx)
+                stop = self._mapFromData(self.mne.xmax, line_idx)
                 pen = _get_color(self.mne.ch_color_bad, self.mne.dark)
                 line = self.scene().addLine(QLineF(start, stop), pen)
                 line.setZValue(2)
@@ -1168,8 +1169,17 @@ class OverviewBar(QGraphicsView):
             x = "+offbounds"
         else:
             if self.mne.is_epochs:
-                # Return epoch index for epochs
-                x = int(len(self.mne.inst) * xnorm)
+                # Return epoch index for epochs. The bar is drawn against time,
+                # so go through the boundaries rather than assume every epoch
+                # occupies the same width.
+                x = int(
+                    np.searchsorted(
+                        self.mne.boundary_times[1:],
+                        xnorm * self.mne.boundary_times[-1],
+                        side="right",
+                    )
+                )
+                x = min(x, len(self.mne.inst) - 1)
             else:
                 time_idx = int((len(self.mne.inst.times) - 1) * xnorm)
                 x = self.mne.inst.times[time_idx]

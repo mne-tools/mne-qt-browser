@@ -13,7 +13,14 @@ from qtpy.QtCore import Qt
 from qtpy.QtTest import QTest
 
 from mne_qt_browser._colors import _oklab_to_rgb, _rgb_to_oklab
-from mne_qt_browser._utils import _calc_data_unit_to_physical, _disconnect
+from mne_qt_browser._utils import (
+    _calc_data_unit_to_physical,
+    _disconnect,
+    epoch_index_at,
+    epoch_window,
+    latency_at,
+    latency_positions,
+)
 
 LESS_TIME = "Show fewer time points"
 MORE_TIME = "Show more time points"
@@ -1050,3 +1057,254 @@ def test_sensitivity_matches_scalebar(raw_orig, pg_backend):
         fig.mne.fig_settings.ch_sensitivity_spinboxes[ch_type].setValue(12.5)
         _check_sensitivity()
         fig._fake_keypress("b")
+
+
+# -- variable-duration epochs ----------------------------------------------
+SFREQ_VAR = 100.0
+LENGTHS_VAR = (100, 250, 75, 180)  # deliberately very different
+
+
+def _var_boundaries():
+    """Return the boundary times a ragged browser should derive."""
+    return np.concatenate([[0], np.cumsum(LENGTHS_VAR)]) / SFREQ_VAR
+
+
+def _make_variable_epochs():
+    """Return epochs whose trials have deliberately unequal lengths."""
+    if not hasattr(mne.EpochsArray, "variable_duration"):
+        # older MNE rejects the ragged list outright, so check before building
+        pytest.skip("This MNE-Python does not support variable-duration epochs")
+    n = len(LENGTHS_VAR)
+    info = mne.create_info(["a", "b", "c"], SFREQ_VAR, "eeg")
+    rng = np.random.default_rng(0)
+    data = [rng.standard_normal((3, length)) * 1e-6 for length in LENGTHS_VAR]
+    events = np.column_stack(
+        [np.arange(n) * 1000 + 500, np.zeros(n, int), np.ones(n, int)]
+    )
+    return mne.EpochsArray(
+        data,
+        info,
+        events=events,
+        tmin=np.zeros(n),
+        event_id={"x": 1},
+        baseline=None,
+        verbose=False,
+    )
+
+
+def _open_variable_browser(n_epochs=2, **kwargs):
+    """Return a browser showing epochs of unequal duration, or skip.
+
+    Not a fixture: the reference-leak check in conftest fails if a browser is
+    still reachable from a fixture when the test closes.
+    """
+    epochs = _make_variable_epochs()
+    try:
+        fig = epochs.plot(n_epochs=n_epochs, show=False, **kwargs)
+    except NotImplementedError:  # MNE still refuses this backend
+        pytest.skip("This MNE-Python does not route variable-duration epochs here")
+    fig.test_mode = True
+    return fig
+
+
+# -- the boundary arithmetic, without Qt ------------------------------------
+def test_epoch_window_variable():
+    """Test that a window of whole epochs spans their real durations."""
+    boundaries = _var_boundaries()
+    assert epoch_window(boundaries, 0, 2) == pytest.approx((0.0, 3.5))
+    assert epoch_window(boundaries, 1, 2) == pytest.approx((1.0, 3.25))
+    # clamped so the requested epochs stay visible
+    assert epoch_window(boundaries, 3, 2) == pytest.approx((3.5, 2.55))
+    assert epoch_window(boundaries, -5, 1) == pytest.approx((0.0, 1.0))
+    # asking for more epochs than exist shows all of them
+    assert epoch_window(boundaries, 0, 99) == pytest.approx((0.0, boundaries[-1]))
+
+
+def test_epoch_window_equal_durations_unchanged():
+    """Test that equal-length epochs still give the old uniform answers."""
+    n_epochs, n_times, sfreq = 5, 100, 100.0
+    boundaries = np.arange(n_epochs + 1) * n_times / sfreq
+    for start_ix in range(n_epochs):
+        t_start, duration = epoch_window(boundaries, start_ix, 2)
+        assert t_start == pytest.approx(min(start_ix, n_epochs - 2) * n_times / sfreq)
+        assert duration == pytest.approx(2 * n_times / sfreq)
+
+
+def test_epoch_index_at():
+    """Test that a display time maps to the epoch containing it."""
+    boundaries = _var_boundaries()
+    assert epoch_index_at(boundaries, 0.0) == 0
+    assert epoch_index_at(boundaries, 0.99) == 0
+    assert epoch_index_at(boundaries, 1.0) == 1  # exactly on a boundary
+    assert epoch_index_at(boundaries, 3.4) == 1
+    assert epoch_index_at(boundaries, 3.5) == 2
+    assert epoch_index_at(boundaries, 6.04) == 3
+    assert epoch_index_at(boundaries, 99.0) == 3  # clamped
+
+
+def test_latency_at_round_trip():
+    """Test that display time and event-relative latency convert both ways."""
+    boundaries = _var_boundaries()
+    tmins = np.zeros(len(LENGTHS_VAR))
+    for idx, offset in enumerate([0.0, 1.2, 0.5, 0.3]):
+        latency = latency_at(boundaries, tmins, SFREQ_VAR, boundaries[idx] + offset)
+        assert latency == pytest.approx(offset)
+    # a non-zero, per-epoch tmin is carried through
+    tmins = np.array([-0.2, -0.5, 0.0, -0.1])
+    latency = latency_at(boundaries, tmins, SFREQ_VAR, boundaries[1] + 0.7)
+    assert latency == pytest.approx(0.2)
+
+
+def test_latency_positions_skips_short_epochs():
+    """Test that a latency is placed only in epochs long enough to reach it."""
+    boundaries = _var_boundaries()
+    tmins = np.zeros(len(LENGTHS_VAR))
+    tmaxs = (np.array(LENGTHS_VAR) - 1) / SFREQ_VAR
+    ixs = np.arange(len(LENGTHS_VAR))
+
+    keep, xs = latency_positions(boundaries, tmins, tmaxs, 1.5, SFREQ_VAR, ixs)
+    assert_array_equal(keep, [1, 3])  # only the 250- and 180-sample epochs
+    assert_allclose(xs, [boundaries[1] + 1.5, boundaries[3] + 1.5])
+
+    keep, xs = latency_positions(boundaries, tmins, tmaxs, 0.5, SFREQ_VAR, ixs)
+    assert_array_equal(keep, ixs)
+    assert_allclose(xs, boundaries[:4] + 0.5)
+
+    keep, _ = latency_positions(boundaries, tmins, tmaxs, 99.0, SFREQ_VAR, ixs)
+    assert len(keep) == 0
+
+
+# -- the browser itself -----------------------------------------------------
+def test_variable_duration_boundaries(pg_backend):
+    """Test that the browser lays epochs end to end at their true lengths."""
+    fig = _open_variable_browser()
+    assert_allclose(fig.mne.boundary_times, _var_boundaries())
+    assert fig.mne.n_times == sum(LENGTHS_VAR)
+    assert fig.mne.n_times != len(LENGTHS_VAR) * max(LENGTHS_VAR)
+    assert fig.mne.xmax == pytest.approx(_var_boundaries()[-1])
+    fig.close()
+
+
+def test_variable_duration_initial_view(pg_backend):
+    """Test that the first view holds exactly n_epochs whole epochs."""
+    boundaries = _var_boundaries()
+    fig = _open_variable_browser()
+    assert fig.mne.t_start == pytest.approx(boundaries[0])
+    assert fig.mne.duration == pytest.approx(boundaries[2])
+    assert fig.mne.duration != pytest.approx(2 * boundaries[1])
+    fig.close()
+
+
+def test_variable_duration_scrolling(pg_backend):
+    """Test that scrolling steps whole epochs and lands on boundaries."""
+    boundaries = _var_boundaries()
+    fig = _open_variable_browser()
+
+    fig.hscroll("right")
+    assert fig.mne.t_start == pytest.approx(boundaries[1])
+    assert fig.mne.duration == pytest.approx(boundaries[3] - boundaries[1])
+
+    fig.hscroll("right")  # clamped so two epochs stay visible
+    assert fig.mne.t_start == pytest.approx(boundaries[2])
+    assert fig.mne.duration == pytest.approx(boundaries[4] - boundaries[2])
+
+    fig.hscroll("left")
+    assert fig.mne.t_start == pytest.approx(boundaries[1])
+
+    fig.hscroll("-full")
+    assert fig.mne.t_start == pytest.approx(boundaries[0])
+    fig.close()
+
+
+def test_variable_duration_change_duration(pg_backend):
+    """Test that adding an epoch adds that epoch's own duration."""
+    boundaries = _var_boundaries()
+    fig = _open_variable_browser()
+    assert fig.mne.n_epochs == 2
+
+    fig.change_duration(step=1)
+    assert fig.mne.n_epochs == 3
+    assert fig.mne.duration == pytest.approx(boundaries[3])
+    # the third epoch is 75 samples, not a repeat of the first
+    assert fig.mne.duration != pytest.approx(boundaries[2] * 3 / 2)
+
+    fig.change_duration(step=-1)
+    assert fig.mne.n_epochs == 2
+    assert fig.mne.duration == pytest.approx(boundaries[2])
+    fig.close()
+
+
+def test_variable_duration_precompute(pg_backend):
+    """Test that precompute concatenates the real samples, unpadded."""
+    epochs = _make_variable_epochs()
+    try:
+        fig = epochs.plot(n_epochs=2, show=False, precompute=True)
+    except NotImplementedError:
+        pytest.skip("This MNE-Python does not route variable-duration epochs here")
+    fig.test_mode = True
+    for _ in range(100):
+        if getattr(fig.mne, "global_data", None) is not None:
+            break
+        QTest.qWait(100)
+    assert fig.mne.global_data is not None, "precompute never finished"
+    assert fig.mne.global_data.shape[-1] == sum(LENGTHS_VAR)
+    assert len(fig.mne.global_times) == sum(LENGTHS_VAR)
+    assert not np.isnan(fig.mne.global_data).any()  # nothing was padded
+    fig.close()
+
+
+def test_variable_duration_crosshair_time(pg_backend):
+    """Test that the crosshair reports a latency, not a remainder."""
+    boundaries = _var_boundaries()
+    fig = _open_variable_browser()
+    tmins = fig.mne.epoch_tmins
+    # 1.2 s into the long epoch is 1.2 s after its own event, even though that
+    # position is well past the end of the first epoch
+    got = latency_at(fig.mne.boundary_times, tmins, SFREQ_VAR, boundaries[1] + 1.2)
+    assert got == pytest.approx(1.2)
+    got = latency_at(fig.mne.boundary_times, tmins, SFREQ_VAR, boundaries[3] + 0.3)
+    assert got == pytest.approx(0.3)
+    fig.close()
+
+
+def test_variable_duration_vline_positions(pg_backend):
+    """Test that vlines mark a latency and skip epochs that never reach it."""
+    boundaries = _var_boundaries()
+    fig = _open_variable_browser()
+    fig.change_duration(step=1)
+    fig.change_duration(step=1)  # show all four epochs
+    assert fig.mne.n_epochs == 4
+
+    # 1.5 s exists only in the 250- and 180-sample epochs
+    fig._add_vline(boundaries[1] + 1.5)
+    shown = [vl.value() for vl in fig.mne.vline if vl.isVisible()]
+    assert_allclose(sorted(shown), [boundaries[1] + 1.5, boundaries[3] + 1.5])
+
+    # 0.5 s exists in every epoch
+    fig._add_vline(boundaries[0] + 0.5)
+    shown = [vl.value() for vl in fig.mne.vline if vl.isVisible()]
+    assert_allclose(sorted(shown), boundaries[:4] + 0.5)
+    fig.close()
+
+
+def test_fixed_duration_epochs_unchanged(pg_backend):
+    """Test that equal-length epochs still browse exactly as before."""
+    n_epochs, n_times = 4, 100
+    info = mne.create_info(["a", "b", "c"], SFREQ_VAR, "eeg")
+    rng = np.random.default_rng(0)
+    data = rng.standard_normal((n_epochs, 3, n_times)) * 1e-6
+    epochs = mne.EpochsArray(data, info, tmin=0, baseline=None, verbose=False)
+    assert not getattr(epochs, "variable_duration", False)
+
+    fig = epochs.plot(n_epochs=2, show=False)
+    fig.test_mode = True
+    epoch_dur = n_times / SFREQ_VAR
+    assert_allclose(fig.mne.boundary_times, np.arange(n_epochs + 1) * epoch_dur)
+    assert fig.mne.n_times == n_epochs * n_times
+    assert fig.mne.duration == pytest.approx(2 * epoch_dur)
+    assert fig.mne.xmax == pytest.approx(n_epochs * epoch_dur)
+
+    fig.hscroll("right")
+    assert fig.mne.t_start == pytest.approx(epoch_dur)
+    assert fig.mne.duration == pytest.approx(2 * epoch_dur)
+    fig.close()

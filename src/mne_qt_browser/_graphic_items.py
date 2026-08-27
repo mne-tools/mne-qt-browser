@@ -24,7 +24,13 @@ from qtpy.QtGui import QTransform
 from qtpy.QtWidgets import QGraphicsLineItem
 
 from mne_qt_browser._colors import _get_color
-from mne_qt_browser._utils import _butterfly_scale, _get_channel_scaling, _q_font
+from mne_qt_browser._utils import (
+    _butterfly_scale,
+    _get_channel_scaling,
+    _q_font,
+    is_variable_duration,
+    latency_at,
+)
 
 # Not run through _get_color: this doubles as the VLineLabel fill, whose text is black,
 # so it must stay light in both themes. Clears 3:1 on either background
@@ -960,12 +966,21 @@ class VLineLabel(InfLineLabel):
         value = self.line.value()
         if self.line.mne.is_epochs:
             # Show epoch time
-            t_vals_abs = np.linspace(
-                0, self.line.mne.epoch_dur, len(self.line.mne.inst.times)
-            )
-            search_val = value % self.line.mne.epoch_dur
-            t_idx = np.searchsorted(t_vals_abs, search_val)
-            value = self.line.mne.inst.times[t_idx]
+            if is_variable_duration(self.line.mne):
+                # the label is the latency relative to this epoch's own event
+                value = latency_at(
+                    self.line.mne.boundary_times,
+                    self.line.mne.epoch_tmins,
+                    self.line.mne.info["sfreq"],
+                    value,
+                )
+            else:
+                t_vals_abs = np.linspace(
+                    0, self.line.mne.epoch_dur, len(self.line.mne.inst.times)
+                )
+                search_val = value % self.line.mne.epoch_dur
+                t_idx = np.searchsorted(t_vals_abs, search_val)
+                value = self.line.mne.inst.times[t_idx]
         self.setText(self.format.format(value=value))
         self.updatePosition()
 
