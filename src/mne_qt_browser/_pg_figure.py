@@ -292,7 +292,10 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         # HiDPI stuff
         self._pixel_ratio = self.devicePixelRatio()
         logger.debug(f"Desktop pixel ratio: {self._pixel_ratio:0.3f}")
-        self.mne.mkPen = _methpartial(self._hidpi_mkPen)
+        # Widths are deliberately *not* scaled by the pixel ratio: Qt only has a fast
+        # rasterizing path for cosmetic pens up to width 1, and going above it cost
+        # ~6x in redraw time for traces that were, if anything, harder to read
+        self.mne.mkPen = mkPen
 
         bgcolor = self.palette().color(self.backgroundRole()).getRgbF()[:3]
         self.mne.dark = _rgb_to_oklab(bgcolor)[0] < 0.5
@@ -944,10 +947,6 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         """Save a setting to QSettings."""
         _qsettings().setValue(key, value)
 
-    def _hidpi_mkPen(self, *args, **kwargs):
-        kwargs["width"] = self._pixel_ratio * kwargs.get("width", 1.0)
-        return mkPen(*args, **kwargs)
-
     def _update_yaxis_labels(self):
         self.mne.channel_axis.repaint()
 
@@ -1334,6 +1333,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         # Update annotations
         self._update_regions_visible()
 
+        self._apply_view_transform()
+
     def _yrange_changed(self, _, yrange):
         if not self.mne.butterfly:
             if not self.mne.fig_selection:
@@ -1386,6 +1387,19 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
             trace.set_ch_idx(ch_idx)
             trace.update_color()
             trace.update_data()
+
+        self._apply_view_transform()
+
+    def _apply_view_transform(self):
+        """Apply the ViewBox's pending transform before returning to the event loop.
+
+        PyQtGraph defers ``ViewBox.updateMatrix()`` to the scene's
+        ``prepareForPaint``, which runs *inside* ``paintEvent``. Re-applying the
+        child-group transform there dirties the scene again, so every range change
+        costs two full repaints instead of one. Doing it eagerly (while the scene is
+        already dirty) keeps it to one.
+        """
+        self.mne.viewbox.updateMatrix()
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     # DATA HANDLING
@@ -1682,7 +1696,11 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         if self.mne.clipping == "clamp":
             self.mne.data = np.clip(self.mne.data, -0.5, 0.5)
         elif self.mne.clipping is not None:
-            self.mne.data = self.mne.data.copy()
+            # Written in place: whichever branch above ran hands us an array that is
+            # private to this call (the precompute branch allocates in ``data /
+            # norms``, and ``BrowserBase._process_data`` returns a picked, rescaled
+            # copy), so these NaNs cannot reach the instance's data or the
+            # precomputed buffer -- see ``test_clipping_leaves_source_data_intact``.
             self.mne.data[
                 abs(self.mne.data * self.mne.scale_factor) > self.mne.clipping
             ] = np.nan

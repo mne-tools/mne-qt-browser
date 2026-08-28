@@ -40,6 +40,10 @@ _Z_SCALEBAR = 101
 _Z_SCALEBAR_TEXT = 102
 _Z_ANNOT_LABEL = 103
 
+# Butterfly mode overlays every channel of a type on one row; drawing the traces
+# slightly transparent lets the density of the overlap show through
+_BUTTERFLY_ALPHA = 0.75
+
 
 def propagate_to_children(method):  # noqa: D103
     @functools.wraps(method)
@@ -563,7 +567,19 @@ class DataTrace(PlotCurveItem):
                 self.setZValue(self._get_zvalue())
                 self.color = self.mne.ch_color_ref[self.ch_name]
 
-        self.setPen(self.mne.mkPen(_get_color(self.color, self.mne.dark)))
+        self.setPen(self._trace_pen())
+
+    def _trace_pen(self):
+        """Get the pen this trace is drawn with.
+
+        Butterfly mode stacks every channel of a type onto one row, where fully
+        opaque traces render the overlap as a solid block; drawing them slightly
+        transparent lets the denser regions read as darker instead.
+        """
+        color = _get_color(self.color, self.mne.dark)
+        if self.mne.butterfly:
+            color.setAlphaF(_BUTTERFLY_ALPHA)
+        return self.mne.mkPen(color)
 
     def _get_zvalue(self):
         """Get the z-value of a good trace."""

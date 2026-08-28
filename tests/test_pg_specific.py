@@ -14,6 +14,7 @@ from qtpy.QtGui import QFontMetrics
 from qtpy.QtTest import QTest
 
 from mne_qt_browser._colors import _oklab_to_rgb, _rgb_to_oklab
+from mne_qt_browser._graphic_items import _BUTTERFLY_ALPHA
 from mne_qt_browser._utils import _calc_data_unit_to_physical, _disconnect
 
 LESS_TIME = "Show fewer time points"
@@ -985,6 +986,11 @@ def _wait_precompute(fig):
     raise AssertionError("Precomputation did not finish")
 
 
+def _trace_alphas(fig):
+    """Get the set of alpha values the traces are drawn with."""
+    return {trace.opts["pen"].color().alpha() for trace in fig.mne.traces}
+
+
 def _traces_drawn(fig):
     """Get what each trace draws plus its zero line, relative to its own baseline."""
     # Relative to the baseline (rather than in data coordinates) so that assert_allclose
@@ -1050,6 +1056,12 @@ def test_precompute_matches_on_the_fly(raw_orig, pg_backend, clipping):
             if precompute:
                 _wait_precompute(fig)
             drawn[precompute].append(_traces_drawn(fig))
+        # Clipping writes its NaNs straight into mne.data, which is only safe while
+        # that array is private to the call; they must not reach the source data or
+        # the precomputed buffer (which the no-DC-removal pass above comes closest to)
+        assert not np.isnan(raw_orig.get_data()).any()
+        if precompute:
+            assert not np.isnan(fig.mne.global_data).any()
         fig.close()
 
     for on_the_fly, precomputed in zip(drawn[False], drawn[True]):
@@ -1062,7 +1074,7 @@ def test_precompute_matches_on_the_fly(raw_orig, pg_backend, clipping):
 
 
 def test_butterfly_scalebars(raw_orig, pg_backend):
-    """Test that butterfly mode matches the matplotlib backend (gh-276)."""
+    """Test butterfly mode's scaling and trace rendering (gh-276)."""
     raw_orig = raw_orig.copy().crop(tmax=5.0)
     fig = raw_orig.plot()
     fig.test_mode = True
@@ -1089,14 +1101,18 @@ def test_butterfly_scalebars(raw_orig, pg_backend):
         assert [zvalues[ch_type] for ch_type in ch_types] == sorted(
             zvalues.values(), reverse=True
         )
+        # Traces are faded, so their overlap reads as density and not a solid block
+        assert _trace_alphas(fig) == {round(255 * _BUTTERFLY_ALPHA)}
 
+    assert _trace_alphas(fig) == {255}
     fig._fake_keypress("b")
     _check_butterfly()
 
-    # Toggling back and forth is a no-op for the scale factor
+    # Toggling back and forth is a no-op for the scale factor and the fading
     fig._fake_keypress("b")
     assert fig.mne.scale_factor == normal_scale_factor
     assert fig._get_scale_bar_texts() == normal_texts
+    assert _trace_alphas(fig) == {255}
 
     # Starting out in butterfly mode gives the same result
     fig = raw_orig.plot(butterfly=True)
@@ -1133,3 +1149,40 @@ def test_sensitivity_matches_scalebar(raw_orig, pg_backend):
         fig.mne.fig_settings.ch_sensitivity_spinboxes[ch_type].setValue(12.5)
         _check_sensitivity()
         fig._fake_keypress("b")
+
+
+def test_one_repaint_per_scroll(raw_orig, pg_backend, qtbot):
+    """Test that scrolling repaints the trace view exactly once.
+
+    PyQtGraph defers ``ViewBox.updateMatrix()`` to the scene's ``prepareForPaint``,
+    which runs inside ``paintEvent``; applying the child-group transform there
+    dirties the scene again and costs a second full repaint of every trace.
+    """
+    fig = raw_orig.copy().crop(tmax=20.0).plot(duration=5, n_channels=10)
+    fig.test_mode = True
+    with qtbot.waitExposed(fig):
+        fig.show()
+    n_paint = list()
+    paint_event = fig.mne.view.paintEvent
+
+    def _counting_paint_event(event):
+        n_paint.append(event)
+        return paint_event(event)
+
+    fig.mne.view.paintEvent = _counting_paint_event
+
+    def _n_repaints(key):
+        n_paint.clear()
+        fig._fake_keypress(key)
+        # A redundant repaint is scheduled from inside the first one, so wait for
+        # that first one and then give any follow-up its chance to land
+        qtbot.waitUntil(lambda: bool(n_paint))
+        qtbot.wait(25)
+        return len(n_paint)
+
+    counts = dict()
+    for key in ("right", "left", "down", "up"):
+        for _ in range(5):  # let one-off repaints (labels, scale bars) settle
+            _n_repaints(key)
+        counts[key] = _n_repaints(key)
+    assert counts == dict.fromkeys(counts, 1)
