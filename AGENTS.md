@@ -31,6 +31,21 @@ What does *not* carry over from MNE-Python:
 - There are no lazy `__init__.pyi` stubs; the public API is just `mne_qt_browser.figure`.
 - Tests use the small bundled `tests/test_raw.fif`, not the MNE testing dataset.
 
+## Verify before you trust this file
+
+Nothing keeps this file in sync with the code, and much of what it names is not even ours:
+`self.mne`'s attributes, the order `BrowserBase` calls our methods in, and the `pg_backend`
+fixture are MNE-Python private API that moves in a different repo on its own schedule, and
+the Qt/pyqtgraph behaviors described below are empirical rather than documented. What is
+written here is meant to be the *durable* shape of the package, but specific names,
+signals, and the snippets in the last section do drift. So treat this file as a map of
+where to look and what to watch out for, not as an API reference: grep for the name, read
+the code around it, and confirm the behavior by actually running it before you rely on it.
+
+If something here turns out to be stale, update this file as part of your change and
+mention it. If the drift is real but outside the scope of what you were asked to do, say so
+in your summary rather than quietly working around it.
+
 ## Layout
 
 - `src/mne_qt_browser/_pg_figure.py` — `MNEQtBrowser(BrowserBase, QMainWindow)`: builds the
