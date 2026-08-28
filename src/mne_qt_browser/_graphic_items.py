@@ -38,6 +38,11 @@ _Z_TRACE = 1
 _Z_TRACE_MAX = 100
 _Z_SCALEBAR = 101
 _Z_SCALEBAR_TEXT = 102
+_Z_ANNOT_LABEL = 103
+
+# Butterfly mode overlays every channel of a type on one row; drawing the traces
+# slightly transparent lets the density of the overlap show through
+_BUTTERFLY_ALPHA = 0.75
 
 
 def propagate_to_children(method):  # noqa: D103
@@ -85,7 +90,9 @@ class AnnotRegion(LinearRegionItem):
 
         self.label_item = TextItem(text=description, anchor=(0.5, 0.5))
         self.label_item.setFont(_q_font(10, bold=True))
-        self.sigRegionChanged.connect(self.update_label_pos)
+        self.label_item.setZValue(_Z_ANNOT_LABEL)  # stacked labels can sit over traces
+        self.setToolTip(description)
+        self.sigRegionChanged.connect(self._update_label_positions)
 
         self.update_color(all_channels=(not ch_names))
 
@@ -142,7 +149,7 @@ class AnnotRegion(LinearRegionItem):
         with QSignalBlocker(self):
             self.setRegion((onset, offset))
 
-        self.update_label_pos()
+        self._update_label_positions()
 
     def _add_single_channel_annot(self, ch_name):
         self.single_channel_annots[ch_name] = SingleChannelAnnot(
@@ -205,7 +212,11 @@ class AnnotRegion(LinearRegionItem):
         self.hover_pen = self.mne.mkPen(color=self.text_color, width=2)
         self.setBrush(self.base_color)
         self.setHoverBrush(self.hover_color)
+        # labels can land on traces once stacked, so back them with the plot background
+        self.label_fill = _get_color(getattr(self.mne, "bgcolor", "w"), self.mne.dark)
         self.label_item.setColor(self.text_color)
+        if not self.selected:
+            self.label_item.fill = mkBrush(self.label_fill)
         for line in self.lines:
             line.setPen(self.line_pen)
             line.setHoverPen(self.hover_pen)
@@ -217,6 +228,8 @@ class AnnotRegion(LinearRegionItem):
         self.description = description
         self.label_item.setText(description)
         self.label_item.update()
+        self.setToolTip(description)
+        self._update_label_positions()
 
     def update_visible(self, visible):
         """Update if annotation region is visible."""
@@ -241,7 +254,7 @@ class AnnotRegion(LinearRegionItem):
             self.gotSelected.emit(self)
         else:
             self.label_item.setColor(self.text_color)
-            self.label_item.fill = mkBrush(None)
+            self.label_item.fill = mkBrush(self.label_fill)
         logger.debug(
             f"{'Selected' if self.selected else 'Deselected'} annotation: "
             f"{self.description}"
@@ -323,13 +336,36 @@ class AnnotRegion(LinearRegionItem):
         else:
             self.sigRegionChanged.emit(self)
 
-    def update_label_pos(self):
-        """Update position of description label from annotation region."""
+    def _update_label_positions(self):
+        """Update the positions of all labels (ours might have changed)."""
+        main = self.weakmain()
+        if main is not None:
+            main._update_label_positions()
+
+    def _label_size(self):
+        """Get the (width, height) of the painted label in pixels."""
+        # the inner QGraphicsTextItem (unlike TextItem.boundingRect(), which is stale
+        # until painted) lays out its document on demand, and includes the document
+        # margins that QFontMetrics would miss
+        rect = self.label_item.textItem.boundingRect()
+        return rect.width(), rect.height()
+
+    def _label_extent(self, xmin, xmax, px):
+        """Get the x position and half width (in data units) of the label.
+
+        The label is centered on the visible part of the region so that it stays
+        readable for regions longer than the shown time window (gh-210), and it is
+        kept on screen. The comparison is inclusive so that regions just touching the
+        view (and zero-duration ones) get clamped onto the screen, too.
+        """
         rgn = self.getRegion()
-        vb = self.mne.viewbox
-        if vb:
-            ymax = vb.viewRange()[1][1]
-            self.label_item.setPos(sum(rgn) / 2, ymax - 0.3)
+        half = self._label_size()[0] / 2 * px
+        left, right = max(rgn[0], xmin), min(rgn[1], xmax)
+        if left <= right:
+            x = min(max((left + right) / 2, xmin + half), xmax - half)
+        else:
+            x = sum(rgn) / 2
+        return x, half
 
 
 class BaseScaleBar:  # noqa: D101
@@ -531,7 +567,19 @@ class DataTrace(PlotCurveItem):
                 self.setZValue(self._get_zvalue())
                 self.color = self.mne.ch_color_ref[self.ch_name]
 
-        self.setPen(self.mne.mkPen(_get_color(self.color, self.mne.dark)))
+        self.setPen(self._trace_pen())
+
+    def _trace_pen(self):
+        """Get the pen this trace is drawn with.
+
+        Butterfly mode stacks every channel of a type onto one row, where fully
+        opaque traces render the overlap as a solid block; drawing them slightly
+        transparent lets the denser regions read as darker instead.
+        """
+        color = _get_color(self.color, self.mne.dark)
+        if self.mne.butterfly:
+            color.setAlphaF(_BUTTERFLY_ALPHA)
+        return self.mne.mkPen(color)
 
     def _get_zvalue(self):
         """Get the z-value of a good trace."""

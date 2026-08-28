@@ -10,9 +10,11 @@ import pytest
 from mne.utils import check_version
 from numpy.testing import assert_allclose, assert_array_equal
 from qtpy.QtCore import Qt
+from qtpy.QtGui import QFontMetrics
 from qtpy.QtTest import QTest
 
 from mne_qt_browser._colors import _oklab_to_rgb, _rgb_to_oklab
+from mne_qt_browser._graphic_items import _BUTTERFLY_ALPHA
 from mne_qt_browser._utils import _calc_data_unit_to_physical, _disconnect
 
 LESS_TIME = "Show fewer time points"
@@ -159,6 +161,88 @@ def test_annotations_recording_end(raw_orig, pg_backend):
         raw_orig.times[-1] + first_time + 1 / raw_orig.info["sfreq"],
         atol=1e-4,
     )
+
+
+def test_annotation_label_position(raw_orig, pg_backend):
+    """Test that annotation labels follow the visible part of the region."""
+    raw_orig = raw_orig.copy().crop(tmax=20.0).resample(100)
+    onset, duration = 2.0, 15.0
+    raw_orig.annotations.append(onset + raw_orig.first_time, duration, "A")
+    raw_orig.annotations.append(3.0 + raw_orig.first_time, 1.0, "B")
+    raw_orig.annotations.append(3.5 + raw_orig.first_time, 1.0, "C")
+    fig = raw_orig.plot(duration=5)
+    fig.test_mode = True
+    region = fig.mne.regions[0]
+    assert region.toolTip() == "A"
+
+    # the labels of A and B both sit at 3.5 s, so they are stacked (A at the bottom,
+    # which is ymax on the inverted axis); C's label at 4 s does not touch them
+    def rows():
+        ys = [r.label_item.pos().y() for r in fig.mne.regions]
+        height = region._label_size()[1] * fig.mne.viewbox.viewPixelSize()[1]
+        return [round((max(ys) - y) / height) for y in ys]
+
+    assert rows() == [0, 1, 0]
+    # stacked labels must not overlap on screen: the painted box is larger than the
+    # font height because of the QTextDocument margins (visible on macOS, where the
+    # font is smaller relative to the margin)
+    ys = [
+        r.label_item.pos().y() / fig.mne.viewbox.viewPixelSize()[1]
+        for r in fig.mne.regions
+    ]
+    box = fig.mne.regions[0].label_item.textItem.boundingRect().height()
+    assert box > QFontMetrics(region.label_item.textItem.font()).height()
+    assert ys[0] - ys[1] >= box, (ys, box)
+
+    # the region is longer than the shown time window, so the label should stay
+    # centered in what is on screen rather than at the (off-screen) region center
+    for t_start in (0, 5, 10, 15):
+        fig.mne.plt.setXRange(t_start, t_start + 5, padding=0)
+        xmin, xmax = fig.mne.viewbox.viewRange()[0]
+        left, right = max(onset, xmin), min(onset + duration, xmax)
+        assert region.label_item.isVisible()
+        assert_allclose(region.label_item.pos().x(), (left + right) / 2, atol=0.1)
+
+    # rows are only used while labels actually overlap: once B is moved away from
+    # A's label, it drops back down to the first row
+    fig.mne.plt.setXRange(0, 5, padding=0)
+    assert rows() == [0, 1, 0]
+    fig.mne.regions[1].setRegion((1.0, 1.5))
+    assert rows() == [0, 0, 0]
+    fig.mne.regions[1].setRegion((3.0, 4.0))
+    assert rows() == [0, 1, 0]
+    # and rows are assigned in sorted description order, so renaming B to sort
+    # before A swaps their rows (without waiting for the next scroll)
+    fig.mne.fig_annotation.description_cmbx.setCurrentText("B")
+    fig.mne.selected_region = fig.mne.regions[1]
+    fig.mne.fig_annotation._edit_description_selected("0")
+    assert [r.description for r in fig.mne.regions] == ["A", "0", "C"]
+    assert rows() == [1, 0, 0]
+
+    # a region that only touches the view edge, and a zero-duration annotation at
+    # the edge, still get a label clamped onto the screen
+    stop = onset + duration  # 17 s of the 20 s recording
+    fig.mne.plt.setXRange(stop, stop + 2, padding=0)
+    xmin, xmax = fig.mne.viewbox.viewRange()[0]
+    assert_allclose(xmin, stop)
+    assert region.label_item.isVisible()
+    px = fig.mne.viewbox.viewPixelSize()[0]
+    half = region._label_size()[0] / 2 * px
+    assert_allclose(region.label_item.pos().x(), stop + half)
+    point = fig._add_region(xmax, 0, "C")
+    point.update_visible(True)
+    half = point._label_size()[0] / 2 * px
+    assert_allclose(point.label_item.pos().x(), xmax - half)
+
+    # rows stay on screen in a short window
+    fig.resize(800, 200)
+    ys = [r.label_item.pos().y() for r in fig.mne.regions]
+    ymin, ymax = fig.mne.viewbox.viewRange()[1]
+    assert all(ymin < y < ymax for y in ys), (ys, ymin, ymax)
+
+    # and the tooltip follows renaming
+    region.update_description("BAD_test")
+    assert region.toolTip() == "BAD_test"
 
 
 def test_annotations_interactions(raw_orig, pg_backend):
@@ -902,6 +986,11 @@ def _wait_precompute(fig):
     raise AssertionError("Precomputation did not finish")
 
 
+def _trace_alphas(fig):
+    """Get the set of alpha values the traces are drawn with."""
+    return {trace.opts["pen"].color().alpha() for trace in fig.mne.traces}
+
+
 def _traces_drawn(fig):
     """Get what each trace draws plus its zero line, relative to its own baseline."""
     # Relative to the baseline (rather than in data coordinates) so that assert_allclose
@@ -967,6 +1056,12 @@ def test_precompute_matches_on_the_fly(raw_orig, pg_backend, clipping):
             if precompute:
                 _wait_precompute(fig)
             drawn[precompute].append(_traces_drawn(fig))
+        # Clipping writes its NaNs straight into mne.data, which is only safe while
+        # that array is private to the call; they must not reach the source data or
+        # the precomputed buffer (which the no-DC-removal pass above comes closest to)
+        assert not np.isnan(raw_orig.get_data()).any()
+        if precompute:
+            assert not np.isnan(fig.mne.global_data).any()
         fig.close()
 
     for on_the_fly, precomputed in zip(drawn[False], drawn[True]):
@@ -979,7 +1074,7 @@ def test_precompute_matches_on_the_fly(raw_orig, pg_backend, clipping):
 
 
 def test_butterfly_scalebars(raw_orig, pg_backend):
-    """Test that butterfly mode matches the matplotlib backend (gh-276)."""
+    """Test butterfly mode's scaling and trace rendering (gh-276)."""
     raw_orig = raw_orig.copy().crop(tmax=5.0)
     fig = raw_orig.plot()
     fig.test_mode = True
@@ -1006,14 +1101,18 @@ def test_butterfly_scalebars(raw_orig, pg_backend):
         assert [zvalues[ch_type] for ch_type in ch_types] == sorted(
             zvalues.values(), reverse=True
         )
+        # Traces are faded, so their overlap reads as density and not a solid block
+        assert _trace_alphas(fig) == {round(255 * _BUTTERFLY_ALPHA)}
 
+    assert _trace_alphas(fig) == {255}
     fig._fake_keypress("b")
     _check_butterfly()
 
-    # Toggling back and forth is a no-op for the scale factor
+    # Toggling back and forth is a no-op for the scale factor and the fading
     fig._fake_keypress("b")
     assert fig.mne.scale_factor == normal_scale_factor
     assert fig._get_scale_bar_texts() == normal_texts
+    assert _trace_alphas(fig) == {255}
 
     # Starting out in butterfly mode gives the same result
     fig = raw_orig.plot(butterfly=True)
@@ -1050,3 +1149,40 @@ def test_sensitivity_matches_scalebar(raw_orig, pg_backend):
         fig.mne.fig_settings.ch_sensitivity_spinboxes[ch_type].setValue(12.5)
         _check_sensitivity()
         fig._fake_keypress("b")
+
+
+def test_one_repaint_per_scroll(raw_orig, pg_backend, qtbot):
+    """Test that scrolling repaints the trace view exactly once.
+
+    PyQtGraph defers ``ViewBox.updateMatrix()`` to the scene's ``prepareForPaint``,
+    which runs inside ``paintEvent``; applying the child-group transform there
+    dirties the scene again and costs a second full repaint of every trace.
+    """
+    fig = raw_orig.copy().crop(tmax=20.0).plot(duration=5, n_channels=10)
+    fig.test_mode = True
+    with qtbot.waitExposed(fig):
+        fig.show()
+    n_paint = list()
+    paint_event = fig.mne.view.paintEvent
+
+    def _counting_paint_event(event):
+        n_paint.append(event)
+        return paint_event(event)
+
+    fig.mne.view.paintEvent = _counting_paint_event
+
+    def _n_repaints(key):
+        n_paint.clear()
+        fig._fake_keypress(key)
+        # A redundant repaint is scheduled from inside the first one, so wait for
+        # that first one and then give any follow-up its chance to land
+        qtbot.waitUntil(lambda: bool(n_paint))
+        qtbot.wait(25)
+        return len(n_paint)
+
+    counts = dict()
+    for key in ("right", "left", "down", "up"):
+        for _ in range(5):  # let one-off repaints (labels, scale bars) settle
+            _n_repaints(key)
+        counts[key] = _n_repaints(key)
+    assert counts == dict.fromkeys(counts, 1)
