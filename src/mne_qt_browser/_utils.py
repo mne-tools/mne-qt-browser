@@ -184,3 +184,141 @@ def _get_y_unit_scaling(widget, ch_type):
 def _get_channel_scaling(widget, ch_type):
     """Get the value a scalebar stands for."""
     return _butterfly_scale(widget.mne) * _get_y_unit_scaling(widget, ch_type)
+
+
+def is_variable_duration(mne):
+    """Whether the browsed epochs have trials of differing duration.
+
+    Parameters
+    ----------
+    mne : object
+        The browser parameter container.
+
+    Returns
+    -------
+    variable : bool
+        ``True`` only for ragged epochs from MNE-Python versions that support
+        them; older versions have no such attribute and keep the fixed path.
+    """
+    return bool(getattr(getattr(mne, "inst", None), "variable_duration", False))
+
+
+def epoch_window(boundary_times, start_ix, n_epochs):
+    """Return the start time and duration of a window of whole epochs.
+
+    Epochs need not share a duration, so a window of ``n_epochs`` of them spans
+    whatever lies between two boundaries rather than a fixed number of seconds.
+    ``start_ix`` is clamped so the requested epochs stay visible whenever the
+    object is long enough to allow it.
+
+    Parameters
+    ----------
+    boundary_times : array
+        Cumulative epoch edges in seconds, including both ends.
+    start_ix : int
+        Index of the first epoch to show.
+    n_epochs : int
+        Number of epochs to show.
+
+    Returns
+    -------
+    t_start : float
+        Time of the first boundary.
+    duration : float
+        Seconds spanned by the requested epochs.
+    """
+    boundary_times = np.asarray(boundary_times, float)
+    n_total = len(boundary_times) - 1
+    n_epochs = int(np.clip(n_epochs, 1, n_total))
+    start_ix = int(np.clip(start_ix, 0, n_total - n_epochs))
+    stop_ix = start_ix + n_epochs
+    return (
+        float(boundary_times[start_ix]),
+        float(boundary_times[stop_ix] - boundary_times[start_ix]),
+    )
+
+
+def epoch_index_at(boundary_times, t):
+    """Return the index of the epoch containing a display time.
+
+    Parameters
+    ----------
+    boundary_times : array
+        Cumulative epoch edges in seconds, including both ends.
+    t : float
+        A time on the browser's concatenated axis.
+
+    Returns
+    -------
+    idx : int
+        Index of the containing epoch, clamped to the available range.
+    """
+    boundary_times = np.asarray(boundary_times, float)
+    n_total = len(boundary_times) - 1
+    return int(
+        np.clip(
+            np.searchsorted(boundary_times[1:], t, side="right"), 0, max(n_total - 1, 0)
+        )
+    )
+
+
+def latency_at(boundary_times, epoch_tmins, sfreq, t):
+    """Convert a display time to the latency relative to its epoch's event.
+
+    Parameters
+    ----------
+    boundary_times : array
+        Cumulative epoch edges in seconds, including both ends.
+    epoch_tmins : array
+        Start time of each epoch relative to its own event.
+    sfreq : float
+        Sampling frequency.
+    t : float
+        A time on the browser's concatenated axis.
+
+    Returns
+    -------
+    latency : float
+        Time relative to the event of the epoch that contains ``t``.
+    """
+    idx = epoch_index_at(boundary_times, t)
+    offset = round((float(t) - float(boundary_times[idx])) * sfreq)
+    return float(epoch_tmins[idx]) + offset / sfreq
+
+
+def latency_positions(
+    boundary_times, epoch_tmins, epoch_tmaxs, latency, sfreq, epoch_ixs
+):
+    """Return where a latency falls in each epoch that reaches it.
+
+    Epochs shorter than ``latency`` simply do not get a position, so the result
+    may be shorter than ``epoch_ixs``.
+
+    Parameters
+    ----------
+    boundary_times : array
+        Cumulative epoch edges in seconds, including both ends.
+    epoch_tmins, epoch_tmaxs : array
+        Start and end of each epoch relative to its own event.
+    latency : float
+        Time relative to the event, as returned by :func:`latency_at`.
+    sfreq : float
+        Sampling frequency.
+    epoch_ixs : array-like
+        Indices of the epochs to consider.
+
+    Returns
+    -------
+    ixs : array
+        The epochs that contain the latency.
+    positions : array
+        Their positions on the browser's concatenated axis.
+    """
+    tol = 0.5 / sfreq
+    keep, xs = list(), list()
+    for idx in np.atleast_1d(np.asarray(epoch_ixs, int)):
+        tmin, tmax = float(epoch_tmins[idx]), float(epoch_tmaxs[idx])
+        if tmin - tol <= latency <= tmax + tol:
+            keep.append(idx)
+            xs.append(float(boundary_times[idx]) + (latency - tmin))
+    return np.array(keep, int), np.array(xs, float)

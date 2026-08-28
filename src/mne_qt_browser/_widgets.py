@@ -40,7 +40,12 @@ from qtpy.QtWidgets import (
 from mne_qt_browser._colors import _get_color
 from mne_qt_browser._dialogs import _AnnotEditDialog
 from mne_qt_browser._graphic_items import AnnotRegion
-from mne_qt_browser._utils import DATA_CH_TYPES_ORDER, _methpartial, _screen_geometry
+from mne_qt_browser._utils import (
+    DATA_CH_TYPES_ORDER,
+    _methpartial,
+    _screen_geometry,
+    epoch_window,
+)
 
 
 def _mouse_event_position(ev):
@@ -678,7 +683,8 @@ class TimeAxis(AxisItem):
         if self.mne.is_epochs:
             value_idxs = np.searchsorted(self.mne.midpoints, [minVal, maxVal])
             values = self.mne.midpoints[slice(*value_idxs)]
-            spacing = len(self.mne.inst.times) / self.mne.info["sfreq"]
+            # the shortest epoch, so ticks stay legible when durations differ
+            spacing = float(np.diff(self.mne.boundary_times).min())
             tick_values = [(spacing, values)]
             return tick_values
         else:
@@ -807,7 +813,7 @@ class OverviewBar(QGraphicsView):
             ch_name = self.mne.ch_names[ch_idx]
             if ch_name in add_chs:
                 start = self._mapFromData(0, line_idx)
-                stop = self._mapFromData(self.mne.inst.times[-1], line_idx)
+                stop = self._mapFromData(self.mne.xmax, line_idx)
                 pen = _get_color(self.mne.ch_color_bad, self.mne.dark)
                 line = self.scene().addLine(QLineF(start, stop), pen)
                 line.setZValue(2)
@@ -995,16 +1001,22 @@ class OverviewBar(QGraphicsView):
                 epo_idx = len(self.mne.inst) - self.mne.n_epochs
             else:
                 epo_idx = max(x - self.mne.n_epochs // 2, 0)
-            x = self.mne.boundary_times[epo_idx]
-        elif x == "-offbounds":
-            x = 0
-        elif x == "+offbounds":
-            x = self.mne.xmax - self.mne.duration
+            # how many seconds n_epochs is worth depends on *which* epochs, so
+            # ask the boundaries rather than reusing the current duration
+            xmin, dur = epoch_window(
+                self.mne.boundary_times, epo_idx, self.mne.n_epochs
+            )
+            xmax = xmin + dur
         else:
-            # Move click position to middle of view range
-            x -= self.mne.duration / 2
-        xmin = np.clip(x, 0, self.mne.xmax - self.mne.duration)
-        xmax = np.clip(xmin + self.mne.duration, self.mne.duration, self.mne.xmax)
+            if x == "-offbounds":
+                x = 0
+            elif x == "+offbounds":
+                x = self.mne.xmax - self.mne.duration
+            else:
+                # Move click position to middle of view range
+                x -= self.mne.duration / 2
+            xmin = np.clip(x, 0, self.mne.xmax - self.mne.duration)
+            xmax = np.clip(xmin + self.mne.duration, self.mne.duration, self.mne.xmax)
 
         self.mne.plt.setXRange(xmin, xmax, padding=0)
 
@@ -1168,8 +1180,17 @@ class OverviewBar(QGraphicsView):
             x = "+offbounds"
         else:
             if self.mne.is_epochs:
-                # Return epoch index for epochs
-                x = int(len(self.mne.inst) * xnorm)
+                # Return epoch index for epochs. The bar is drawn against time,
+                # so go through the boundaries rather than assume every epoch
+                # occupies the same width.
+                x = int(
+                    np.searchsorted(
+                        self.mne.boundary_times[1:],
+                        xnorm * self.mne.boundary_times[-1],
+                        side="right",
+                    )
+                )
+                x = min(x, len(self.mne.inst) - 1)
             else:
                 time_idx = int((len(self.mne.inst.times) - 1) * xnorm)
                 x = self.mne.inst.times[time_idx]
@@ -1266,10 +1287,15 @@ class TimeScrollBar(BaseScrollBar):
     def _time_changed(self, value):
         if not self.external_change:
             if self.mne.is_epochs:
-                # Convert Epoch index to time
-                value = self.mne.boundary_times[int(value)]
-            else:
-                value /= self.step_factor
+                # Convert epoch index to a window of whole epochs; their
+                # durations need not be equal, so the width comes from the
+                # boundaries rather than from mne.duration
+                t_start, duration = epoch_window(
+                    self.mne.boundary_times, int(value), self.mne.n_epochs
+                )
+                self.mne.plt.setXRange(t_start, t_start + duration, padding=0)
+                return
+            value /= self.step_factor
             self.mne.plt.setXRange(value, value + self.mne.duration, padding=0)
 
     def update_value(self, value):
@@ -1286,8 +1312,13 @@ class TimeScrollBar(BaseScrollBar):
     def update_duration(self):
         """Update bar size."""
         if self.mne.is_epochs:
+            # setMaximum can clamp the value and emit valueChanged, which would
+            # fire _time_changed with the *old* duration and paint an unaligned
+            # window on the way. This is geometry only, so mark it external.
+            self.external_change = True
             self.setPageStep(self.mne.n_epochs)
             self.setMaximum(len(self.mne.inst) - self.mne.n_epochs)
+            self.external_change = False
         else:
             self.step_factor = self.mne.scroll_sensitivity / self.mne.duration
             # One page (the visible duration) in scrollbar units, so that the

@@ -98,6 +98,11 @@ from mne_qt_browser._utils import (
     _safe_splash,
     _screen_geometry,
     _unique_ordered_ch_types,
+    epoch_index_at,
+    epoch_window,
+    is_variable_duration,
+    latency_at,
+    latency_positions,
     qsettings_params,
 )
 from mne_qt_browser._widgets import (
@@ -112,6 +117,10 @@ from mne_qt_browser._widgets import (
 )
 
 name = "pyqtgraph"  # Backend name, used by MNE-Python
+# Announces to MNE-Python that this backend reads the boundary model rather
+# than assuming every epoch has the same length; older versions lack it and
+# MNE-Python declines variable-duration epochs for them.
+_SUPPORTS_VARIABLE_DURATION = True
 
 
 def _qsettings():
@@ -143,10 +152,9 @@ class LoadThread(QThread):
     def run(self):
         """Load and process data in a separate QThread."""
         if self.mne.is_epochs:
-            times = (
-                np.arange(len(self.mne.inst) * len(self.mne.inst.times))
-                / self.mne.info["sfreq"]
-            )
+            # n_times counts the samples the epochs really hold, which is the
+            # same as len(inst) * len(inst.times) when they share a duration
+            times = np.arange(self.mne.n_times) / self.mne.info["sfreq"]
         else:
             times = None
         n_chunks = self.n_chunks
@@ -459,9 +467,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         self.mne.plt.hideButtons()
         # Configure XY range
         if self.mne.is_epochs:
-            self.mne.xmax = (
-                len(self.mne.inst.times) * len(self.mne.inst) / self.mne.info["sfreq"]
-            )
+            self.mne.xmax = self.mne.boundary_times[-1]
         else:
             self.mne.xmax = self.mne.inst.times[-1]
         # Add one empty line as padding at top (y=0)
@@ -1042,8 +1048,28 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         if update_spinboxes:
             self._update_ch_spinbox_values()
 
+    def _hscroll_epochs(self, step):
+        """Scroll by whole epochs, which need not share a duration."""
+        if isinstance(step, str):
+            if step in ("-full", "+full"):
+                n_step = self.mne.n_epochs * (1 if step == "+full" else -1)
+            else:
+                assert step in ("left", "right")
+                n_step = 1 if step == "right" else -1
+        else:
+            n_step = int(np.sign(step))
+        ix_start = epoch_index_at(self.mne.boundary_times, self.mne.t_start)
+        t_start, duration = epoch_window(
+            self.mne.boundary_times, ix_start + n_step, self.mne.n_epochs
+        )
+        self.mne.plt.setXRange(t_start, t_start + duration, padding=0)
+
     def hscroll(self, step):
         """Scroll horizontally by step."""
+        if self.mne.is_epochs and is_variable_duration(self.mne):
+            # a step of "one epoch" is not a fixed number of seconds here
+            self._hscroll_epochs(step)
+            return
         if isinstance(step, str):
             if step in ("-full", "+full"):
                 rel_step = self.mne.duration
@@ -1108,6 +1134,21 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
     def change_duration(self, checked=False, *, step):
         """Change duration by step."""
         xmin, xmax = self.mne.viewbox.viewRange()[0]
+
+        if self.mne.is_epochs and is_variable_duration(self.mne):
+            # the epoch added or removed has its own duration, so ask the
+            # boundaries how many seconds the new window is worth
+            step_dir = 1 if step > 0 else -1
+            self.mne.n_epochs = int(
+                np.clip(self.mne.n_epochs + step_dir, 1, len(self.mne.inst))
+            )
+            ix_start = epoch_index_at(self.mne.boundary_times, self.mne.t_start)
+            t_start, duration = epoch_window(
+                self.mne.boundary_times, ix_start, self.mne.n_epochs
+            )
+            self.mne.ax_hscroll.update_duration()
+            self.mne.plt.setXRange(t_start, t_start + duration, padding=0)
+            return
 
         if self.mne.is_epochs:
             # use the length of one epoch as duration change
@@ -1175,37 +1216,158 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         self.mne.vline_visible = False
         self.mne.overview_bar.update_vline()
 
+    def _epoch_vline_latency(self, t):
+        """Remember the latency a click or drag selected, and return it.
+
+        The latency has to live in state rather than be re-derived from a line
+        position: every line can be hidden at once, and then no position on
+        screen carries it any more.
+        """
+        latency = latency_at(
+            self.mne.boundary_times,
+            self.mne.epoch_tmins,
+            self.mne.info["sfreq"],
+            t,
+        )
+        self.mne.vline_latency = latency
+        return latency
+
+    def _epoch_vline_state(self, t=None, latency=None):
+        """Return a position per visible epoch, and which ones really have it.
+
+        A latency exists only in epochs long enough to reach it, so the mask
+        says which lines to show. Keeping one line per visible epoch means the
+        list length never changes while a line is being dragged.
+        """
+        sfreq = self.mne.info["sfreq"]
+        if latency is None:
+            latency = self._epoch_vline_latency(t)
+        ixs = np.atleast_1d(np.asarray(self.mne.epoch_idx, int))
+        keep, xs_keep = latency_positions(
+            self.mne.boundary_times,
+            self.mne.epoch_tmins,
+            self.mne.epoch_tmaxs,
+            latency,
+            sfreq,
+            ixs,
+        )
+        # epochs without that latency park at their own start and stay hidden
+        xs = np.asarray(self.mne.boundary_times, float)[ixs].copy()
+        mask = np.isin(ixs, keep)
+        xs[mask] = xs_keep
+        return xs, mask
+
     def _get_vline_times(self, t):
+        if is_variable_duration(self.mne):
+            return self._epoch_vline_state(t)[0]
         rel_time = t % self.mne.epoch_dur
         abs_time = self.mne.times[0]
         ts = np.arange(self.mne.n_epochs) * self.mne.epoch_dur + abs_time + rel_time
 
         return ts
 
+    def _set_epoch_vline_visibility(self, t=None, latency=None):
+        """Hide the lines whose epoch never reaches the dragged latency."""
+        if not is_variable_duration(self.mne) or self.mne.vline is None:
+            return
+        _, mask = self._epoch_vline_state(t=t, latency=latency)
+        for vl, visible in zip(self.mne.vline, mask):
+            was_visible = vl.isVisible()
+            vl.setVisible(bool(visible))
+            if visible and not was_visible:
+                # the label drops updates while hidden, so it would come back
+                # carrying the text from wherever the line used to be
+                vl.label.valueChanged()
+
+    def _new_epoch_vline(self, epo_idx, x):
+        """Build one epoch vline bounded to its own epoch."""
+        bmin, bmax = self.mne.boundary_times[epo_idx : epo_idx + 2]
+        # Avoid off-by-one-error at bmax for VlineLabel
+        # a one-sample epoch has bmax == bmin, and the subtraction alone can
+        # land a hair below it in float64, clamping the line out of its own
+        # epoch and reporting the previous epoch's latency
+        bmax = max(bmax - 1 / self.mne.info["sfreq"], bmin)
+        vl = VLine(self.mne, x, bounds=(bmin, bmax))
+        # Should only be emitted when dragged
+        vl.sigPositionChangeFinished.connect(self._vline_slot)
+        self.mne.plt.addItem(vl)
+        return vl
+
+    def _reposition_epoch_vlines(self):
+        """Put every visible epoch's line back at the remembered latency.
+
+        The window may now hold a different number of epochs than the list was
+        built for, so the list is resized first. Positions come from the
+        latency rather than from a seconds-offset, which is the whole point:
+        epochs need not share a duration or a tmin.
+        """
+        ixs = np.atleast_1d(np.asarray(self.mne.epoch_idx, int))
+        latency = getattr(self.mne, "vline_latency", None)
+        if latency is None:
+            # nothing has recorded one yet; fall back to the first line
+            latency = self._epoch_vline_latency(self.mne.vline[0].value())
+
+        # resize: the epoch count changes with `change_duration`
+        while len(self.mne.vline) > len(ixs):
+            vl = self.mne.vline.pop()
+            _disconnect(vl.sigPositionChangeFinished, allow_error=True)
+            self.mne.plt.removeItem(vl)
+        while len(self.mne.vline) < len(ixs):
+            idx = ixs[len(self.mne.vline)]
+            self.mne.vline.append(
+                self._new_epoch_vline(idx, self.mne.boundary_times[idx])
+            )
+
+        xs, mask = self._epoch_vline_state(latency=latency)
+        sfreq = self.mne.info["sfreq"]
+        for epo_idx, x, visible, vl in zip(ixs, xs, mask, self.mne.vline):
+            bmin, bmax = self.mne.boundary_times[epo_idx : epo_idx + 2]
+            bmax = max(bmax - 1 / sfreq, bmin)
+            vl.setBounds((bmin, bmax))
+            vl.setValue(x)
+            was_visible = vl.isVisible()
+            vl.setVisible(bool(visible))
+            if visible and not was_visible:
+                vl.label.valueChanged()
+
     def _vline_slot(self, orig_vline):
         if self.mne.is_epochs:
+            if is_variable_duration(self.mne):
+                self._epoch_vline_latency(orig_vline.value())
             ts = self._get_vline_times(orig_vline.value())
             for vl, xt in zip(self.mne.vline, ts):
                 if vl != orig_vline:
                     vl.setPos(xt)
+            self._set_epoch_vline_visibility(orig_vline.value())
         self.mne.overview_bar.update_vline()
 
     def _add_vline(self, t):
         if self.mne.is_epochs:
+            if is_variable_duration(self.mne):
+                self._epoch_vline_latency(t)
             ts = self._get_vline_times(t)
 
             # Add vline if None
             if self.mne.vline is None:
                 self.mne.vline = list()
-                for xt in ts:
-                    epo_idx = np.clip(
-                        np.searchsorted(self.mne.boundary_times, xt) - 1,
-                        0,
-                        len(self.mne.inst) - 1,
-                    )
+                # Which epoch each line belongs to is already known when the
+                # durations vary; deriving it from the position would land on
+                # the previous epoch whenever a line sits exactly on a boundary.
+                if is_variable_duration(self.mne):
+                    epo_idxs = np.atleast_1d(np.asarray(self.mne.epoch_idx, int))
+                else:
+                    epo_idxs = [
+                        np.clip(
+                            np.searchsorted(self.mne.boundary_times, xt) - 1,
+                            0,
+                            len(self.mne.inst) - 1,
+                        )
+                        for xt in ts
+                    ]
+                for epo_idx, xt in zip(epo_idxs, ts):
                     bmin, bmax = self.mne.boundary_times[epo_idx : epo_idx + 2]
                     # Avoid off-by-one-error at bmax for VlineLabel
-                    bmax -= 1 / self.mne.info["sfreq"]
+                    bmax = max(bmax - 1 / self.mne.info["sfreq"], bmin)
                     vl = VLine(self.mne, xt, bounds=(bmin, bmax))
                     # Should only be emitted when dragged
                     vl.sigPositionChangeFinished.connect(self._vline_slot)
@@ -1214,6 +1376,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
             else:
                 for vl, xt in zip(self.mne.vline, ts):
                     vl.setPos(xt)
+            self._set_epoch_vline_visibility(t)
         else:
             if self.mne.vline is None:
                 self.mne.vline = VLine(self.mne, t, bounds=(0, self.mne.xmax))
@@ -1261,8 +1424,21 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
 
                         # relative x for epochs
                         if self.mne.is_epochs:
-                            rel_idx = idx % len(self.mne.inst.times)
-                            x = self.mne.inst.times[rel_idx]
+                            if is_variable_duration(self.mne):
+                                # epochs differ in length, so the offset into
+                                # one of them is not a remainder
+                                # report the latency of the sample whose y
+                                # value is shown, not of the raw cursor x,
+                                # which can sit past the last sample
+                                x = latency_at(
+                                    self.mne.boundary_times,
+                                    self.mne.epoch_tmins,
+                                    self.mne.info["sfreq"],
+                                    self.mne.times[idx],
+                                )
+                            else:
+                                rel_idx = idx % len(self.mne.inst.times)
+                                x = self.mne.inst.times[rel_idx]
 
                         # negative because plot is inverted for Y
                         inv_norm = _get_channel_scaling(self, trace.ch_type) * -1
@@ -1286,7 +1462,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
     def _xrange_changed(self, _, xrange):
         # Update data
         if self.mne.is_epochs:
-            if self.mne.vline is not None:
+            variable = is_variable_duration(self.mne)
+            if self.mne.vline is not None and not variable:
                 rel_vl_t = (
                     self.mne.vline[0].value()
                     - self.mne.boundary_times[self.mne.epoch_idx][0]
@@ -1302,15 +1479,18 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
 
             # Update vlines
             if self.mne.vline is not None:
-                for bmin, bmax, vl in zip(
-                    self.mne.boundary_times[self.mne.epoch_idx],
-                    self.mne.boundary_times[self.mne.epoch_idx + 1],
-                    self.mne.vline,
-                ):
-                    # Avoid off-by-one-error at bmax for VlineLabel
-                    bmax -= 1 / self.mne.info["sfreq"]
-                    vl.setBounds((bmin, bmax))
-                    vl.setValue(bmin + rel_vl_t)
+                if variable:
+                    self._reposition_epoch_vlines()
+                else:
+                    for bmin, bmax, vl in zip(
+                        self.mne.boundary_times[self.mne.epoch_idx],
+                        self.mne.boundary_times[self.mne.epoch_idx + 1],
+                        self.mne.vline,
+                    ):
+                        # Avoid off-by-one-error at bmax for VlineLabel
+                        bmax = max(bmax - 1 / self.mne.info["sfreq"], bmin)
+                        vl.setBounds((bmin, bmax))
+                        vl.setValue(bmin + rel_vl_t)
 
         self.mne.t_start = xrange[0]
         self.mne.duration = xrange[1] - xrange[0]
@@ -1571,13 +1751,18 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                 # processing.
                 expected_ram = disk_space * fmt_multipliers[fmt] * 2
             elif self.mne.inst.preload:
-                expected_ram = self.mne.inst._data.nbytes
+                data = self.mne.inst._data
+                if isinstance(data, list):  # variable-duration epochs
+                    expected_ram = sum(epoch.nbytes for epoch in data)
+                else:
+                    expected_ram = data.nbytes
             else:
                 # No file and not preloaded (e.g., epochs constructed from a
                 # non-preloaded raw): estimate the float64 size once loaded
                 n_samples = len(self.mne.inst)
                 if self.mne.is_epochs:
-                    n_samples *= len(self.mne.inst.times)
+                    # n_times already counts every real sample across epochs
+                    n_samples = self.mne.n_times
                 expected_ram = 8 * n_samples * len(self.mne.inst.ch_names)
 
             # Get available RAM
