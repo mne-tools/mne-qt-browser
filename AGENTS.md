@@ -115,7 +115,7 @@ fig.resize(900, 450)
 fig.show()
 app = QApplication.instance()
 fig.mne.plt.setXRange(t, t + 10, padding=0)
-app.processEvents()          # required, or you grab the pre-layout frame
+app.processEvents()  # required, or you grab the pre-layout frame
 fig.grab().save("shot.png")  # then read the PNG
 print({r.description: r.label_item.pos() for r in fig.mne.regions})
 ```
