@@ -94,6 +94,14 @@ scroll benchmarks. `pg_backend` comes from `mne.conftest`; `raw_orig` is session
 so `.copy()` before mutating it. `fig.test_mode = True` makes message boxes non-modal.
 Warnings are errors. Run `pre-commit run --all-files` before handing work back.
 
+Known flake: the `pytest PySide6 / macos / MNE main` CI job intermittently dies with
+`Fatal Python error: Bus error` inside `QPainter.drawPath` (pyqtgraph's
+`PlotCurveItem.paint`) during `test_precompute_matches_on_the_fly`. It is a native crash,
+not an assertion, so the log shows a faulthandler traceback and exit code 138 rather than a
+`FAILED` line. It has never been seen on Linux, Windows, or the macOS MNE maint/1.12 job.
+A PR that only hits that job with that signature is almost certainly not the cause; look
+for the traceback in the log before spending time on it (see `WORK_ORDER.md` if present).
+
 Headless: run GUI tests and scripts with `xvfb-run -a` (or `QT_QPA_PLATFORM=offscreen`).
 Prefer driving the figure through `pytest-qt`/`_fake_*` helpers over OS-level input
 injection. If the package is pip-installed editable from a *different* checkout (e.g. you
