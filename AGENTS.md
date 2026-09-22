@@ -94,13 +94,18 @@ scroll benchmarks. `pg_backend` comes from `mne.conftest`; `raw_orig` is session
 so `.copy()` before mutating it. `fig.test_mode = True` makes message boxes non-modal.
 Warnings are errors. Run `pre-commit run --all-files` before handing work back.
 
-Known flake: the `pytest PySide6 / macos / MNE main` CI job intermittently dies with
-`Fatal Python error: Bus error` inside `QPainter.drawPath` (pyqtgraph's
-`PlotCurveItem.paint`) during `test_precompute_matches_on_the_fly`. It is a native crash,
-not an assertion, so the log shows a faulthandler traceback and exit code 138 rather than a
-`FAILED` line. It has never been seen on Linux, Windows, or the macOS MNE maint/1.12 job.
-A PR that only hits that job with that signature is almost certainly not the cause; look
-for the traceback in the log before spending time on it (see `WORK_ORDER.md` if present).
+Known flake: the `pytest PySide6 / macos` CI jobs (both MNE main and maint/1.12, PySide6
+6.11.1 and 6.11.2, macOS 26 runner) intermittently die with `Fatal Python error: Bus
+error` while painting a `DataTrace` right after an action plus `QTest.qWait`, most often in
+`test_precompute_matches_on_the_fly[transparent]` (before 2026-08 in MNE's
+`test_plot_epochs_clicks`). It is a native crash, not an assertion, so the log shows a
+faulthandler traceback and exit code 138 rather than a `FAILED` line; a PR that only hits
+that job with that signature is almost certainly not the cause. The native frame is
+`QCosmeticStroker::drawPath` reading a corrupted `state->lastPen`; the coordinates handed
+to `setData` are always finite and bounded, and the crash has never reproduced locally
+(macOS 27, 50+ runs, also under Guard Malloc and MallocScribble). Do not rerun-until-green
+by hand; if you touch this, capture an `lldb --batch` backtrace on the runner first (the
+workflow supports SSH debugging, see `.github/workflows/tests.yml`).
 
 Headless: run GUI tests and scripts with `xvfb-run -a` (or `QT_QPA_PLATFORM=offscreen`).
 Prefer driving the figure through `pytest-qt`/`_fake_*` helpers over OS-level input

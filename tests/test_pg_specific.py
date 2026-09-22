@@ -1021,8 +1021,9 @@ _HAS_ZERO_LINE_OFFSET = check_version("mne", "1.13")
     reason="mne < 1.10 pads the shown range with two extra samples",
 )
 @pytest.mark.parametrize("clipping", ("transparent", "clamp", None))
-# TODO: This test is flaky on macOS, where painting the curve can hit a bus error
-# inside pyqtgraph's PlotCurveItem.paint
+# TODO: Flaky on the macOS CI runner (see "Known flake" in AGENTS.md): a SIGBUS in
+# Qt's QCosmeticStroker::drawPath while painting a trace. It is not caused by the
+# data we hand pyqtgraph (verified finite and bounded on every setData call).
 def test_precompute_matches_on_the_fly(raw_orig, pg_backend, clipping):
     """Test that precomputed data is displayed like data processed on the fly."""
     # A window that has stim events but whose stim maxima differ from the maxima over
