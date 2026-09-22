@@ -1021,8 +1021,6 @@ _HAS_ZERO_LINE_OFFSET = check_version("mne", "1.13")
     reason="mne < 1.10 pads the shown range with two extra samples",
 )
 @pytest.mark.parametrize("clipping", ("transparent", "clamp", None))
-# TODO: This test is flaky on macOS, where painting the curve can hit a bus error
-# inside pyqtgraph's PlotCurveItem.paint
 def test_precompute_matches_on_the_fly(raw_orig, pg_backend, clipping):
     """Test that precomputed data is displayed like data processed on the fly."""
     # A window that has stim events but whose stim maxima differ from the maxima over
@@ -1071,6 +1069,57 @@ def test_precompute_matches_on_the_fly(raw_orig, pg_backend, clipping):
             # Clipping must kick in for the same samples in both modes
             assert_array_equal(np.isnan(got), np.isnan(expected), err_msg=ch_name)
             assert_allclose(got, expected, atol=1e-10, err_msg=ch_name)
+
+
+def _all_traces(fig):
+    for trace in fig.mne.traces:
+        yield trace
+        yield from getattr(trace, "child_traces", [])
+
+
+@pytest.mark.parametrize("kind", ("raw", "epochs"))
+def test_no_lone_leading_moveto(raw_orig, pg_backend, kind):
+    """Test that a trace path never starts with a lone MoveTo element.
+
+    QCosmeticStroker::drawPath (all Qt 5/6 versions) treats a subpath made of a single
+    MoveTo as closed and reads the two points before it, i.e. before the start of the
+    point array when it is the first element. That is an out-of-bounds read that
+    sporadically SIGBUSes on macOS. pyqtgraph emits such an element whenever the first
+    sample handed to setData is non-finite.
+    """
+    from pyqtgraph import QtGui
+
+    raw = raw_orig.copy().crop(tmax=10.0)
+    if kind == "raw":
+        fig = raw.plot(clipping="transparent", duration=2.0, splash=False)
+    else:
+        epochs = mne.make_fixed_length_epochs(raw, duration=2.0, preload=True)
+        fig = epochs.plot(splash=False)
+    fig.test_mode = True
+    # Tiny scalings blow the MEG traces up so that clipping NaNs (nearly) every sample
+    fig.mne.scalings.update(grad=1e-15, mag=1e-15)
+    if kind == "epochs":
+        # Marking the first epoch bad recolors it: its samples are NaN'd out of the
+        # main trace and become a child trace whose other epochs are NaN
+        trace = fig.mne.traces[0]
+        fig._fake_click((trace.get_xdata()[3], trace.get_ydata()[3]), xform="data")
+    fig._update_data()
+    fig._redraw()
+    # Leading non-finite samples are dropped before setData (all-NaN traces end up
+    # empty), and the situation actually arose here, i.e. the test is not vacuous
+    n_times = len(fig.mne.times)
+    lengths = [len(tr.yData) for tr in _all_traces(fig)]
+    assert any(n < n_times for n in lengths), lengths
+    for trace in _all_traces(fig):
+        assert len(trace.yData) == 0 or np.isfinite(trace.yData[0]), trace.ch_name
+    # ... so no lone leading MoveTo reaches Qt
+    for trace in _all_traces(fig):
+        path = trace.getPath()
+        types = [path.elementAt(i).type for i in range(min(2, path.elementCount()))]
+        assert types != [QtGui.QPainterPath.ElementType.MoveToElement] * 2, (
+            trace.ch_name
+        )
+    fig.close()
 
 
 def test_butterfly_scalebars(raw_orig, pg_backend):

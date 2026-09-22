@@ -94,13 +94,18 @@ scroll benchmarks. `pg_backend` comes from `mne.conftest`; `raw_orig` is session
 so `.copy()` before mutating it. `fig.test_mode = True` makes message boxes non-modal.
 Warnings are errors. Run `pre-commit run --all-files` before handing work back.
 
-Known flake: the `pytest PySide6 / macos / MNE main` CI job intermittently dies with
-`Fatal Python error: Bus error` inside `QPainter.drawPath` (pyqtgraph's
-`PlotCurveItem.paint`) during `test_precompute_matches_on_the_fly`. It is a native crash,
-not an assertion, so the log shows a faulthandler traceback and exit code 138 rather than a
-`FAILED` line. It has never been seen on Linux, Windows, or the macOS MNE maint/1.12 job.
-A PR that only hits that job with that signature is almost certainly not the cause; look
-for the traceback in the log before spending time on it (see `WORK_ORDER.md` if present).
+Known (fixed) crash: painting a trace whose *first* sample is non-finite used to SIGBUS
+sporadically on the macOS CI runners (`Fatal Python error: Bus error` inside
+`QPainter.drawPath`, exit code 138, no `FAILED` line). pyqtgraph turns a leading NaN into
+a lone `MoveTo` element, and `QCosmeticStroker::drawPath` (every Qt 5/6) treats such a
+subpath as closed and reads the two points before it, i.e. before the point array.
+`DataTrace.update_data` now drops leading non-finite samples on the `connect="finite"`
+path (`test_no_lone_leading_moveto`); `tools/qt_lone_moveto_repro.py` is the Qt-only
+reproducer. Such out-of-bounds reads are made deterministic on macOS with
+`DYLD_INSERT_LIBRARIES=/usr/lib/libgmalloc.dylib MALLOC_PROTECT_BEFORE=1`, and the
+workflow supports SSH debugging (`[actions ssh]` in the PR title or commit message); on a
+runner, loop the test under `lldb --batch -o "settings set target.process.stop-on-exec
+false" -o run -k "bt 40" -k "register read" -- $(which python) -m pytest ...` to catch it.
 
 Headless: run GUI tests and scripts with `xvfb-run -a` (or `QT_QPA_PLATFORM=offscreen`).
 Prefer driving the figure through `pytest-qt`/`_fake_*` helpers over OS-level input

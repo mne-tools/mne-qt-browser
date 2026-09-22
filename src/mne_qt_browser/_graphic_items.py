@@ -697,6 +697,15 @@ class DataTrace(PlotCurveItem):
             for start, stop in zip(starts, stops):
                 data[np.logical_and(start <= times, times <= stop)] = np.nan
 
+        if connect == "finite":
+            # A leading non-finite sample makes pyqtgraph start the path with a lone
+            # MoveTo, which Qt's cosmetic stroker treats as a closed subpath and reads
+            # the two points *before* it: an out-of-bounds read that sporadically
+            # SIGBUSes on macOS (see test_no_lone_leading_moveto)
+            finite = np.flatnonzero(np.isfinite(data))
+            start = finite[0] if len(finite) else len(data)
+            times, data = times[start:], data[start:]
+
         assert times.shape[-1] == data.shape[-1]
 
         self.setData(
