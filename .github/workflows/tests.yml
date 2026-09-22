@@ -22,26 +22,25 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # TEMPORARY (revert before merging): only the job that hits the macOS bus error
-        os: [macos]
-        mne: [main]
+        os: [ubuntu, windows, macos]
+        mne: [main, maint/1.12]
         python: ['3.14']
         name: [PySide6]
-        # include:
-        #   - os: ubuntu
-        #     mne: main
-        #     python: '3.11'
-        #     qt: PyQt6
-        #     name: PyQt6
-        #   - os: ubuntu
-        #     mne: maint/1.8  # released 2024/08/18
-        #     python: '3.10'
-        #     name: old
-        #     allow_skip: '^.*mne < 1\.10 pads the shown range.*$'
-        #   - os: ubuntu
-        #     mne: main
-        #     python: '3.14'
-        #     name: pip-pre
+        include:
+          - os: ubuntu
+            mne: main
+            python: '3.11'
+            qt: PyQt6
+            name: PyQt6
+          - os: ubuntu
+            mne: maint/1.8  # released 2024/08/18
+            python: '3.10'
+            name: old
+            allow_skip: '^.*mne < 1\.10 pads the shown range.*$'
+          - os: ubuntu
+            mne: main
+            python: '3.14'
+            name: pip-pre
     name: pytest ${{ matrix.name }} / ${{ matrix.os }} / MNE ${{ matrix.mne }}
     runs-on: ${{ matrix.os }}-latest
     # Long enough for an SSH session when one is requested via workflow_dispatch

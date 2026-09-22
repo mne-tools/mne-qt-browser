@@ -94,18 +94,18 @@ scroll benchmarks. `pg_backend` comes from `mne.conftest`; `raw_orig` is session
 so `.copy()` before mutating it. `fig.test_mode = True` makes message boxes non-modal.
 Warnings are errors. Run `pre-commit run --all-files` before handing work back.
 
-Known flake: the `pytest PySide6 / macos` CI jobs (both MNE main and maint/1.12, PySide6
-6.11.1 and 6.11.2, macOS 26 runner) intermittently die with `Fatal Python error: Bus
-error` while painting a `DataTrace` right after an action plus `QTest.qWait`, most often in
-`test_precompute_matches_on_the_fly[transparent]` (before 2026-08 in MNE's
-`test_plot_epochs_clicks`). It is a native crash, not an assertion, so the log shows a
-faulthandler traceback and exit code 138 rather than a `FAILED` line; a PR that only hits
-that job with that signature is almost certainly not the cause. The native frame is
-`QCosmeticStroker::drawPath` reading a corrupted `state->lastPen`; the coordinates handed
-to `setData` are always finite and bounded, and the crash has never reproduced locally
-(macOS 27, 50+ runs, also under Guard Malloc and MallocScribble). Do not rerun-until-green
-by hand; if you touch this, capture an `lldb --batch` backtrace on the runner first (the
-workflow supports SSH debugging, see `.github/workflows/tests.yml`).
+Known (fixed) crash: painting a trace whose *first* sample is non-finite used to SIGBUS
+sporadically on the macOS CI runners (`Fatal Python error: Bus error` inside
+`QPainter.drawPath`, exit code 138, no `FAILED` line). pyqtgraph turns a leading NaN into
+a lone `MoveTo` element, and `QCosmeticStroker::drawPath` (every Qt 5/6) treats such a
+subpath as closed and reads the two points before it, i.e. before the point array.
+`DataTrace.update_data` now drops leading non-finite samples on the `connect="finite"`
+path (`test_no_lone_leading_moveto`); `tools/qt_lone_moveto_repro.py` is the Qt-only
+reproducer. Such out-of-bounds reads are made deterministic on macOS with
+`DYLD_INSERT_LIBRARIES=/usr/lib/libgmalloc.dylib MALLOC_PROTECT_BEFORE=1`, and the
+workflow supports SSH debugging (`[actions ssh]` in the PR title or commit message); on a
+runner, loop the test under `lldb --batch -o "settings set target.process.stop-on-exec
+false" -o run -k "bt 40" -k "register read" -- $(which python) -m pytest ...` to catch it.
 
 Headless: run GUI tests and scripts with `xvfb-run -a` (or `QT_QPA_PLATFORM=offscreen`).
 Prefer driving the figure through `pytest-qt`/`_fake_*` helpers over OS-level input
