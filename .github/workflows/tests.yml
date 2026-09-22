@@ -45,7 +45,7 @@ jobs:
     name: pytest ${{ matrix.name }} / ${{ matrix.os }} / MNE ${{ matrix.mne }}
     runs-on: ${{ matrix.os }}-latest
     # Long enough for an SSH session when one is requested via workflow_dispatch
-    timeout-minutes: ${{ inputs.ssh && 120 || 30 }}
+    timeout-minutes: ${{ (inputs.ssh || contains(github.event.head_commit.message, '[actions ssh]') || contains(github.event.pull_request.title, '[actions ssh]')) && 120 || 30 }}
     env:
       MNE_LOGGING_LEVEL: 'warning'
       OMP_NUM_THREADS: '1'
@@ -60,7 +60,7 @@ jobs:
         run: echo "COMMIT_MESSAGE=$(git show -s --format=%s ${{ github.event.pull_request.head.sha || github.sha }})" | tee -a ${GITHUB_ENV}
       - name: Triage SSH
         run: |
-          if [[ "${{ inputs.ssh }}" == "true" ]] || [[ "$COMMIT_MESSAGE" == *"[actions ssh]"* ]]; then
+          if [[ "${{ inputs.ssh }}" == "true" ]] || [[ "$COMMIT_MESSAGE" == *"[actions ssh]"* ]] || [[ "${{ github.event.pull_request.title }}" == *"[actions ssh]"* ]]; then
             echo "ENABLE_SSH=true" | tee -a $GITHUB_ENV
           else
             echo "ENABLE_SSH=false" | tee -a $GITHUB_ENV
@@ -124,7 +124,7 @@ jobs:
         name: Run benchmarks
         if: runner.os != 'macOS'
       # Hold the runner open after a failure so the crashed environment can be inspected
-      # (bounded by the job timeout, i.e. ~20 min when triggered by "[actions ssh]")
+      # (bounded by the job timeout)
       - name: Keep SSH session alive on failure
         if: failure() && env.ENABLE_SSH == 'true'
         uses: Warpbuilds/action-debugger@v1.3
