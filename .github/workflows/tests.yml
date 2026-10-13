@@ -36,6 +36,7 @@ jobs:
             mne: maint/1.8  # released 2024/08/18
             python: '3.10'
             name: old
+            qt: 'PySide6<6.12'  # 6.12.0 over-decrefs None on Python < 3.12
             allow_skip: '^.*mne < 1\.10 pads the shown range.*$'
           - os: ubuntu
             mne: main
