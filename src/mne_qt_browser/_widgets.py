@@ -710,6 +710,7 @@ class TimeAxis(AxisItem):
                     val_str += f"{round(val_time.microsecond * 1e-6, digits)}"[1:]
                 tick_strings.append(val_str)
         else:
+            values = np.asarray(values) + self.mne.time_offset
             tick_strings = super().tickStrings(values, scale, spacing)
 
         return tick_strings

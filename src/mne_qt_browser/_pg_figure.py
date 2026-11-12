@@ -269,7 +269,12 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         self.backend_name = "pyqtgraph"
         self._closed = False
 
+        # Qt uses zero-based plot coordinates; offset only the displayed times.
+        time_offset = kwargs["first_time"]
+        kwargs["t_start"] -= time_offset
+        kwargs["first_time"] = 0
         BrowserBase.__init__(self, **kwargs)
+        self.mne.time_offset = time_offset
         QMainWindow.__init__(self)
 
         # Add to list to keep a reference and avoid premature garbage collection
@@ -1267,6 +1272,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                         if self.mne.is_epochs:
                             rel_idx = idx % len(self.mne.inst.times)
                             x = self.mne.inst.times[rel_idx]
+                        else:
+                            x += self.mne.time_offset
 
                         # negative because plot is inverted for Y
                         inv_norm = _get_channel_scaling(self, trace.ch_type) * -1

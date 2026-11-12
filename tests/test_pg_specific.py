@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 from mne.utils import check_version
 from numpy.testing import assert_allclose, assert_array_equal
-from qtpy.QtCore import Qt
+from qtpy.QtCore import QPointF, Qt
 from qtpy.QtGui import QFontMetrics
 from qtpy.QtTest import QTest
 
@@ -984,6 +984,48 @@ def _wait_precompute(fig):
             return
         QTest.qWait(100)
     raise AssertionError("Precomputation did not finish")
+
+
+@pytest.mark.parametrize("show_first_samp", (False, True))
+@pytest.mark.parametrize("precompute", (False, True))
+def test_show_first_samp(pg_backend, precompute, show_first_samp):
+    """Test the time reference of traces, events, annotations, and labels."""
+    raw = mne.io.RawArray(
+        np.sin(np.arange(120.0))[np.newaxis] * 1e-6,
+        mne.create_info(["EEG 001"], 10.0, "eeg"),
+        first_samp=50,
+    )
+    raw.set_annotations(mne.Annotations(3.0, 1.0, "test"))
+    raw.set_meas_date(0.0)
+    fig = raw.plot(
+        start=3.0,
+        duration=1.0,
+        events=np.array([[raw.first_samp + 30, 0, 1]]),
+        show_first_samp=show_first_samp,
+        precompute=precompute,
+        splash=False,
+    )
+    fig.test_mode = True
+    if precompute:
+        _wait_precompute(fig)
+    assert fig._get_start_stop() == (30, 40)
+    assert_allclose(fig.mne.viewbox.viewRange()[0], (3.0, 4.0))
+    assert_allclose(fig.mne.traces[0].xData, raw.times[30:40])
+    assert_allclose(fig.mne.event_lines[0].value(), 3.0)
+    assert_allclose(fig.mne.regions[0].getRegion(), (3.0, 4.0))
+    display_time = 3.5 + (raw.first_time if show_first_samp else 0)
+    assert fig.mne.time_axis.tickStrings([3.5], 1, 0.5) == [str(display_time)]
+    fig._add_vline(3.5)
+    assert fig.mne.vline.label.toPlainText() == f"{display_time:.3f} s"
+    fig.mne.crosshair_enabled = True
+    fig._mouse_moved(fig.mne.viewbox.mapViewToScene(QPointF(3.5, 1.0)))
+    assert fig.statusBar().currentMessage().startswith(f"x={display_time:.3f} s,")
+    fig.mne.time_format = "clock"
+    fig.mne.time_axis.tickValues(3.0, 4.0, 1000)
+    assert fig.mne.time_axis.tickStrings([3.5], 1, 0.5) == ["00:00:08.5"]
+    fig.hscroll("+full")
+    assert fig._get_start_stop() == (40, 50)
+    assert_allclose(fig.mne.traces[0].xData, raw.times[40:50])
 
 
 def _trace_alphas(fig):
