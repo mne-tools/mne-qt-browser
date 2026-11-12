@@ -1023,6 +1023,8 @@ class VLineLabel(InfLineLabel):
             search_val = value % self.line.mne.epoch_dur
             t_idx = np.searchsorted(t_vals_abs, search_val)
             value = self.line.mne.inst.times[t_idx]
+        else:
+            value += self.line.mne.time_offset
         self.setText(self.format.format(value=value))
         self.updatePosition()
 
