@@ -269,12 +269,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         self.backend_name = "pyqtgraph"
         self._closed = False
 
-        # Qt uses zero-based plot coordinates; offset only the displayed times.
-        time_offset = kwargs["first_time"]
-        kwargs["t_start"] -= time_offset
-        kwargs["first_time"] = 0
         BrowserBase.__init__(self, **kwargs)
-        self.mne.time_offset = time_offset
         QMainWindow.__init__(self)
 
         # Add to list to keep a reference and avoid premature garbage collection
@@ -731,9 +726,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         self.mne.toolbar.addAction(ahelp)
 
         # Set start range (after all necessary elements are initialized)
-        self.mne.plt.setXRange(
-            self.mne.t_start, self.mne.t_start + self.mne.duration, padding=0
-        )
+        # Plot coordinates are zero-based, mne.t_start is a displayed time
+        t_start = self.mne.t_start - self.mne.first_time
+        self.mne.plt.setXRange(t_start, t_start + self.mne.duration, padding=0)
         if self.mne.butterfly:
             self._set_butterfly(True)
         else:
@@ -1273,7 +1268,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                             rel_idx = idx % len(self.mne.inst.times)
                             x = self.mne.inst.times[rel_idx]
                         else:
-                            x += self.mne.time_offset
+                            x += self.mne.first_time
 
                         # negative because plot is inverted for Y
                         inv_norm = _get_channel_scaling(self, trace.ch_type) * -1
@@ -1323,7 +1318,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                     vl.setBounds((bmin, bmax))
                     vl.setValue(bmin + rel_vl_t)
 
-        self.mne.t_start = xrange[0]
+        self.mne.t_start = xrange[0] + self.mne.first_time
         self.mne.duration = xrange[1] - xrange[0]
 
         self._redraw(update_data=True)
@@ -1915,7 +1910,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
     def _update_regions_visible(self):
         if self.mne.is_epochs:
             return
-        start = self.mne.t_start
+        start = self.mne.t_start - self.mne.first_time
         stop = start + self.mne.duration
         for region in self.mne.regions:
             if self.mne.visible_annotations[region.description]:

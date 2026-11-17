@@ -986,6 +986,20 @@ def _wait_precompute(fig):
     raise AssertionError("Precomputation did not finish")
 
 
+def _check_view_start(fig, start, offset):
+    """Check everything that follows the start of the view (in plot coords)."""
+    # as in the matplotlib backend, these are displayed (offset) times
+    assert fig.mne.first_time == offset
+    assert_allclose(fig.mne.t_start, start + offset)
+    assert_allclose(fig.mne.viewbox.viewRange()[0][0], start)
+    assert_allclose(fig.mne.scalebars["eeg"].line().x1(), start)
+    assert_allclose(fig.mne.scalebar_texts["eeg"].pos().x(), start)
+    bar = fig.mne.overview_bar
+    assert_allclose(
+        bar.viewrange_rect.rect().left(), bar.width() * start / fig.mne.xmax
+    )
+
+
 @pytest.mark.parametrize("show_first_samp", (False, True))
 @pytest.mark.parametrize("precompute", (False, True))
 def test_show_first_samp(pg_backend, precompute, show_first_samp):
@@ -1008,12 +1022,14 @@ def test_show_first_samp(pg_backend, precompute, show_first_samp):
     fig.test_mode = True
     if precompute:
         _wait_precompute(fig)
+    offset = raw.first_time if show_first_samp else 0
+    _check_view_start(fig, 3.0, offset)
     assert fig._get_start_stop() == (30, 40)
     assert_allclose(fig.mne.viewbox.viewRange()[0], (3.0, 4.0))
+    assert fig.mne.regions[0].isVisible()
     assert_allclose(fig.mne.traces[0].xData, raw.times[30:40])
     assert_allclose(fig.mne.event_lines[0].value(), 3.0)
     assert_allclose(fig.mne.regions[0].getRegion(), (3.0, 4.0))
-    offset = raw.first_time if show_first_samp else 0
     display_time = 3.5 + offset
     assert fig.mne.time_axis.tickStrings([3.5], 1, 0.5) == [str(display_time)]
     # ticks sit on round displayed times, and are labeled with where they are
@@ -1047,6 +1063,11 @@ def test_show_first_samp(pg_backend, precompute, show_first_samp):
     fig.mne.time_axis.tickValues(3.0, 4.0, 1000)
     assert fig.mne.time_axis.tickStrings([3.5], 1, 0.5) == ["00:00:08.9"]
     fig.hscroll("+full")
+    _check_view_start(fig, 4.0, offset)
+    assert not fig.mne.regions[0].isVisible()
+    fig.resize(fig.width() + 100, fig.height())  # the overview bar follows
+    QTest.qWait(100)
+    _check_view_start(fig, 4.0, offset)
     assert fig._get_start_stop() == (40, 50)
     assert_allclose(fig.mne.traces[0].xData, raw.times[40:50])
 
