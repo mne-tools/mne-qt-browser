@@ -102,8 +102,8 @@ class AnnotationDock(QDockWidget):
         layout.addWidget(QLabel("Start:"))
         self.start_bx = QDoubleSpinBox()
         self.start_bx.setDecimals(time_decimals)
-        self.start_bx.setMinimum(0)
-        self.start_bx.setMaximum(self.mne.xmax)
+        self.start_bx.setMinimum(self.mne.time_offset)
+        self.start_bx.setMaximum(self.mne.time_offset + self.mne.xmax)
         self.start_bx.setSingleStep(0.05)
         self.start_bx.valueChanged.connect(self._start_changed)
         layout.addWidget(self.start_bx)
@@ -111,8 +111,10 @@ class AnnotationDock(QDockWidget):
         layout.addWidget(QLabel("Stop:"))
         self.stop_bx = QDoubleSpinBox()
         self.stop_bx.setDecimals(time_decimals)
-        self.stop_bx.setMinimum(0)
-        self.stop_bx.setMaximum(self.mne.xmax + 1 / self.mne.info["sfreq"])
+        self.stop_bx.setMinimum(self.mne.time_offset)
+        self.stop_bx.setMaximum(
+            self.mne.time_offset + self.mne.xmax + 1 / self.mne.info["sfreq"]
+        )
         self.stop_bx.setSingleStep(0.05)
         self.stop_bx.valueChanged.connect(self._stop_changed)
         layout.addWidget(self.stop_bx)
@@ -322,7 +324,7 @@ class AnnotationDock(QDockWidget):
                 region.setZValue(1)
 
     def _start_changed(self):
-        start = self.start_bx.value()
+        start = self.start_bx.value() - self.mne.time_offset
         sel_region = self.mne.selected_region
         stop = sel_region.getRegion()[1]
         if start <= stop:
@@ -337,10 +339,10 @@ class AnnotationDock(QDockWidget):
                 icon=QMessageBox.Critical,
                 modal=False,
             )
-            self.start_bx.setValue(sel_region.getRegion()[0])
+            self.start_bx.setValue(sel_region.getRegion()[0] + self.mne.time_offset)
 
     def _stop_changed(self):
-        stop = self.stop_bx.value()
+        stop = self.stop_bx.value() - self.mne.time_offset
         sel_region = self.mne.selected_region
         start = sel_region.getRegion()[0]
         if start <= stop:
@@ -351,7 +353,7 @@ class AnnotationDock(QDockWidget):
                 info_text="Stop can't be smaller than Start!",
                 icon=QMessageBox.Critical,
             )
-            self.stop_bx.setValue(sel_region.getRegion()[1])
+            self.stop_bx.setValue(sel_region.getRegion()[1] + self.mne.time_offset)
 
     def _set_color(self):
         curr_descr = self.description_cmbx.currentText()
@@ -373,7 +375,7 @@ class AnnotationDock(QDockWidget):
 
     def update_values(self, region):
         """Update spinbox values from region."""
-        rgn = region.getRegion()
+        rgn = [t + self.mne.time_offset for t in region.getRegion()]
         self.start_bx.setEnabled(True)
         self.stop_bx.setEnabled(True)
         with QSignalBlocker(self.start_bx):
@@ -686,7 +688,16 @@ class TimeAxis(AxisItem):
         else:
             # Save _spacing for later use
             self._spacing = self.tickSpacing(minVal, maxVal, size)
-            return super().tickValues(minVal, maxVal, size)
+            if self.mne.time_format == "clock":
+                return super().tickValues(minVal, maxVal, size)
+            # Put the ticks on round *displayed* times (see tickStrings)
+            offset = self.mne.time_offset
+            return [
+                (spacing, [value - offset for value in values])
+                for spacing, values in super().tickValues(
+                    minVal + offset, maxVal + offset, size
+                )
+            ]
 
     def tickStrings(self, values, scale, spacing):
         """Customize strings of axis values."""

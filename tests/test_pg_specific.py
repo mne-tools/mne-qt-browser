@@ -993,7 +993,7 @@ def test_show_first_samp(pg_backend, precompute, show_first_samp):
     raw = mne.io.RawArray(
         np.sin(np.arange(120.0))[np.newaxis] * 1e-6,
         mne.create_info(["EEG 001"], 10.0, "eeg"),
-        first_samp=50,
+        first_samp=54,  # not a multiple of the tick spacing
     )
     raw.set_annotations(mne.Annotations(3.0, 1.0, "test"))
     raw.set_meas_date(0.0)
@@ -1013,16 +1013,39 @@ def test_show_first_samp(pg_backend, precompute, show_first_samp):
     assert_allclose(fig.mne.traces[0].xData, raw.times[30:40])
     assert_allclose(fig.mne.event_lines[0].value(), 3.0)
     assert_allclose(fig.mne.regions[0].getRegion(), (3.0, 4.0))
-    display_time = 3.5 + (raw.first_time if show_first_samp else 0)
+    offset = raw.first_time if show_first_samp else 0
+    display_time = 3.5 + offset
     assert fig.mne.time_axis.tickStrings([3.5], 1, 0.5) == [str(display_time)]
+    # ticks sit on round displayed times, and are labeled with where they are
+    for spacing, values in fig.mne.time_axis.tickValues(0.0, 10.0, 1000):
+        assert len(values)
+        values = np.array(values)
+        assert_allclose(
+            np.round((values + offset) / spacing) * spacing, values + offset
+        )
+        labels = fig.mne.time_axis.tickStrings(values, 1, spacing)
+        assert_allclose([float(label) for label in labels], values + offset)
     fig._add_vline(3.5)
     assert fig.mne.vline.label.toPlainText() == f"{display_time:.3f} s"
     fig.mne.crosshair_enabled = True
     fig._mouse_moved(fig.mne.viewbox.mapViewToScene(QPointF(3.5, 1.0)))
     assert fig.statusBar().currentMessage().startswith(f"x={display_time:.3f} s,")
+    # annotation dock shows and takes displayed times
+    fig._fake_keypress("a")
+    dock = fig.mne.fig_annotation
+    fig._fake_click((3.5, 1.0), xform="data")
+    assert_allclose(dock.start_bx.value(), 3.0 + offset)
+    assert_allclose(dock.stop_bx.value(), 4.0 + offset)
+    dock.start_bx.setValue(3.2 + offset)
+    assert_allclose(fig.mne.regions[0].getRegion(), (3.2, 4.0))
+    dock.stop_bx.setValue(3.8 + offset)
+    assert_allclose(fig.mne.regions[0].getRegion(), (3.2, 3.8))
+    assert_allclose(raw.annotations.onset, 3.2 + raw.first_time)
+    assert_allclose(raw.annotations.duration, 0.6)
+    fig._fake_keypress("a")
     fig.mne.time_format = "clock"
     fig.mne.time_axis.tickValues(3.0, 4.0, 1000)
-    assert fig.mne.time_axis.tickStrings([3.5], 1, 0.5) == ["00:00:08.5"]
+    assert fig.mne.time_axis.tickStrings([3.5], 1, 0.5) == ["00:00:08.9"]
     fig.hscroll("+full")
     assert fig._get_start_stop() == (40, 50)
     assert_allclose(fig.mne.traces[0].xData, raw.times[40:50])
