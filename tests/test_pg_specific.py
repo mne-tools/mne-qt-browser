@@ -1027,7 +1027,9 @@ def test_show_first_samp(pg_backend, precompute, show_first_samp):
     assert fig._get_start_stop() == (30, 40)
     assert_allclose(fig.mne.viewbox.viewRange()[0], (3.0, 4.0))
     assert fig.mne.regions[0].isVisible()
-    assert_allclose(fig.mne.traces[0].xData, raw.times[30:40])
+    # mne < 1.10 pads the shown range with two extra samples (not when precomputed)
+    pad = 0 if precompute or check_version("mne", "1.10") else 2
+    assert_allclose(fig.mne.traces[0].xData, raw.times[30 : 40 + pad])
     assert_allclose(fig.mne.event_lines[0].value(), 3.0)
     assert_allclose(fig.mne.regions[0].getRegion(), (3.0, 4.0))
     display_time = 3.5 + offset
@@ -1069,7 +1071,7 @@ def test_show_first_samp(pg_backend, precompute, show_first_samp):
     QTest.qWait(100)
     _check_view_start(fig, 4.0, offset)
     assert fig._get_start_stop() == (40, 50)
-    assert_allclose(fig.mne.traces[0].xData, raw.times[40:50])
+    assert_allclose(fig.mne.traces[0].xData, raw.times[40 : 50 + pad])
 
 
 def _trace_alphas(fig):
