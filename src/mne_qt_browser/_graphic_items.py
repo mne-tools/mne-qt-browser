@@ -459,9 +459,6 @@ class DataTrace(PlotCurveItem):
         # The range_idx is the index of the channel represented by this trace in the
         # shown range
         self.range_idx = None
-        # The order_idx is the index of the channel represented by this trace in the
-        # channel-order (defined e.g. by group_by)
-        self.order_idx = None
         # Name of the channel the trace represents
         self.ch_name = None
         # Indicates if trace is bad
@@ -619,8 +616,7 @@ class DataTrace(PlotCurveItem):
         offset = getattr(self.mne, "zero_line_offset", None)
         if offset is None:
             return self.ypos
-        idx = self.order_idx if self.mne.data_precomputed else self.range_idx
-        return self.ypos + offset[idx] * self.transform().m22()
+        return self.ypos + offset[self.range_idx] * self.transform().m22()
 
     def update_zero_line_pos(self):
         """Update the zero line's position, e.g. after data, scale or ypos changes."""
@@ -654,9 +650,6 @@ class DataTrace(PlotCurveItem):
         # The range_idx is the index of the channel represented by this trace in the
         # shown range
         self.update_range_idx(propagate=False)
-        # The order_idx is the index of the channel represented by this trace in the
-        # channel order (defined e.g. by group_by).
-        self.order_idx = np.argwhere(self.mne.ch_order == self.ch_idx)[0][0]
         self.ch_name = self.mne.inst.ch_names[ch_idx]
         self.isbad = self.ch_name in self.mne.info["bads"]
         self.ch_type = self.mne.ch_types[ch_idx]
@@ -675,10 +668,7 @@ class DataTrace(PlotCurveItem):
             skip = True
 
         self._apply_transform()
-        if self.mne.data_precomputed:
-            data = self.mne.data[self.order_idx]
-        else:
-            data = self.mne.data[self.range_idx]
+        data = self.mne.data[self.range_idx]
         times = self.mne.times
 
         # Get decim-specific time if enabled

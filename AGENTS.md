@@ -76,6 +76,8 @@ in your summary rather than quietly working around it.
 - Redraw path: `plt.setXRange()` → `sigXRangeChanged` → `_xrange_changed` →
   `_redraw(update_data=True)` plus scale bars, overview bar, annotations. Everything on
   that path runs on every scroll, so keep per-item work there cheap.
+- After `_update_data`, `mne.data` holds only the shown channels, precomputed or not, so
+  index it with `trace.range_idx` (`mne.global_data` is what holds every channel).
 - **A resize emits no range signal.** Anything positioned in pixel units (text rows, label
   offsets) needs `viewbox.sigResized` too, or it silently goes stale until the next scroll.
 - Qt geometry read before layout is stale — e.g. `TextItem.boundingRect()` returns empty

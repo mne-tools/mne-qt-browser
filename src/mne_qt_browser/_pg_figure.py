@@ -1255,10 +1255,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                             np.searchsorted(self.mne.times, x),
                             len(self.mne.times) - 1,
                         )
-                        if self.mne.data_precomputed:
-                            data = self.mne.data[trace.order_idx]
-                        else:
-                            data = self.mne.data[trace.range_idx]
+                        data = self.mne.data[trace.range_idx]
                         yvalue = data[idx]
                         yshown = yvalue + trace.ypos
                         self.mne.crosshair.set_data(x, yshown)
@@ -1660,7 +1657,16 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
             # get start/stop samples
             start, stop = self._get_start_stop()
             self.mne.times = self.mne.global_times[start:stop]
-            data = self.mne.global_data[:, start:stop]
+            # Only the shown channels are processed (as without precomputation),
+            # everything below is per-view work that runs on every scroll.
+            # global_data is in ch_order, so map the picks to its rows
+            lookup = np.zeros(len(self.mne.ch_names), int)
+            lookup[self.mne.ch_order] = np.arange(len(self.mne.ch_order))
+            rows = lookup[self.mne.picks]
+            if len(rows) and np.array_equal(rows, np.arange(rows[0], rows[-1] + 1)):
+                rows = slice(rows[0], rows[-1] + 1)  # the usual case: cheaper copy
+            # always a copy, so that it can be modified in place
+            data = np.array(self.mne.global_data[rows, start:stop])
 
             # remove DC locally but keep track of the offset
             if self.mne.remove_dc:
@@ -1673,14 +1679,15 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                         "ignore", "Mean of empty slice", RuntimeWarning
                     )
                     dc_offset = np.nanmean(data, axis=1, keepdims=True)
-                data = data - dc_offset
+                data -= dc_offset
             else:
                 dc_offset = None
 
             # Scale here rather than in LoadThread so that stim channels and
             # self.mne.scalings changes behave as they do without precomputation
-            norms = self._get_display_norms(self.mne.ch_order, data)[:, np.newaxis]
-            self.mne.data = data / norms
+            norms = self._get_display_norms(self.mne.picks, data)[:, np.newaxis]
+            data /= norms
+            self.mne.data = data
             self.mne.zero_line_offset = (
                 None if dc_offset is None else -(dc_offset / norms)[:, 0]
             )
