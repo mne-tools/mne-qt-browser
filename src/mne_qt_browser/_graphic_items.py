@@ -405,14 +405,14 @@ class BaseScaleBar:  # noqa: D101
         if self._is_visible():
             if self.ypos is None:
                 self._get_ypos()
-            self._set_position(self.mne.t_start, self.ypos)
+            self._set_position(self.mne.t_start - self.mne.first_time, self.ypos)
 
     def update_y_position(self):
         """Update y-position of scalebar."""
         if self._is_visible():
             self.setVisible(True)
             self._get_ypos()
-            self._set_position(self.mne.t_start, self.ypos)
+            self._set_position(self.mne.t_start - self.mne.first_time, self.ypos)
         else:
             self.setVisible(False)
 
@@ -1023,6 +1023,8 @@ class VLineLabel(InfLineLabel):
             search_val = value % self.line.mne.epoch_dur
             t_idx = np.searchsorted(t_vals_abs, search_val)
             value = self.line.mne.inst.times[t_idx]
+        else:
+            value += self.line.mne.first_time
         self.setText(self.format.format(value=value))
         self.updatePosition()
 

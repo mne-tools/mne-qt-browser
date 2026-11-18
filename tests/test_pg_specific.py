@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 from mne.utils import check_version
 from numpy.testing import assert_allclose, assert_array_equal
-from qtpy.QtCore import Qt
+from qtpy.QtCore import QPointF, Qt
 from qtpy.QtGui import QFontMetrics
 from qtpy.QtTest import QTest
 
@@ -984,6 +984,94 @@ def _wait_precompute(fig):
             return
         QTest.qWait(100)
     raise AssertionError("Precomputation did not finish")
+
+
+def _check_view_start(fig, start, offset):
+    """Check everything that follows the start of the view (in plot coords)."""
+    # as in the matplotlib backend, these are displayed (offset) times
+    assert fig.mne.first_time == offset
+    assert_allclose(fig.mne.t_start, start + offset)
+    assert_allclose(fig.mne.viewbox.viewRange()[0][0], start)
+    assert_allclose(fig.mne.scalebars["eeg"].line().x1(), start)
+    assert_allclose(fig.mne.scalebar_texts["eeg"].pos().x(), start)
+    bar = fig.mne.overview_bar
+    assert_allclose(
+        bar.viewrange_rect.rect().left(), bar.width() * start / fig.mne.xmax
+    )
+
+
+@pytest.mark.parametrize("show_first_samp", (False, True))
+@pytest.mark.parametrize("precompute", (False, True))
+def test_show_first_samp(pg_backend, precompute, show_first_samp):
+    """Test the time reference of traces, events, annotations, and labels."""
+    raw = mne.io.RawArray(
+        np.sin(np.arange(120.0))[np.newaxis] * 1e-6,
+        mne.create_info(["EEG 001"], 10.0, "eeg"),
+        first_samp=54,  # not a multiple of the tick spacing
+    )
+    raw.set_annotations(mne.Annotations(3.0, 1.0, "test"))
+    raw.set_meas_date(0.0)
+    fig = raw.plot(
+        start=3.0,
+        duration=1.0,
+        events=np.array([[raw.first_samp + 30, 0, 1]]),
+        show_first_samp=show_first_samp,
+        precompute=precompute,
+        splash=False,
+    )
+    fig.test_mode = True
+    if precompute:
+        _wait_precompute(fig)
+    offset = raw.first_time if show_first_samp else 0
+    _check_view_start(fig, 3.0, offset)
+    assert fig._get_start_stop() == (30, 40)
+    assert_allclose(fig.mne.viewbox.viewRange()[0], (3.0, 4.0))
+    assert fig.mne.regions[0].isVisible()
+    # mne < 1.10 pads the shown range with two extra samples (not when precomputed)
+    pad = 0 if precompute or check_version("mne", "1.10") else 2
+    assert_allclose(fig.mne.traces[0].xData, raw.times[30 : 40 + pad])
+    assert_allclose(fig.mne.event_lines[0].value(), 3.0)
+    assert_allclose(fig.mne.regions[0].getRegion(), (3.0, 4.0))
+    display_time = 3.5 + offset
+    assert fig.mne.time_axis.tickStrings([3.5], 1, 0.5) == [str(display_time)]
+    # ticks sit on round displayed times, and are labeled with where they are
+    for spacing, values in fig.mne.time_axis.tickValues(0.0, 10.0, 1000):
+        assert len(values)
+        values = np.array(values)
+        assert_allclose(
+            np.round((values + offset) / spacing) * spacing, values + offset
+        )
+        labels = fig.mne.time_axis.tickStrings(values, 1, spacing)
+        assert_allclose([float(label) for label in labels], values + offset)
+    fig._add_vline(3.5)
+    assert fig.mne.vline.label.toPlainText() == f"{display_time:.3f} s"
+    fig.mne.crosshair_enabled = True
+    fig._mouse_moved(fig.mne.viewbox.mapViewToScene(QPointF(3.5, 1.0)))
+    assert fig.statusBar().currentMessage().startswith(f"x={display_time:.3f} s,")
+    # annotation dock shows and takes displayed times
+    fig._fake_keypress("a")
+    dock = fig.mne.fig_annotation
+    fig._fake_click((3.5, 1.0), xform="data")
+    assert_allclose(dock.start_bx.value(), 3.0 + offset)
+    assert_allclose(dock.stop_bx.value(), 4.0 + offset)
+    dock.start_bx.setValue(3.2 + offset)
+    assert_allclose(fig.mne.regions[0].getRegion(), (3.2, 4.0))
+    dock.stop_bx.setValue(3.8 + offset)
+    assert_allclose(fig.mne.regions[0].getRegion(), (3.2, 3.8))
+    assert_allclose(raw.annotations.onset, 3.2 + raw.first_time)
+    assert_allclose(raw.annotations.duration, 0.6)
+    fig._fake_keypress("a")
+    fig.mne.time_format = "clock"
+    fig.mne.time_axis.tickValues(3.0, 4.0, 1000)
+    assert fig.mne.time_axis.tickStrings([3.5], 1, 0.5) == ["00:00:08.9"]
+    fig.hscroll("+full")
+    _check_view_start(fig, 4.0, offset)
+    assert not fig.mne.regions[0].isVisible()
+    fig.resize(fig.width() + 100, fig.height())  # the overview bar follows
+    QTest.qWait(100)
+    _check_view_start(fig, 4.0, offset)
+    assert fig._get_start_stop() == (40, 50)
+    assert_allclose(fig.mne.traces[0].xData, raw.times[40 : 50 + pad])
 
 
 def _trace_alphas(fig):

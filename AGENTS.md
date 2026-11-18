@@ -69,6 +69,10 @@ in your summary rather than quietly working around it.
   reads or writes must live there under the name it expects.
 - The authoritative view range is `self.mne.viewbox.viewRange()`; `mne.t_start` and
   `mne.duration` are caches refreshed in `_xrange_changed`.
+- Plot coordinates are zero-based seconds from the first sample. `mne.t_start` is a
+  *displayed* time, `mne.first_time` (nonzero with `show_first_samp=True`) later than the
+  view start, as in the matplotlib backend: subtract `mne.first_time` before using
+  `mne.t_start` as a plot coordinate, and add it to any time shown to the user.
 - Redraw path: `plt.setXRange()` → `sigXRangeChanged` → `_xrange_changed` →
   `_redraw(update_data=True)` plus scale bars, overview bar, annotations. Everything on
   that path runs on every scroll, so keep per-item work there cheap.

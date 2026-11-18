@@ -102,8 +102,8 @@ class AnnotationDock(QDockWidget):
         layout.addWidget(QLabel("Start:"))
         self.start_bx = QDoubleSpinBox()
         self.start_bx.setDecimals(time_decimals)
-        self.start_bx.setMinimum(0)
-        self.start_bx.setMaximum(self.mne.xmax)
+        self.start_bx.setMinimum(self.mne.first_time)
+        self.start_bx.setMaximum(self.mne.first_time + self.mne.xmax)
         self.start_bx.setSingleStep(0.05)
         self.start_bx.valueChanged.connect(self._start_changed)
         layout.addWidget(self.start_bx)
@@ -111,8 +111,10 @@ class AnnotationDock(QDockWidget):
         layout.addWidget(QLabel("Stop:"))
         self.stop_bx = QDoubleSpinBox()
         self.stop_bx.setDecimals(time_decimals)
-        self.stop_bx.setMinimum(0)
-        self.stop_bx.setMaximum(self.mne.xmax + 1 / self.mne.info["sfreq"])
+        self.stop_bx.setMinimum(self.mne.first_time)
+        self.stop_bx.setMaximum(
+            self.mne.first_time + self.mne.xmax + 1 / self.mne.info["sfreq"]
+        )
         self.stop_bx.setSingleStep(0.05)
         self.stop_bx.valueChanged.connect(self._stop_changed)
         layout.addWidget(self.stop_bx)
@@ -322,7 +324,7 @@ class AnnotationDock(QDockWidget):
                 region.setZValue(1)
 
     def _start_changed(self):
-        start = self.start_bx.value()
+        start = self.start_bx.value() - self.mne.first_time
         sel_region = self.mne.selected_region
         stop = sel_region.getRegion()[1]
         if start <= stop:
@@ -337,10 +339,10 @@ class AnnotationDock(QDockWidget):
                 icon=QMessageBox.Critical,
                 modal=False,
             )
-            self.start_bx.setValue(sel_region.getRegion()[0])
+            self.start_bx.setValue(sel_region.getRegion()[0] + self.mne.first_time)
 
     def _stop_changed(self):
-        stop = self.stop_bx.value()
+        stop = self.stop_bx.value() - self.mne.first_time
         sel_region = self.mne.selected_region
         start = sel_region.getRegion()[0]
         if start <= stop:
@@ -351,7 +353,7 @@ class AnnotationDock(QDockWidget):
                 info_text="Stop can't be smaller than Start!",
                 icon=QMessageBox.Critical,
             )
-            self.stop_bx.setValue(sel_region.getRegion()[1])
+            self.stop_bx.setValue(sel_region.getRegion()[1] + self.mne.first_time)
 
     def _set_color(self):
         curr_descr = self.description_cmbx.currentText()
@@ -373,7 +375,7 @@ class AnnotationDock(QDockWidget):
 
     def update_values(self, region):
         """Update spinbox values from region."""
-        rgn = region.getRegion()
+        rgn = [t + self.mne.first_time for t in region.getRegion()]
         self.start_bx.setEnabled(True)
         self.stop_bx.setEnabled(True)
         with QSignalBlocker(self.start_bx):
@@ -686,7 +688,16 @@ class TimeAxis(AxisItem):
         else:
             # Save _spacing for later use
             self._spacing = self.tickSpacing(minVal, maxVal, size)
-            return super().tickValues(minVal, maxVal, size)
+            if self.mne.time_format == "clock":
+                return super().tickValues(minVal, maxVal, size)
+            # Put the ticks on round *displayed* times (see tickStrings)
+            offset = self.mne.first_time
+            return [
+                (spacing, [value - offset for value in values])
+                for spacing, values in super().tickValues(
+                    minVal + offset, maxVal + offset, size
+                )
+            ]
 
     def tickStrings(self, values, scale, spacing):
         """Customize strings of axis values."""
@@ -710,6 +721,7 @@ class TimeAxis(AxisItem):
                     val_str += f"{round(val_time.microsecond * 1e-6, digits)}"[1:]
                 tick_strings.append(val_str)
         else:
+            values = np.asarray(values) + self.mne.first_time
             tick_strings = super().tickStrings(values, scale, spacing)
 
         return tick_strings
@@ -964,16 +976,17 @@ class OverviewBar(QGraphicsView):
 
     def update_viewrange(self):
         """Update representation of viewrange."""
+        t_start = self.mne.t_start - self.mne.first_time
         if self.mne.butterfly:
             # all channels are shown, and the overview bar is scaled by channel count
-            top_left = self._mapFromData(self.mne.t_start, 0)
+            top_left = self._mapFromData(t_start, 0)
             bottom_right = self._mapFromData(
-                self.mne.t_start + self.mne.duration, len(self.mne.ch_order)
+                t_start + self.mne.duration, len(self.mne.ch_order)
             )
         else:
-            top_left = self._mapFromData(self.mne.t_start, self.mne.ch_start)
+            top_left = self._mapFromData(t_start, self.mne.ch_start)
             bottom_right = self._mapFromData(
-                self.mne.t_start + self.mne.duration,
+                t_start + self.mne.duration,
                 self.mne.ch_start + self.mne.n_channels,
             )
         rect = QRectF(top_left, bottom_right)
@@ -1114,9 +1127,10 @@ class OverviewBar(QGraphicsView):
             self.v_line.setLine(QLineF(top_left, bottom_right))
 
         # Update viewrange rect
-        top_left = self._mapFromData(self.mne.t_start, self.mne.ch_start)
+        t_start = self.mne.t_start - self.mne.first_time
+        top_left = self._mapFromData(t_start, self.mne.ch_start)
         bottom_right = self._mapFromData(
-            self.mne.t_start + self.mne.duration,
+            t_start + self.mne.duration,
             self.mne.ch_start + self.mne.n_channels,
         )
         self.viewrange_rect.setRect(QRectF(top_left, bottom_right))
