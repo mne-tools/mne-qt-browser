@@ -51,7 +51,7 @@ in your summary rather than quietly working around it.
 - `src/mne_qt_browser/_pg_figure.py` — `MNEQtBrowser(BrowserBase, QMainWindow)`: builds the
   plot, wires signals, toolbar/keyboard actions, annotation glue, and the `_fake_click`,
   `_fake_keypress`, `_fake_scroll` helpers that the tests drive it with.
-- `_graphic_items.py` — items *inside* the plot: `DataTrace`, `AnnotRegion`,
+- `_graphic_items.py` — items *inside* the plot: `DataTrace`, `AnnotRegion` (lazily),
   `SingleChannelAnnot`, scale bars, `VLine`, `EventLine`, `Crosshair`. Drawing order is
   set by the `_Z_*` constants at the top of the file.
 - `_widgets.py` — Qt widgets *around* the plot: `BrowserView`, `RawViewBox`,
@@ -76,6 +76,12 @@ in your summary rather than quietly working around it.
 - Redraw path: `plt.setXRange()` → `sigXRangeChanged` → `_xrange_changed` →
   `_redraw(update_data=True)` plus scale bars, overview bar, annotations. Everything on
   that path runs on every scroll, so keep per-item work there cheap.
+- `mne.regions` holds an `AnnotRegion` for every annotation, but that is a plain `QObject`:
+  its graphics items (`.region`, a `LinearRegionItem`, plus `.label_item` and
+  `.single_channel_annots`) are created the first time it is shown, and are in the plot
+  only while shown (`update_visible`). Thousands of regions cost seconds otherwise. Use
+  the `AnnotRegion` methods and state (`getRegion`, `setRegion`, `isVisible`, `ch_names`,
+  …) for anything that should work off screen, since touching those three creates the items.
 - **A resize emits no range signal.** Anything positioned in pixel units (text rows, label
   offsets) needs `viewbox.sigResized` too, or it silently goes stale until the next scroll.
 - Qt geometry read before layout is stale — e.g. `TextItem.boundingRect()` returns empty

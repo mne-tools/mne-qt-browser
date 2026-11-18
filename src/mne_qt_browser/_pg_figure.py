@@ -1755,7 +1755,14 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
     # ANNOTATIONS
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     def _add_region(
-        self, plot_onset, duration, description, *, ch_names=None, region=None
+        self,
+        plot_onset,
+        duration,
+        description,
+        *,
+        ch_names=None,
+        region=None,
+        visible=True,
     ):
         if not region:
             region = AnnotRegion(
@@ -1764,23 +1771,22 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
                 ch_names=ch_names,
                 values=(plot_onset, plot_onset + duration),
                 weakmain=weakref.ref(self),
+                visible=visible,
             )
-        # Add region to list and plot
+        # Add region to list (it is in the plot while it is visible)
         self.mne.regions.append(region)
 
         # Connect signals of region
         region.regionChangeFinished.connect(self._region_changed)
         region.gotSelected.connect(self._region_selected)
         region.removeRequested.connect(self._remove_region)
-        self._update_label_positions()
+        if visible:  # otherwise there is no label to place
+            self._update_label_positions()
         return region
 
     def _remove_region(self, region, from_annot=True):
         # Remove from shown regions
-        if region.label_item in self.mne.plt.items:
-            self.mne.plt.removeItem(region.label_item)
-        if region in self.mne.plt.items:
-            self.mne.plt.removeItem(region)
+        region.update_visible(False)
 
         # Remove from all regions
         if region in self.mne.regions:
@@ -1842,8 +1848,8 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         self.mne.overview_bar.update_annotations()
 
     def _draw_annotations(self):
-        # All regions are constantly added to the scene and handled by Qt, which is
-        # faster than handling adding/removing in Python
+        # Regions are created and added to the scene when they come into view (see
+        # _update_regions_visible)
         pass
 
     def _init_annot_mode(self):
@@ -1872,10 +1878,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
             duration = annot["duration"]
             description = annot["description"]
             ch_names = annot["ch_names"] if "ch_names" in annot else None
-            region = self._add_region(
-                plot_onset, duration, description, ch_names=ch_names
+            # The regions start out hidden, and thus not in the plot: adding them
+            # all takes several times as long as creating them, and placing the
+            # labels after each one would be quadratic. The ones in view are shown
+            # by _update_regions_visible.
+            self._add_region(
+                plot_onset, duration, description, ch_names=ch_names, visible=False
             )
-            region.update_visible(False)
 
         # Initialize showing annotation widgets
         self._change_annot_mode()
@@ -1936,9 +1945,7 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         # regions only exist once annotation mode has been initialized (never for
         # epochs)
         regions = [
-            region
-            for region in getattr(self.mne, "regions", [])
-            if region.label_item.isVisible()
+            region for region in getattr(self.mne, "regions", []) if region.isVisible()
         ]
         if not regions:
             return
