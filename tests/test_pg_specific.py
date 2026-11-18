@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 from mne.utils import check_version
 from numpy.testing import assert_allclose, assert_array_equal
+from pyqtgraph import LinearRegionItem
 from qtpy.QtCore import QPointF, Qt
 from qtpy.QtGui import QFontMetrics
 from qtpy.QtTest import QTest
@@ -173,7 +174,7 @@ def test_annotation_label_position(raw_orig, pg_backend):
     fig = raw_orig.plot(duration=5)
     fig.test_mode = True
     region = fig.mne.regions[0]
-    assert region.toolTip() == "A"
+    assert region.region.toolTip() == "A"
 
     # the labels of A and B both sit at 3.5 s, so they are stacked (A at the bottom,
     # which is ymax on the inverted axis); C's label at 4 s does not touch them
@@ -242,7 +243,7 @@ def test_annotation_label_position(raw_orig, pg_backend):
 
     # and the tooltip follows renaming
     region.update_description("BAD_test")
-    assert region.toolTip() == "BAD_test"
+    assert region.region.toolTip() == "BAD_test"
 
 
 def test_annotations_interactions(raw_orig, pg_backend):
@@ -1323,3 +1324,69 @@ def test_one_repaint_per_scroll(raw_orig, pg_backend, qtbot):
             _n_repaints(key)
         counts[key] = _n_repaints(key)
     assert counts == dict.fromkeys(counts, 1)
+
+
+def test_annotation_regions_lazy(raw_orig, pg_backend):
+    """Test that annotation items are created when shown and in the plot while shown."""
+    raw = raw_orig.copy().crop(tmax=20.0)
+    onsets = np.arange(0.1, 19.5, 0.25)
+    ch_names = [[]] * len(onsets)
+    ch_names[61] = raw.ch_names[1:3]  # at 15.35 s
+    desc = ["a", "b"] * (len(onsets) // 2)
+    raw.set_annotations(mne.Annotations(onsets, 0.1, desc, ch_names=ch_names))
+    fig = raw.plot(duration=2.0)
+    fig.test_mode = True
+    regions, plt = fig.mne.regions, fig.mne.plt
+    created = np.zeros(len(onsets), bool)
+
+    def _check(t_start):
+        shown = (onsets + 0.1 >= t_start) & (onsets <= t_start + 2)
+        created[:] |= shown
+        # thousands of annotations should not cost four graphics items each up front
+        assert [region._region is not None for region in regions] == created.tolist()
+        for region, want in zip(regions, shown.tolist()):
+            assert region.isVisible() is want
+            if region._region is not None:
+                items = [region.region, region.label_item]
+                items += list(region.single_channel_annots.values())
+                assert [item in plt.items for item in items] == [want] * len(items)
+
+    def _n_in_plot():
+        return sum(isinstance(item, LinearRegionItem) for item in plt.items)
+
+    _check(0.0)
+    # what does not need drawing works without the items ...
+    fig._toggle_annotation_fig()
+    far, chan = regions[60], regions[61]  # at 15.1 s and 15.35 s
+    far.select(True)
+    fig.mne.fig_annotation.stop_bx.setValue(15.3)
+    assert_allclose(raw.annotations.duration[60], 0.2)
+    far.setRegion((0.05, -1.0))  # sorted and clipped, like a shown one would be
+    assert_allclose(far.getRegion(), (0.0, 0.05))
+    far.setRegion((15.1, 15.3))
+    assert chan.ch_names == raw.ch_names[1:3]
+    _check(0.0)
+    # ... and they come up in the right state when scrolled to
+    plt.setXRange(14.05, 16.05, padding=0)
+    _check(14.05)
+    assert_allclose(far.region.getRegion(), (15.1, 15.3))
+    assert far.label_item.toPlainText() == far.region.toolTip() == "a"
+    assert far.label_item.fill.color() == far.hover_color  # shown as selected
+    assert regions[59].label_item.fill.color() == regions[59].label_fill
+    assert far.region.zValue() == 2 and regions[59].region.zValue() == 1
+    assert list(chan.single_channel_annots) == raw.ch_names[1:3]
+    fig._toggle_annotations()  # hide and show
+    assert _n_in_plot() == 0 and not any(region.isVisible() for region in regions)
+    fig._toggle_annotations()
+    _check(14.05)
+    # merging with and removing regions, shown or not
+    regions[58].setRegion((14.6, 17.15))  # "a", reaches the ones from 15.1 to 17.1
+    assert_allclose(regions[58].getRegion(), (14.6, 17.2))
+    fig._remove_region(regions[-1])
+    assert len(regions) == len(raw.annotations) == len(onsets) - 6
+    assert _n_in_plot() == sum(region.isVisible() for region in regions) == 6
+    n_items = len(plt.items)
+    chan.remove()
+    assert len(plt.items) == n_items - 4  # region, label, two channels
+    assert fig._add_region(15.5, 0.1, "b").region in plt.items  # new ones are shown
+    fig.close()

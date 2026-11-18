@@ -19,7 +19,7 @@ from pyqtgraph import (
     TextItem,
     mkBrush,
 )
-from qtpy.QtCore import QLineF, QSignalBlocker, Qt, Signal
+from qtpy.QtCore import QLineF, QObject, QSignalBlocker, Qt, Signal
 from qtpy.QtGui import QTransform
 from qtpy.QtWidgets import QGraphicsLineItem
 
@@ -60,210 +60,35 @@ def propagate_to_children(method):  # noqa: D103
     return wrapper
 
 
-class AnnotRegion(LinearRegionItem):
-    """Graphics object for annotations."""
+def _set_in_plot(plt, item, in_plot):
+    """Add an item to the plot or remove it from it, as needed."""
+    if in_plot == (item.scene() is None):
+        if in_plot:
+            plt.addItem(item, ignoreBounds=True)
+        else:
+            plt.removeItem(item)
 
-    regionChangeFinished = Signal(object)
-    gotSelected = Signal(object)
-    removeRequested = Signal(object)
-    removeSingleChannelAnnots = Signal(object)
-    sigToggleVisibility = Signal(bool)
-    sigUpdateColor = Signal(object)  # can be str or tuple
 
-    def __init__(self, mne, description, values, weakmain, ch_names=None):
+class _AnnotRegionItem(LinearRegionItem):
+    """The region of an annotation in the plot (see ``AnnotRegion``)."""
+
+    def __init__(self, annot, values, bounds):
         super().__init__(
             values=values,
             orientation="vertical",
             movable=True,
             swapMode="sort",
-            bounds=(0, mne.xmax + 1 / mne.info["sfreq"]),
+            bounds=bounds,
         )
-        # Set default z-value to 0 to be behind other items in scene
-        self.setZValue(0)
-
-        self.sigRegionChangeFinished.connect(self._region_changed)
-        self.weakmain = weakmain
-        self.mne = mne
-        self.description = description
-        self.old_onset = values[0]
-        self.selected = False
-
-        self.label_item = TextItem(text=description, anchor=(0.5, 0.5))
-        self.label_item.setFont(_q_font(10, bold=True))
-        self.label_item.setZValue(_Z_ANNOT_LABEL)  # stacked labels can sit over traces
-        self.setToolTip(description)
-        self.sigRegionChanged.connect(self._update_label_positions)
-
-        self.update_color(all_channels=(not ch_names))
-
-        self.single_channel_annots = {}
-        if ch_names is not None and len(ch_names):
-            for ch in ch_names:
-                self._add_single_channel_annot(ch)
-
-        self.mne.plt.addItem(self, ignoreBounds=True)
-        self.mne.plt.addItem(self.label_item, ignoreBounds=True)
-
-    def _region_changed(self):
-        # Check for overlapping regions
-        overlap_has_sca = []
-        overlapping_regions = list()
-        for region in self.mne.regions:
-            if region.description != self.description or id(self) == id(region):
-                continue
-            values = region.getRegion()
-            if (
-                any(self.getRegion()[0] <= val <= self.getRegion()[1] for val in values)
-                or (values[0] <= self.getRegion()[0] <= values[1])
-                and (values[0] <= self.getRegion()[1] <= values[1])
-            ):
-                overlapping_regions.append(region)
-                overlap_has_sca.append(len(region.single_channel_annots) > 0)
-
-        # Terminate if this or an overlapping region has channel-specific annotations
-        if (len(self.single_channel_annots) > 0 or any(overlap_has_sca)) and len(
-            overlapping_regions
-        ) > 0:
-            dur = self.getRegion()[1] - self.getRegion()[0]
-            self.setRegion((self.old_onset, self.old_onset + dur))
-            warn("Can not combine channel-based annotations with any other annotation.")
-            return
-
-        # figure out new boundaries
-        regions_ = np.array(
-            [region.getRegion() for region in overlapping_regions] + [self.getRegion()]
-        )
-
-        self.regionChangeFinished.emit(self)
-
-        onset = np.min(regions_[:, 0])
-        offset = np.max(regions_[:, 1])
-
-        self.old_onset = onset
-
-        logger.debug(f"New {self.description} region: {onset:.2f} - {offset:.2f}")
-        # remove overlapping regions
-        for region in overlapping_regions:
-            self.weakmain()._remove_region(region, from_annot=False)
-        # re-set while blocking the signal to avoid re-running this function
-        with QSignalBlocker(self):
-            self.setRegion((onset, offset))
-
-        self._update_label_positions()
-
-    def _add_single_channel_annot(self, ch_name):
-        self.single_channel_annots[ch_name] = SingleChannelAnnot(
-            self.mne, self.weakmain, self, ch_name
-        )
-
-    def _remove_single_channel_annot(self, ch_name):
-        self.single_channel_annots[ch_name].remove()
-        self.single_channel_annots.pop(ch_name)
-
-    def _toggle_single_channel_annot(self, ch_name, update_color=True):
-        """Add or remove single channel annotations."""
-        # Exit if MNE-Python not updated to support shift-click
-        if not hasattr(self.weakmain(), "_toggle_single_channel_annotation"):
-            warn(
-                "MNE must be updated to version 1.8 or above to "
-                "support add/remove channels from annotation."
-            )
-            return
-
-        region_idx = self.weakmain()._get_onset_idx(self.getRegion()[0])
-        self.weakmain()._toggle_single_channel_annotation(ch_name, region_idx)
-        if ch_name not in self.single_channel_annots.keys():
-            self._add_single_channel_annot(ch_name)
-        else:
-            self._remove_single_channel_annot(ch_name)
-
-        if update_color:
-            self.update_color(
-                all_channels=(not list(self.single_channel_annots.keys()))
-            )
-
-    def update_color(self, all_channels=True):
-        """Update color of annotation region.
-
-        Parameters
-        ----------
-        all_channels : bool
-            all_channels should be False for channel specific annotations. These
-            annotations will be more transparent with a dashed outline.
-        """
-        color_string = self.mne.annotation_segment_colors[self.description]
-        self.base_color = _get_color(color_string, self.mne.dark)
-        self.hover_color = _get_color(color_string, self.mne.dark)
-        self.text_color = _get_color(color_string, self.mne.dark)
-        self.base_color.setAlpha(75 if all_channels else 15)
-        self.hover_color.setAlpha(150)
-        self.text_color.setAlpha(255)
-        kwargs = dict(color=self.hover_color, width=2)
-        if not all_channels:
-            color = _get_color(color_string, self.mne.dark)
-            color.setAlpha(75)
-            kwargs.update(
-                style=Qt.CustomDashLine,
-                cap=Qt.FlatCap,
-                dash=[8, 8],
-                color=color,
-            )
-        self.line_pen = self.mne.mkPen(**kwargs)
-        self.hover_pen = self.mne.mkPen(color=self.text_color, width=2)
-        self.setBrush(self.base_color)
-        self.setHoverBrush(self.hover_color)
-        # labels can land on traces once stacked, so back them with the plot background
-        self.label_fill = _get_color(getattr(self.mne, "bgcolor", "w"), self.mne.dark)
-        self.label_item.setColor(self.text_color)
-        if not self.selected:
-            self.label_item.fill = mkBrush(self.label_fill)
-        for line in self.lines:
-            line.setPen(self.line_pen)
-            line.setHoverPen(self.hover_pen)
-        self.update()
-        self.sigUpdateColor.emit(color_string)
-
-    def update_description(self, description):
-        """Update description of annotation region."""
-        self.description = description
-        self.label_item.setText(description)
-        self.label_item.update()
-        self.setToolTip(description)
-        self._update_label_positions()
-
-    def update_visible(self, visible):
-        """Update if annotation region is visible."""
-        self.setVisible(visible)
-        self.label_item.setVisible(visible)
-        self.sigToggleVisibility.emit(visible)
-
-    def remove(self):
-        """Remove annotation region."""
-        self.removeSingleChannelAnnots.emit(self)
-        self.removeRequested.emit(self)
-        vb = self.mne.viewbox
-        if vb and self.label_item in vb.addedItems:
-            vb.removeItem(self.label_item)
-
-    def select(self, selected):
-        """Update select state of annotation region."""
-        self.selected = selected
-        if selected:
-            self.label_item.setColor("w")
-            self.label_item.fill = mkBrush(self.hover_color)
-            self.gotSelected.emit(self)
-        else:
-            self.label_item.setColor(self.text_color)
-            self.label_item.fill = mkBrush(self.label_fill)
-        logger.debug(
-            f"{'Selected' if self.selected else 'Deselected'} annotation: "
-            f"{self.description}"
-        )
-        self.label_item.update()
+        self.weakannot = weakref.ref(annot)
+        self.mne = annot.mne
 
     def mouseClickEvent(self, event):
         """Customize mouse click events."""
-        if self.mne.annotation_mode and (
+        annot = self.weakannot()
+        if annot is None:
+            event.ignore()
+        elif self.mne.annotation_mode and (
             event.button() == Qt.LeftButton and event.modifiers() & Qt.ShiftModifier
         ):
             scene_pos = self.mapToScene(event.pos())
@@ -272,17 +97,17 @@ class AnnotRegion(LinearRegionItem):
                 trace_path = t.shape()
                 trace_point = t.mapFromScene(scene_pos)
                 if trace_path.contains(trace_point):
-                    self._toggle_single_channel_annot(t.ch_name)
+                    annot._toggle_single_channel_annot(t.ch_name)
                     event.accept()
                     break
 
         elif self.mne.annotation_mode:
             if event.button() == Qt.LeftButton and self.movable:
                 logger.debug(f"Mouse event in annotation mode for {event.pos()}...")
-                self.select(True)
+                annot.select(True)
                 event.accept()
             elif event.button() == Qt.RightButton and self.movable:
-                self.remove()
+                annot.remove()
                 # the annotation removed should be the one on top of all others, which
                 # should correspond to the one of the type currently selected and with
                 # the highest z-value
@@ -335,6 +160,297 @@ class AnnotRegion(LinearRegionItem):
             self.sigRegionChangeFinished.emit(self)
         else:
             self.sigRegionChanged.emit(self)
+
+
+class AnnotRegion(QObject):
+    """An annotation, and its graphics items once it has been shown.
+
+    Every annotation has one of these (in ``mne.regions``), but the items that draw
+    it are created the first time it is shown, by ``region`` (which ``label_item``
+    and ``single_channel_annots`` go through): creating four graphics items for each
+    of thousands of annotations takes seconds. So use the methods here rather than
+    those of ``region`` for anything that should not need the items to exist.
+
+    Only the shown regions are in the plot (see ``update_visible``): setting up the
+    scene with thousands of regions in it takes several times as long as creating
+    them does.
+    """
+
+    regionChangeFinished = Signal(object)
+    gotSelected = Signal(object)
+    removeRequested = Signal(object)
+    removeSingleChannelAnnots = Signal(object)
+    sigToggleVisibility = Signal(bool)
+    sigUpdateColor = Signal(object)  # can be str or tuple
+
+    def __init__(
+        self, mne, description, values, weakmain, ch_names=None, *, visible=True
+    ):
+        super().__init__()
+        self.weakmain = weakmain
+        self.mne = mne
+        self.description = description
+        self.old_onset = values[0]
+        self.selected = False
+        self.movable = True
+        self.ch_names = list() if ch_names is None else list(ch_names)
+        self._bounds = (0, mne.xmax + 1 / mne.info["sfreq"])
+        self._values = self._clip_values(values)
+        # Set default z-value to 0 to be behind other items in scene
+        self._z_value = 0
+        self._all_channels = not self.ch_names
+        self._visible = False
+        self._region = None
+        self.update_visible(visible)
+
+    @property
+    def region(self):
+        """The region in the plot (created along with its label when first used)."""
+        if self._region is None:
+            self._region = region = _AnnotRegionItem(self, self._values, self._bounds)
+            region.setZValue(self._z_value)
+            region.setMovable(self.movable)
+            region.setToolTip(self.description)
+            region.sigRegionChangeFinished.connect(self._item_change_finished)
+            region.sigRegionChanged.connect(self._item_changed)
+            self._label_item = TextItem(text=self.description, anchor=(0.5, 0.5))
+            self._label_item.setFont(_q_font(10, bold=True))
+            # stacked labels can sit over traces
+            self._label_item.setZValue(_Z_ANNOT_LABEL)
+            self._single_channel_annots = dict()
+            self.update_color(all_channels=self._all_channels)
+            self._update_label_selected()
+            for ch_name in self.ch_names:
+                self._single_channel_annots[ch_name] = SingleChannelAnnot(
+                    self.mne, self.weakmain, self, ch_name
+                )
+        return self._region
+
+    @property
+    def label_item(self):
+        """The label in the plot (created along with the region)."""
+        self.region  # noqa: B018
+        return self._label_item
+
+    @property
+    def single_channel_annots(self):
+        """The channel patches in the plot (created along with the region)."""
+        self.region  # noqa: B018
+        return self._single_channel_annots
+
+    def _clip_values(self, values):
+        # what LinearRegionItem(swapMode="sort", bounds=...) does with them
+        return tuple(sorted(float(np.clip(val, *self._bounds)) for val in values))
+
+    def getRegion(self):  # noqa: N802
+        """Get the (start, stop) of the annotation in plot time."""
+        if self._region is None:
+            return self._values
+        return self._region.getRegion()
+
+    def setRegion(self, values):  # noqa: N802
+        """Set the (start, stop) of the annotation in plot time."""
+        if self._region is not None:
+            self._region.setRegion(values)
+            return
+        values = self._clip_values(values)
+        if values != self._values:
+            self._values = values
+            self._item_changed()
+            self._item_change_finished()
+
+    def isVisible(self):  # noqa: N802
+        """Get whether the annotation is shown."""
+        return self._visible
+
+    def setZValue(self, z_value):  # noqa: N802
+        """Set the z-value of the region."""
+        self._z_value = z_value
+        if self._region is not None:
+            self._region.setZValue(z_value)
+
+    def setMovable(self, movable):  # noqa: N802
+        """Set whether the region can be moved."""
+        self.movable = movable
+        if self._region is not None:
+            self._region.setMovable(movable)
+
+    def _item_changed(self, *args):
+        # (signals are blocked to change the region without the consequences)
+        if not self.signalsBlocked():
+            self._update_label_positions()
+
+    def _item_change_finished(self, *args):
+        if not self.signalsBlocked():
+            self._region_changed()
+
+    def _region_changed(self):
+        # Check for overlapping regions
+        overlap_has_sca = []
+        overlapping_regions = list()
+        for region in self.mne.regions:
+            if region.description != self.description or id(self) == id(region):
+                continue
+            values = region.getRegion()
+            if (
+                any(self.getRegion()[0] <= val <= self.getRegion()[1] for val in values)
+                or (values[0] <= self.getRegion()[0] <= values[1])
+                and (values[0] <= self.getRegion()[1] <= values[1])
+            ):
+                overlapping_regions.append(region)
+                overlap_has_sca.append(len(region.ch_names) > 0)
+
+        # Terminate if this or an overlapping region has channel-specific annotations
+        if (len(self.ch_names) > 0 or any(overlap_has_sca)) and len(
+            overlapping_regions
+        ) > 0:
+            dur = self.getRegion()[1] - self.getRegion()[0]
+            self.setRegion((self.old_onset, self.old_onset + dur))
+            warn("Can not combine channel-based annotations with any other annotation.")
+            return
+
+        # figure out new boundaries
+        regions_ = np.array(
+            [region.getRegion() for region in overlapping_regions] + [self.getRegion()]
+        )
+
+        self.regionChangeFinished.emit(self)
+
+        onset = np.min(regions_[:, 0])
+        offset = np.max(regions_[:, 1])
+
+        self.old_onset = onset
+
+        logger.debug(f"New {self.description} region: {onset:.2f} - {offset:.2f}")
+        # remove overlapping regions
+        for region in overlapping_regions:
+            self.weakmain()._remove_region(region, from_annot=False)
+        # re-set while blocking the signal to avoid re-running this function
+        with QSignalBlocker(self):
+            self.setRegion((onset, offset))
+
+        self._update_label_positions()
+
+    def _add_single_channel_annot(self, ch_name):
+        self.ch_names.append(ch_name)
+        if self._region is not None:
+            self._single_channel_annots[ch_name] = SingleChannelAnnot(
+                self.mne, self.weakmain, self, ch_name
+            )
+
+    def _remove_single_channel_annot(self, ch_name):
+        self.ch_names.remove(ch_name)
+        if self._region is not None:
+            self._single_channel_annots.pop(ch_name).remove()
+
+    def _toggle_single_channel_annot(self, ch_name, update_color=True):
+        """Add or remove single channel annotations."""
+        # Exit if MNE-Python not updated to support shift-click
+        if not hasattr(self.weakmain(), "_toggle_single_channel_annotation"):
+            warn(
+                "MNE must be updated to version 1.8 or above to "
+                "support add/remove channels from annotation."
+            )
+            return
+
+        region_idx = self.weakmain()._get_onset_idx(self.getRegion()[0])
+        self.weakmain()._toggle_single_channel_annotation(ch_name, region_idx)
+        if ch_name not in self.ch_names:
+            self._add_single_channel_annot(ch_name)
+        else:
+            self._remove_single_channel_annot(ch_name)
+
+        if update_color:
+            self.update_color(all_channels=(not self.ch_names))
+
+    def update_color(self, all_channels=True):
+        """Update color of annotation region.
+
+        Parameters
+        ----------
+        all_channels : bool
+            all_channels should be False for channel specific annotations. These
+            annotations will be more transparent with a dashed outline.
+        """
+        self._all_channels = all_channels
+        if self._region is None:  # done when it is created
+            return
+        color_string = self.mne.annotation_segment_colors[self.description]
+        self.base_color = _get_color(color_string, self.mne.dark)
+        self.hover_color = _get_color(color_string, self.mne.dark)
+        self.text_color = _get_color(color_string, self.mne.dark)
+        self.base_color.setAlpha(75 if all_channels else 15)
+        self.hover_color.setAlpha(150)
+        self.text_color.setAlpha(255)
+        kwargs = dict(color=self.hover_color, width=2)
+        if not all_channels:
+            color = _get_color(color_string, self.mne.dark)
+            color.setAlpha(75)
+            kwargs.update(
+                style=Qt.CustomDashLine,
+                cap=Qt.FlatCap,
+                dash=[8, 8],
+                color=color,
+            )
+        self.line_pen = self.mne.mkPen(**kwargs)
+        self.hover_pen = self.mne.mkPen(color=self.text_color, width=2)
+        self._region.setBrush(self.base_color)
+        self._region.setHoverBrush(self.hover_color)
+        # labels can land on traces once stacked, so back them with the plot background
+        self.label_fill = _get_color(getattr(self.mne, "bgcolor", "w"), self.mne.dark)
+        self._label_item.setColor(self.text_color)
+        if not self.selected:
+            self._label_item.fill = mkBrush(self.label_fill)
+        for line in self._region.lines:
+            line.setPen(self.line_pen)
+            line.setHoverPen(self.hover_pen)
+        self._region.update()
+        self.sigUpdateColor.emit(color_string)
+
+    def update_description(self, description):
+        """Update description of annotation region."""
+        self.description = description
+        if self._region is not None:
+            self._label_item.setText(description)
+            self._label_item.update()
+            self._region.setToolTip(description)
+        self._update_label_positions()
+
+    def update_visible(self, visible):
+        """Update if annotation region is visible (and only then in the plot)."""
+        if visible or self._region is not None:
+            for item in (self.region, self._label_item):
+                _set_in_plot(self.mne.plt, item, visible)
+                item.setVisible(visible)
+        self._visible = visible
+        self.sigToggleVisibility.emit(visible)
+
+    def remove(self):
+        """Remove annotation region."""
+        self.removeSingleChannelAnnots.emit(self)
+        self.removeRequested.emit(self)
+        self.update_visible(False)
+
+    def _update_label_selected(self):
+        if self.selected:
+            self._label_item.setColor("w")
+            self._label_item.fill = mkBrush(self.hover_color)
+        else:
+            self._label_item.setColor(self.text_color)
+            self._label_item.fill = mkBrush(self.label_fill)
+        self._label_item.update()
+
+    def select(self, selected):
+        """Update select state of annotation region."""
+        self.selected = selected
+        if self._region is not None:
+            self._update_label_selected()
+        if selected:
+            self.gotSelected.emit(self)
+        logger.debug(
+            f"{'Selected' if self.selected else 'Deselected'} annotation: "
+            f"{self.description}"
+        )
 
     def _update_label_positions(self):
         """Update the positions of all labels (ours might have changed)."""
@@ -920,11 +1036,12 @@ class SingleChannelAnnot(FillBetweenItem):
         color_string = self.mne.annotation_segment_colors[self.annot.description]
         self.update_color(color_string)
 
-        self.mne.plt.addItem(self, ignoreBounds=True)
+        # in the plot when the region is (which it is not yet while it is created)
+        self.update_visible(self.annot.isVisible())
 
         self.annot.removeSingleChannelAnnots.connect(self.remove)
-        self.annot.sigRegionChangeFinished.connect(self.update_plot_curves)
-        self.annot.sigRegionChanged.connect(self.update_plot_curves)
+        self.annot.region.sigRegionChangeFinished.connect(self.update_plot_curves)
+        self.annot.region.sigRegionChanged.connect(self.update_plot_curves)
         self.annot.sigToggleVisibility.connect(self.update_visible)
         self.annot.sigUpdateColor.connect(self.update_color)
 
@@ -943,6 +1060,7 @@ class SingleChannelAnnot(FillBetweenItem):
 
     def update_visible(self, visible):
         """Update visibility to match the annot."""
+        _set_in_plot(self.mne.plt, self, visible)
         self.setVisible(visible)
 
     def update_color(self, color_string=None):
@@ -952,8 +1070,7 @@ class SingleChannelAnnot(FillBetweenItem):
 
     def remove(self):
         """Remove this from plot."""
-        vb = self.mne.viewbox
-        vb.removeItem(self)
+        _set_in_plot(self.mne.plt, self, False)
 
 
 class VLine(InfiniteLine):
