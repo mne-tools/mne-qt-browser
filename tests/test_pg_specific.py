@@ -1323,3 +1323,16 @@ def test_one_repaint_per_scroll(raw_orig, pg_backend, qtbot):
             _n_repaints(key)
         counts[key] = _n_repaints(key)
     assert counts == dict.fromkeys(counts, 1)
+
+
+def test_precompute_processes_shown_channels_only(raw_orig, pg_backend):
+    """Test that scrolling precomputed data only processes the shown channels."""
+    raw = raw_orig.copy().crop(tmax=10.0)
+    fig = raw.plot(precompute=True, n_channels=5, duration=2.0, group_by="type")
+    fig.test_mode = True
+    _wait_precompute(fig)
+    assert fig.mne.global_data.shape[0] > 5
+    for _ in range(3):
+        fig._fake_keypress("down")
+        assert fig.mne.data.shape[0] == len(fig.mne.picks) == 5
+    fig.close()
