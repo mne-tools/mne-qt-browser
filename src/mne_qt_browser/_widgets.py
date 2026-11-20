@@ -180,6 +180,7 @@ class AnnotationDock(QDockWidget):
         self.mne.current_description = new_des
         self._update_description_cmbx()
         self.mne.overview_bar.update_annotations()
+        self.weakmain()._ui_publish("_publish_annotations_change")
 
     def _edit_description_selected(self, new_des):
         """Update description only of selected region."""
@@ -206,6 +207,7 @@ class AnnotationDock(QDockWidget):
         self._update_regions_colors()
         self._update_description_cmbx()
         self.mne.overview_bar.update_annotations()
+        self.weakmain()._ui_publish("_publish_annotations_change")
 
     def _edit_description_dlg(self):
         if len(self.mne.inst.annotations.description) > 0:
@@ -633,6 +635,7 @@ class RawViewBox(ViewBox):
 
                     # Update Overview Bar
                     self.mne.overview_bar.update_annotations()
+                    self.weakmain()._ui_publish("_publish_annotations_change")
                 else:
                     x_to = self.mapSceneToView(event.scenePos()).x()
                     with QSignalBlocker(self._drag_region):
