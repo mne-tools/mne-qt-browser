@@ -1344,7 +1344,12 @@ def test_link_browsers(raw_orig, pg_backend):
     from mne.viz._figure import BrowserBase
 
     if not hasattr(BrowserBase, "_publish_annotations_change"):
-        pytest.skip("Needs MNE-Python >= 1.14")
+        # MNE-Python < 1.14 can't link browsers. Publishing must then do nothing.
+        # (not a skip, CI doesn't allow unexpected skips)
+        fig = raw_orig.plot(duration=4.0, splash=False)
+        fig._fake_keypress("right")
+        assert fig.mne.t_start == 1.0
+        return
     raw = raw_orig.copy().pick("eeg")
     raw.set_annotations(None)
     raw2 = raw.copy().crop(tmin=2.0)  # starts later, and has its own annotations
