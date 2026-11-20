@@ -1334,6 +1334,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
 
         self._apply_view_transform()
 
+        # Tell linked browsers (see mne.viz.ui_events.link)
+        self._ui_publish("_publish_time_window")
+
     def _yrange_changed(self, _, yrange):
         if not self.mne.butterfly:
             if not self.mne.fig_selection:
@@ -1814,6 +1817,9 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         # Update overview bar
         self.mne.overview_bar.update_annotations()
 
+        if from_annot:
+            self._ui_publish("_publish_annotations_change")
+
     def _region_selected(self, region):
         old_region = self.mne.selected_region
         # Remove selected status from old region
@@ -1847,11 +1853,69 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
         )
         # update overview bar
         self.mne.overview_bar.update_annotations()
+        self._ui_publish("_publish_annotations_change")
 
     def _draw_annotations(self):
         # All regions are constantly added to the scene and handled by Qt, which is
         # faster than handling adding/removing in Python
         pass
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+    # UI EVENTS (keep linked browsers in sync, see mne.viz.ui_events.link)
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+    def _ui_publish(self, method_name):
+        # The publishing methods only exist in MNE-Python >= 1.14
+        method = getattr(self, method_name, None)
+        if method is not None:
+            method()
+
+    def _set_time_window(self, t_start, duration):
+        """Show the given time window (in displayed time), clipped to the data."""
+        if self.mne.is_epochs:
+            return
+        xmax = self.mne.xmax
+        min_duration = 3 / self.mne.info["sfreq"]
+        duration = float(min(max(duration, min_duration), xmax))
+        # (start must win if rounding makes xmax - duration < 0)
+        xmin = float(max(min(t_start - self.mne.first_time, xmax - duration), 0.0))
+        self.mne.plt.setXRange(xmin, xmin + duration, padding=0)
+
+    def _refresh_annotations(self, *, new_labels):
+        """Redraw the annotations after they were changed in a linked browser."""
+        if self.mne.is_epochs or not hasattr(self.mne, "regions"):
+            return
+        selected = self.mne.selected_region
+        if selected is not None:
+            selected = (selected.description, selected.getRegion())
+        # Re-create all regions from the annotations
+        for region in list(self.mne.regions):
+            region.removeSingleChannelAnnots.emit(region)
+            self._remove_region(region, from_annot=False)
+        for annot in self.mne.inst.annotations:
+            ch_names = annot["ch_names"] if "ch_names" in annot else None
+            region = self._add_region(
+                _sync_onset(self.mne.inst, annot["onset"]),
+                annot["duration"],
+                annot["description"],
+                ch_names=ch_names,
+            )
+            region.setMovable(self.mne.annotation_mode)
+            if self.mne.annotation_mode:
+                region.setZValue(
+                    2 if region.description == self.mne.current_description else 1
+                )
+            # keep the selection if the region still exists
+            if (
+                selected is not None
+                and region.description == selected[0]
+                and np.allclose(region.getRegion(), selected[1])
+            ):
+                self._region_selected(region)
+                region.select(self.mne.annotation_mode)
+                selected = None
+        if new_labels:
+            self.mne.fig_annotation._update_description_cmbx()
+        self._update_regions_visible()
 
     def _init_annot_mode(self):
         self.mne.annotations_visible = True
