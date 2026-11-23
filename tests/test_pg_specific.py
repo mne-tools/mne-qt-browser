@@ -1428,3 +1428,41 @@ def test_link_browsers(raw_orig, pg_backend):
         raw2.annotations.onset + raw2.annotations.duration,
         raw.annotations.onset + raw.annotations.duration,
     )
+
+
+def test_link_browsers_time_window_from_custom_figure(raw_orig, pg_backend):
+    """Test following time windows of figures that aren't browsers."""
+    import matplotlib.pyplot as plt
+    from mne.viz import ui_events
+    from mne.viz._figure import BrowserBase
+
+    if not hasattr(BrowserBase, "_publish_annotations_change"):
+        return  # MNE-Python < 1.14 can't link browsers (not a skip, see above)
+    raw = raw_orig.copy().pick("eeg").crop(tmin=2.0)
+    fig = raw.plot(duration=4.0, splash=False)
+    custom = plt.figure()
+    ui_events.link(custom, fig)
+    sfreq = raw.info["sfreq"]
+    t0 = raw.first_time
+
+    def window():
+        x0, x1 = fig.mne.viewbox.viewRange()[0]
+        return x0, x1
+
+    # a window we have all the data for is shown as is
+    ui_events.publish(custom, ui_events.TimeWindowChange(tmin=t0 + 1, tmax=t0 + 3))
+    assert_allclose(window(), (1, 3), atol=1 / sfreq)
+    # otherwise, we show the part of it that we have data for
+    ui_events.publish(custom, ui_events.TimeWindowChange(tmin=t0 - 5, tmax=t0 + 2))
+    assert_allclose(window(), (0, 2), atol=1 / sfreq)
+    ui_events.publish(
+        custom, ui_events.TimeWindowChange(tmin=t0 + 1e5, tmax=t0 + 1e5 + 4)
+    )
+    x0, x1 = window()
+    assert 0 <= x0 < x1 <= raw.times[-1] + 1 / sfreq
+    # invalid windows are ignored
+    before = window()
+    for tmin, tmax in ((t0 + 1, t0 + 1), (t0 + 3, t0 + 1), (np.nan, t0 + 1)):
+        ui_events.publish(custom, ui_events.TimeWindowChange(tmin=tmin, tmax=tmax))
+        assert window() == before
+    plt.close(custom)

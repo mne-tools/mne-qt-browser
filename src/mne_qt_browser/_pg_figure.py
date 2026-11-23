@@ -1875,9 +1875,13 @@ class MNEQtBrowser(BrowserBase, QMainWindow, metaclass=_PGMetaClass):  # type: i
             return
         xmax = self.mne.xmax
         min_duration = 3 / self.mne.info["sfreq"]
-        duration = float(min(max(duration, min_duration), xmax))
+        # Show the part of the window that we have data for. If that's nothing,
+        # show the part of our data that is closest.
+        start = min(max(t_start - self.mne.first_time, 0.0), xmax)
+        stop = min(max(t_start - self.mne.first_time + duration, 0.0), xmax)
+        duration = float(min(max(stop - start, min_duration), xmax))
         # (start must win if rounding makes xmax - duration < 0)
-        xmin = float(max(min(t_start - self.mne.first_time, xmax - duration), 0.0))
+        xmin = float(max(min(start, xmax - duration), 0.0))
         self.mne.plt.setXRange(xmin, xmin + duration, padding=0)
 
     def _refresh_annotations(self, *, new_labels):
