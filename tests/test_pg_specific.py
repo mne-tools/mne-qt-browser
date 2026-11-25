@@ -1336,3 +1336,133 @@ def test_precompute_processes_shown_channels_only(raw_orig, pg_backend):
         fig._fake_keypress("down")
         assert fig.mne.data.shape[0] == len(fig.mne.picks) == 5
     fig.close()
+
+
+def test_link_browsers(raw_orig, pg_backend):
+    """Test linking browsers with mne.viz.ui_events.link (mne-python gh-13260)."""
+    from mne.viz import ui_events
+    from mne.viz._figure import BrowserBase
+
+    if not hasattr(BrowserBase, "_publish_annotations_change"):
+        # MNE-Python < 1.14 can't link browsers. Publishing must then do nothing.
+        # (not a skip, CI doesn't allow unexpected skips)
+        fig = raw_orig.plot(duration=4.0, splash=False)
+        fig._fake_keypress("right")
+        assert fig.mne.t_start == 1.0
+        return
+    raw = raw_orig.copy().pick("eeg")
+    raw.set_annotations(None)
+    raw2 = raw.copy().crop(tmin=2.0)  # starts later, and has its own annotations
+    fig1 = raw.plot(duration=4.0, splash=False)
+    fig2 = raw2.plot(duration=4.0, splash=False, show_first_samp=True)
+    ui_events.link(fig1, fig2)
+
+    def acq_samples(fig):
+        start, stop = fig._get_start_stop()
+        return start + fig.mne.inst.first_samp, stop - start
+
+    # time navigation, in both directions
+    fig1._fake_keypress("shift+right")  # past the start of fig2's data
+    assert fig1.mne.t_start == 4.0
+    assert acq_samples(fig2) == acq_samples(fig1)
+    fig2._fake_keypress("end")  # more time
+    assert fig1.mne.duration == fig2.mne.duration > 4.0
+    assert acq_samples(fig2) == acq_samples(fig1)
+    fig2._fake_keypress("left")
+    assert 2.0 < fig1.mne.t_start < 4.0
+    assert acq_samples(fig2) == acq_samples(fig1)
+    t = fig1.mne.t_start
+
+    def annots(raw):  # in acquisition time
+        a = raw.annotations
+        return [
+            (round(o, 6), round(d, 6), desc, tuple(ch))
+            for o, d, desc, ch in zip(a.onset, a.duration, a.description, a.ch_names)
+        ]
+
+    # add (by dragging in fig1)
+    fig1._fake_keypress("a")
+    fig1.mne.fig_annotation._add_description("BAD test")
+    fig1._fake_click(
+        (t + 1.0, 1.0), add_points=[(t + 3.0, 1.0)], xform="data", kind="drag"
+    )
+    assert len(raw.annotations) == 1
+    assert annots(raw2) == annots(raw)
+    assert [r.description for r in fig2.mne.regions] == ["BAD test"]
+    assert fig2.mne.regions[0].isVisible()
+    assert "BAD test" in fig2.mne.annotation_segment_colors
+
+    # modify (with the start box of the annotation dock in fig1)
+    dock = fig1.mne.fig_annotation
+    dock.start_bx.setValue(t + 2.0)
+    dock.start_bx.editingFinished.emit()
+    assert_allclose(raw.annotations.onset - raw.first_time, [t + 2.0])
+    assert annots(raw2) == annots(raw)
+    want = raw.annotations.onset[0] - raw2.first_time + fig2.mne.first_time
+    assert_allclose(fig2.mne.regions[0].getRegion()[0], want - fig2.mne.first_time)
+
+    # make it channel specific (in fig1)
+    fig1.mne.regions[0]._toggle_single_channel_annot(raw.ch_names[0])
+    assert annots(raw2) == annots(raw)
+    assert list(fig2.mne.regions[0].single_channel_annots) == [raw.ch_names[0]]
+
+    # rename (in fig1)
+    dock._edit_description_all("BAD renamed")
+    assert annots(raw2) == annots(raw)
+    assert [r.description for r in fig2.mne.regions] == ["BAD renamed"]
+
+    # remove (in fig2)
+    fig2.mne.regions[0].remove()
+    assert len(raw2.annotations) == len(raw.annotations) == 0
+    assert fig1.mne.regions == []
+
+    # annotations outside of the other browser's data are clipped
+    fig1._fake_keypress("home")  # less time
+    fig1._fake_keypress("shift+left")  # to the start of fig1, before fig2 starts
+    assert fig1.mne.t_start == 0
+    assert fig2.mne.t_start == fig2.mne.first_time  # clipped to its start
+    fig1._fake_click((0.5, 1.0), add_points=[(3.0, 1.0)], xform="data", kind="drag")
+    assert_allclose(raw.annotations.onset - raw.first_time, [0.5], atol=2e-2)
+    assert_allclose(raw2.annotations.onset, [raw2.first_time])
+    assert_allclose(
+        raw2.annotations.onset + raw2.annotations.duration,
+        raw.annotations.onset + raw.annotations.duration,
+    )
+
+
+def test_link_browsers_time_window_from_custom_figure(raw_orig, pg_backend):
+    """Test following time windows of figures that aren't browsers."""
+    import matplotlib.pyplot as plt
+    from mne.viz import ui_events
+    from mne.viz._figure import BrowserBase
+
+    if not hasattr(BrowserBase, "_publish_annotations_change"):
+        return  # MNE-Python < 1.14 can't link browsers (not a skip, see above)
+    raw = raw_orig.copy().pick("eeg").crop(tmin=2.0)
+    fig = raw.plot(duration=4.0, splash=False)
+    custom = plt.figure()
+    ui_events.link(custom, fig)
+    sfreq = raw.info["sfreq"]
+    t0 = raw.first_time
+
+    def window():
+        x0, x1 = fig.mne.viewbox.viewRange()[0]
+        return x0, x1
+
+    # a window we have all the data for is shown as is
+    ui_events.publish(custom, ui_events.TimeWindowChange(tmin=t0 + 1, tmax=t0 + 3))
+    assert_allclose(window(), (1, 3), atol=1 / sfreq)
+    # otherwise, we show the part of it that we have data for
+    ui_events.publish(custom, ui_events.TimeWindowChange(tmin=t0 - 5, tmax=t0 + 2))
+    assert_allclose(window(), (0, 2), atol=1 / sfreq)
+    ui_events.publish(
+        custom, ui_events.TimeWindowChange(tmin=t0 + 1e5, tmax=t0 + 1e5 + 4)
+    )
+    x0, x1 = window()
+    assert 0 <= x0 < x1 <= raw.times[-1] + 1 / sfreq
+    # invalid windows are ignored
+    before = window()
+    for tmin, tmax in ((t0 + 1, t0 + 1), (t0 + 3, t0 + 1), (np.nan, t0 + 1)):
+        ui_events.publish(custom, ui_events.TimeWindowChange(tmin=tmin, tmax=tmax))
+        assert window() == before
+    plt.close(custom)
